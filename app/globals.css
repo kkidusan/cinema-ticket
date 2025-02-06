@@ -1,21 +1,21 @@
+/* Move @import to the top */
+@import 'react-toastify/dist/ReactToastify.css';
+
+/* Tailwind's base, components, and utilities directives */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer utilities {
+  .bg-background {
+    background-color: var(--background-color);
   }
-}
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  .text-foreground {
+    color: var(--foreground-color);
+  }
+
+  .border-border {
+    border-color: var(--border-color);
+  }
 }

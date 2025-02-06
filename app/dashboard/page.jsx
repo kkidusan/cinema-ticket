@@ -129,7 +129,7 @@ export default function Dashboard() {
           transition={{ duration: 0.3 }}
         >
           <h2 className="text-2xl font-semibold text-gray-800 dark:text-white mb-3">
-            Video Upload Portal
+            Video Upload Portal from meku cv1
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
             Upload and manage your videos with ease. Enhance your audience engagement today!

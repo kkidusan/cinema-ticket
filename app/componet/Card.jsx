@@ -6,7 +6,7 @@ import PortfolioCard from './Cardview'
 const projects = [
   {
     title: '',
-    subtitle: 'Modern Ticket Selling v1',
+    subtitle: 'Modern Ticket Selling',
     description: '',
     tags: ['Uplod detail', 'Update detail', 'Cancelle detail'],
     image: '/images/project1.jpg'

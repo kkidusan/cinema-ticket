@@ -1,7 +1,6 @@
 import { getAuth } from "firebase-admin/auth";
 import { initializeApp, applicationDefault } from "firebase-admin/app";
 
-// Initialize Firebase Admin SDK
 initializeApp({
   credential: applicationDefault(),
 });

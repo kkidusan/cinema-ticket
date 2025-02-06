@@ -13,6 +13,7 @@ export default function Dashboard() {
   const [userEmail, setUserEmail] = useState("");
   const [userData, setUserData] = useState(null);
   const [upload, setUpload] = useState([]);
+  const [theme, settheme] = useState("light")
 
   const router = useRouter();
 
@@ -85,7 +86,9 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen px-4 sm:px-6 lg:px-8 flex flex-col items-center">
+    <div className="min-h-screen px-4 sm:px-6 lg:px-8 flex flex-col items-center"
+      style={{ backgroundColor: theme ? "red" : "blue" }}
+    >
       {/* Navbar */}
       <nav className="fixed w-full bg-gradient-to-r from-blue-500 via-purple-600 to-pink-500 dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 shadow-lg z-50">
         <div className="max-w-7xl mx-auto px-6 lg:px-8 flex justify-between h-16 items-center">
@@ -105,7 +108,10 @@ export default function Dashboard() {
               </span>
             )}
           </motion.div>
-          <button onClick={toggleDarkMode} className="text-white hover:text-yellow-300">
+          <button
+            // onClick={toggleDarkMode}
+            onClick={() => settheme(!theme)}
+            className="text-white hover:text-yellow-300">
             {darkMode ? <Sun size={28} /> : <Moon size={28} />}
           </button>
         </div>
@@ -113,7 +119,7 @@ export default function Dashboard() {
 
       {/* Video Uploads Section */}
       <div className="mt-24 w-full max-w-3xl">
-      
+
 
         {/* Video Upload Portal Card */}
         <motion.div
@@ -157,7 +163,7 @@ export default function Dashboard() {
                 <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
                   Uploading: {formatDate(video.uploadingDate)} {/* Format the date here */}
                 </p>
-               
+
                 <p className="text-sm text-gray-600 dark:text-gray-300">{video.description}</p>
               </motion.div>
             ))}

@@ -87,7 +87,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen px-4 sm:px-6 lg:px-8 flex flex-col items-center"
-      style={{ backgroundColor: theme ? "red" : "blue" }}
+      style={{ backgroundColor: theme ? "aqua" : "green" }}
     >
       {/* Navbar */}
       <nav className="fixed w-full bg-gradient-to-r from-blue-500 via-purple-600 to-pink-500 dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 shadow-lg z-50">

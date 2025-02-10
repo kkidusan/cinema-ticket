@@ -104,7 +104,7 @@ export default function PortfolioPage() {
         </p>
 
         {/* Apply Now Button */}
-        <Link href="/apply">
+        <Link href="/signup">
           <button className="mt-6 flex items-center gap-2 px-6 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-all text-lg shadow-md">
             Apply Now <ArrowRightCircle className="w-5 h-5" />
           </button>

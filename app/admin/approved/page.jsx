@@ -2,14 +2,14 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "../../firebaseconfig";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, updateDoc, doc } from "firebase/firestore";
 import { Bell } from "lucide-react"; // Notification icon
 import Image from "next/image";
 
 export default function AboutPage() {
   const [userEmail, setUserEmail] = useState(null);
   const [pendingOwners, setPendingOwners] = useState([]);
-  const [openCertificate, setOpenCertificate] = useState(null); // State to track which certificate is open
+  const [openCertificate, setOpenCertificate] = useState(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -22,8 +22,8 @@ export default function AboutPage() {
   }, [router]);
 
   // Fetch pending owners from Firestore
-  useEffect(() => {
-    const fetchPendingOwners = async () => {
+  const fetchPendingOwners = async () => {
+    try {
       const ownersRef = collection(db, "owner");
       const q = query(ownersRef, where("approved", "==", false));
       const querySnapshot = await getDocs(q);
@@ -32,16 +32,42 @@ export default function AboutPage() {
         ...doc.data(),
       }));
       setPendingOwners(ownersData);
-    };
+    } catch (error) {
+      console.error("Error fetching pending owners:", error);
+    }
+  };
 
-    fetchPendingOwners();
+  useEffect(() => {
+    fetchPendingOwners(); // Fetch data initially
+
+    // Refresh the data every 3 minutes
+    const interval = setInterval(() => {
+      fetchPendingOwners();
+    }, 1); // 180000ms = 3 minutes
+
+    return () => clearInterval(interval); // Cleanup interval on unmount
   }, []);
 
-  // Function to handle the Base64 certificate rendering
+  // Approve Owner Function
+  const handleApproveOwner = async (ownerId, ownerEmail) => {
+    try {
+      const ownerDocRef = doc(db, "owner", ownerId);
+      await updateDoc(ownerDocRef, {
+        approved: true,
+      });
+
+      // Update UI after approval
+      setPendingOwners((prevOwners) =>
+        prevOwners.filter((owner) => owner.email !== ownerEmail)
+      );
+    } catch (error) {
+      console.error("Error approving owner:", error);
+    }
+  };
+
+  // Function to render Base64 Trade Certificate
   const renderTradeCertificate = (certificateData) => {
-    // Check if certificate is an image or PDF
     if (certificateData.includes("data:image")) {
-      // Render Image
       return (
         <Image
           src={certificateData}
@@ -52,7 +78,6 @@ export default function AboutPage() {
         />
       );
     } else if (certificateData.includes("data:application/pdf")) {
-      // Render PDF using Base64 encoding directly in iframe
       const pdfData = certificateData.replace("data:application/pdf;base64,", "");
       const pdfUrl = `data:application/pdf;base64,${pdfData}`;
       
@@ -73,7 +98,7 @@ export default function AboutPage() {
     <div className="flex flex-col min-h-screen bg-gray-100">
       {/* Header with Notification Icon */}
       <header className="flex justify-between items-center p-5 bg-white shadow-md">
-        <h1 className="text-2xl font-bold">About Pages</h1>
+        <h1 className="text-2xl font-bold">About Page</h1>
         <div className="relative">
           <Bell className="w-6 h-6 text-gray-700 cursor-pointer" />
           {pendingOwners.length > 0 && (
@@ -86,7 +111,7 @@ export default function AboutPage() {
 
       {/* Pending Approvals Section */}
       <div className="container mx-auto p-6">
-        <h2 className="text-xl font-semibold mb-4">Pending Approvals .</h2>
+        <h2 className="text-xl font-semibold mb-4">Pending Approvals</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {pendingOwners.length > 0 ? (
             pendingOwners.map((owner) => (
@@ -116,6 +141,14 @@ export default function AboutPage() {
                     {renderTradeCertificate(owner.tradeCertificate)}
                   </div>
                 )}
+
+                {/* Approve Button */}
+                <button
+                  onClick={() => handleApproveOwner(owner.id, owner.email)}
+                  className="mt-4 bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-700"
+                >
+                  Approve
+                </button>
               </div>
             ))
           ) : (

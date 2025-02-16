@@ -123,7 +123,8 @@ export default function Dashboard() {
         {upload.length > 0 ? (
           <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
             {upload.slice(0, visibleCount).map((video, index) => (
-              <motion.div key={index} className={`shadow-lg rounded-xl p-6 ${darkMode ? "bg-gray-800 text-white" : "bg-white text-gray-800"}`} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.3 }} onClick={() => router.push(`/dashboard/videodetail/${video.title}`)}>
+              <motion.div key={index} className={`shadow-lg rounded-xl p-6 ${darkMode ? "bg-gray-800 text-white" : "bg-white text-gray-800"}`} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.3 }}
+               onClick={() => router.push(`/dashboard/videodetial/${video.title}`)}>
                 <h3 className="text-xl font-semibold mb-2">{video.title}</h3>
                 <img src={video.poster} alt={video.title} className="w-full h-48 object-cover rounded-md mb-4" />
                 <p className="text-sm mb-4">Uploaded on: {formatDate(video.uploadingDate)}</p>

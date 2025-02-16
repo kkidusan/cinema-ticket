@@ -2,14 +2,17 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "../../firebaseconfig";
-import { collection, query, where, getDocs, updateDoc, doc } from "firebase/firestore";
-import { Bell } from "lucide-react"; // Notification icon
+import { collection, query, where, getDocs, updateDoc, doc, setDoc } from "firebase/firestore";
+import { Bell, MessageCircle } from "lucide-react"; // Notification icon
 import Image from "next/image";
 
 export default function AboutPage() {
   const [userEmail, setUserEmail] = useState(null);
   const [pendingOwners, setPendingOwners] = useState([]);
   const [openCertificate, setOpenCertificate] = useState(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [currentOwner, setCurrentOwner] = useState(null); // For keeping track of the owner in chat
+  const [message, setMessage] = useState(""); // For the message input
   const router = useRouter();
 
   useEffect(() => {
@@ -43,7 +46,7 @@ export default function AboutPage() {
     // Refresh the data every 3 minutes
     const interval = setInterval(() => {
       fetchPendingOwners();
-    }, 1); // 180000ms = 3 minutes
+    }, 180000); // 180000ms = 3 minutes
 
     return () => clearInterval(interval); // Cleanup interval on unmount
   }, []);
@@ -62,6 +65,30 @@ export default function AboutPage() {
       );
     } catch (error) {
       console.error("Error approving owner:", error);
+    }
+  };
+
+  // Handle sending a new message
+  const handleSendMessage = async () => {
+    if (message.trim() === "") return;
+
+    try {
+      // Prepare the message to be sent
+      const newMessage = {
+        ownerEmail: currentOwner.email, // Store current owner's email
+        message,
+        from: "admin", // Default sender is admin
+        timestamp: new Date(),
+      };
+
+      // Send message to Firestore collection 'messages'
+      await setDoc(doc(db, "messages", `${currentOwner.email}_${Date.now()}`), newMessage);
+      setMessage(""); // Clear the message input
+
+      // Close the chat after sending the message
+      setIsChatOpen(false);
+    } catch (error) {
+      console.error("Error sending message:", error);
     }
   };
 
@@ -142,13 +169,26 @@ export default function AboutPage() {
                   </div>
                 )}
 
-                {/* Approve Button */}
-                <button
-                  onClick={() => handleApproveOwner(owner.id, owner.email)}
-                  className="mt-4 bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-700"
-                >
-                  Approve
-                </button>
+                {/* Flex container for Approve and New Chat buttons */}
+                <div className="flex gap-4 mt-4">
+                  <button
+                    onClick={() => handleApproveOwner(owner.id, owner.email)}
+                    className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-700"
+                  >
+                    Approve
+                  </button>
+
+                  {/* New Chat Button */}
+                  <button
+                    onClick={() => {
+                      setIsChatOpen(true);
+                      setCurrentOwner(owner); // Set the current owner to start a chat
+                    }}
+                    className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                  >
+                    New Chat
+                  </button>
+                </div>
               </div>
             ))
           ) : (
@@ -156,6 +196,38 @@ export default function AboutPage() {
           )}
         </div>
       </div>
+
+      {/* Chat Modal or View */}
+      {isChatOpen && currentOwner && (
+        <div className="fixed inset-0 bg-gray-700 bg-opacity-50 flex justify-center items-center z-50">
+          <div className="bg-white p-6 rounded-lg w-96">
+            <h3 className="text-xl font-semibold">Chat with {currentOwner.firstName} {currentOwner.lastName}</h3>
+            <div className="mt-4">
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Type your message..."
+                rows="4"
+                className="w-full p-2 border border-gray-300 rounded-md"
+              ></textarea>
+            </div>
+            <div className="flex gap-4 mt-4">
+              <button
+                onClick={handleSendMessage}
+                className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+              >
+                Send
+              </button>
+              <button
+                onClick={() => setIsChatOpen(false)}
+                className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -13,6 +13,7 @@ export default function AboutPage() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [currentOwner, setCurrentOwner] = useState(null); // For keeping track of the owner in chat
   const [message, setMessage] = useState(""); // For the message input
+  const [messages, setMessages] = useState([]); // Store the messages for the chat view
   const router = useRouter();
 
   useEffect(() => {
@@ -46,8 +47,7 @@ export default function AboutPage() {
     // Refresh the data every 3 minutes
     const interval = setInterval(() => {
       fetchPendingOwners();
-    }, 180000); // 180000ms = 3 minutes
-
+    }, 1); 
     return () => clearInterval(interval); // Cleanup interval on unmount
   }, []);
 
@@ -76,13 +76,15 @@ export default function AboutPage() {
       // Prepare the message to be sent
       const newMessage = {
         ownerEmail: currentOwner.email, // Store current owner's email
-        message,
-        from: "admin", // Default sender is admin
+        text: message, // Using 'text' instead of 'message'
+        sender: "admin", // Default sender is admin
         timestamp: new Date(),
+        show:false, // Default show is false
       };
 
       // Send message to Firestore collection 'messages'
       await setDoc(doc(db, "messages", `${currentOwner.email}_${Date.now()}`), newMessage);
+      setMessages((prevMessages) => [...prevMessages, newMessage]); // Update the local state with new message
       setMessage(""); // Clear the message input
 
       // Close the chat after sending the message
@@ -91,6 +93,26 @@ export default function AboutPage() {
       console.error("Error sending message:", error);
     }
   };
+
+  // Fetch messages for the current owner
+  const fetchMessages = async () => {
+    if (!currentOwner) return;
+    try {
+      const messagesRef = collection(db, "messages");
+      const q = query(messagesRef, where("ownerEmail", "==", currentOwner.email));
+      const querySnapshot = await getDocs(q);
+      const messagesData = querySnapshot.docs.map((doc) => doc.data());
+      setMessages(messagesData);
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (currentOwner) {
+      fetchMessages(); // Fetch messages when chat is opened
+    }
+  }, [currentOwner]);
 
   // Function to render Base64 Trade Certificate
   const renderTradeCertificate = (certificateData) => {
@@ -203,6 +225,16 @@ export default function AboutPage() {
           <div className="bg-white p-6 rounded-lg w-96">
             <h3 className="text-xl font-semibold">Chat with {currentOwner.firstName} {currentOwner.lastName}</h3>
             <div className="mt-4">
+              {/* Display messages */}
+              <div className="h-64 overflow-y-scroll mb-4">
+                {messages.map((msg, index) => (
+                  <div key={index} className="mb-2">
+                    <p className="font-bold">{msg.from}: </p>
+                    <p>{msg.text}</p> {/* Changed 'message' to 'text' */}
+                  </div>
+                ))}
+              </div>
+
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}

@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, query, where, getDocs, doc, updateDoc } from "firebase/firestore"; // Firestore
+import { getFirestore, collection, query, where, getDocs, orderBy, onSnapshot, addDoc, serverTimestamp,doc, updateDoc } from "firebase/firestore";
+
 import { getAuth, setPersistence, browserSessionPersistence } from "firebase/auth";
 import { getStorage } from 'firebase/storage';
 import {  updatePassword } from "firebase/auth"; // Firebase Auth
@@ -21,5 +22,6 @@ export const db = getFirestore(app);
 const storage = getStorage(app);
 // Enable session persistence
 setPersistence(auth, browserSessionPersistence);
-export { auth, db,addDoc, collection, query, where,storage, getDocs, updateDoc, doc, updatePassword };
+export { addDoc, collection, query, where,storage, getDocs, updateDoc, doc, updatePassword };
+export { auth, db,orderBy, onSnapshot, serverTimestamp };
 

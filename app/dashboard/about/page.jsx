@@ -12,7 +12,7 @@ export default function AboutPage() {
 
     if (!user) {
       // Redirect to login page if user is not logged in
-      router.push("/login");
+      // router.push("/login");
     } else {
       // Set user email if authenticated
       setUserEmail(user.email);

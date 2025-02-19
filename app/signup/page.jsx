@@ -36,7 +36,7 @@ export default function RegisterForm() {
     if (formData.countryCode === "+251") {
       const ethiopianRegex = /^9\d{8}$/;
       if (!ethiopianRegex.test(formData.phoneNumber)) {
-        newErrors.phoneNumber = "Phone number must be 9 digits and start with 9.";
+        newErrors.phoneNumber = "Phone number must be add 9 digits and start with +2519 .";
       }
     } else if (!formData.phoneNumber.match(/^\d{7,15}$/)) {
       newErrors.phoneNumber = "Invalid phone number for the selected country.";

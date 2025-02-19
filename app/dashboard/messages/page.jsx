@@ -69,7 +69,7 @@ export default function Messages() {
       text: newMessage,
       sender: "owner",
       from: auth.currentUser.displayName || auth.currentUser.email,
-      show: true,
+      show: false,
       timestamp: serverTimestamp(),
       status: "sending", // Set status as "sending"
     });
@@ -93,9 +93,9 @@ export default function Messages() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
+    <div className="flex flex-col h-screen bg-gradient-to-r from-indigo-100 via-purple-200 to-pink-100 dark:bg-gray-900 dark:text-white">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 bg-blue-600 text-white shadow-md">
+      <div className="flex items-center justify-between p-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md">
         <button onClick={() => router.push("/dashboard")} className="text-white">
           <ArrowLeft size={24} />
         </button>
@@ -112,7 +112,7 @@ export default function Messages() {
                 className={`grid ${msg.sender === "owner" ? "justify-self-end" : "justify-self-start"}`}
               >
                 <div
-                  className={`max-w-lg p-4 rounded-lg ${msg.sender === "owner" ? "bg-blue-500 text-white" : "bg-gray-300 text-black"} shadow-lg`}
+                  className={`max-w-lg p-4 rounded-lg ${msg.sender === "owner" ? "bg-gradient-to-r from-blue-400 to-blue-600 text-white" : "bg-gray-300 text-black"} shadow-lg`}
                 >
                   {/* Message Text */}
                   <p className="text-lg">{msg.text}</p>
@@ -134,7 +134,7 @@ export default function Messages() {
       </div>
 
       {/* Input Field */}
-      <div className="p-4 bg-white dark:bg-gray-800 flex items-center shadow-md space-x-3 rounded-lg">
+      <div className="p-4 bg-gradient-to-r from-blue-100 via-blue-200 to-blue-300 dark:bg-gray-800 flex items-center shadow-md space-x-3 rounded-lg">
         {/* File Upload */}
         <label htmlFor="file-upload" className="cursor-pointer">
           <Paperclip size={20} className="text-gray-500 hover:text-gray-700 dark:text-gray-300" />
@@ -158,7 +158,7 @@ export default function Messages() {
         {/* Send Button */}
         <button
           onClick={sendMessage}
-          className="bg-blue-500 text-white px-4 py-2 rounded-xl flex items-center space-x-2"
+          className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-2 rounded-xl flex items-center space-x-2"
         >
           <Send size={20} />
           <span>Send</span>

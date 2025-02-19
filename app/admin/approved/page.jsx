@@ -19,7 +19,7 @@ export default function AboutPage() {
   useEffect(() => {
     const user = auth.currentUser;
     if (!user) {
-      // router.push("/login");
+      router.push("/login");
     } else {
       setUserEmail(user.email);
     }

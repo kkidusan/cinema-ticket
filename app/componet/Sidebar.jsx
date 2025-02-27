@@ -1,46 +1,38 @@
-// components/Sidebar.js
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Home, Sun, Moon, ChevronLeft, ChevronRight, Inbox, Send, CheckCircle, CreditCard } from "lucide-react";
+import { Home, Sun, Moon, ChevronLeft, ChevronRight, CheckCircle, CreditCard, MessageCircle } from "lucide-react";
+import { useDarkMode } from "../context/DarkModeContext"; // Import the dark mode hook
 
 const Sidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
-  const pathname = typeof window !== "undefined" ? usePathname() : "";
-  const router = typeof window !== "undefined" ? useRouter() : null;
+  const pathname = usePathname();
+  const router = useRouter();
+  const { darkMode, toggleDarkMode } = useDarkMode(); // Use dark mode context
 
-  useEffect(() => {
-    const theme = localStorage.getItem("theme");
-    if (theme === "dark") {
-      setDarkMode(true);
-      document.documentElement.classList.add("dark");
-    } else {
-      setDarkMode(false);
-      document.documentElement.classList.remove("dark");
-    }
-  }, []);
-
-  const toggleDarkMode = () => {
-    const newMode = !darkMode;
-    setDarkMode(newMode);
-    localStorage.setItem("theme", newMode ? "dark" : "light");
-    document.documentElement.classList.toggle("dark", newMode);
+  // Mapping of paths to titles
+  const pageTitles = {
+    "/admin": "Admin Dashboard",
+    "/admin/approved": "Approved Requests",
+    "/admin/message": "Messages",
+    "/admin/managetransaction": "Manage Transactions",
   };
+
+  // Get the current page title based on the pathname
+  const currentTitle = pageTitles[pathname] || "Admin Dashboard";
 
   const menuItems = [
     { name: "Home", icon: <Home size={isCollapsed ? 36 : 24} />, path: "/admin" },
     { name: "Approved", icon: <CheckCircle size={isCollapsed ? 36 : 24} />, path: "/admin/approved" },
-    { name: "Send Message", icon: <Send size={isCollapsed ? 36 : 24} />, path: "/admin/sendmessage" },
-    { name: "Receive Feedback", icon: <Inbox size={isCollapsed ? 36 : 24} />, path: "/admin/receivfeedback" },
+    { name: "Message", icon: <MessageCircle size={isCollapsed ? 36 : 24} />, path: "/admin/message" },
     { name: "Manage Transactions", icon: <CreditCard size={isCollapsed ? 36 : 24} />, path: "/admin/managetransaction" },
   ];
 
   return (
     <motion.div
       animate={{ width: isCollapsed ? 80 : 250 }}
-      className="h-screen bg-gray-900 text-white dark:bg-gray-800 flex flex-col p-4 relative transition-all duration-300"
+      className="fixed min-h-screen bg-gray-900 text-white dark:bg-gray-800 flex flex-col p-4 transition-all duration-300"
     >
       {/* Sidebar Toggle Button */}
       <button
@@ -49,6 +41,11 @@ const Sidebar = () => {
       >
         {isCollapsed ? <ChevronRight size={24} /> : <ChevronLeft size={24} />}
       </button>
+
+      {/* Page Title */}
+      <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+        {currentTitle}
+      </h1>
 
       {/* Dark Mode Toggle */}
       <div className="flex justify-center my-4">
@@ -62,7 +59,7 @@ const Sidebar = () => {
         {menuItems.map(({ name, icon, path }) => (
           <div
             key={name}
-            onClick={() => router && router.push(path)}
+            onClick={() => router.push(path)}
             className={`flex items-center p-3 cursor-pointer hover:bg-gray-700 rounded-md transition-all ${
               pathname === path ? "bg-gray-700" : ""
             }`}

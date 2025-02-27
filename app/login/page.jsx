@@ -2,12 +2,13 @@
 import { useState } from "react";
 import { auth, db } from "../firebaseconfig"; // Firebase Auth & Firestore
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import Cookies from "js-cookie"; // For cookie handling
 import Link from "next/link";
 import { motion } from "framer-motion"; // For animations
+import { Loader2 } from "lucide-react"; // Importing a loading spinner icon
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({ email: "", password: "" });
@@ -100,10 +101,25 @@ export default function LoginPage() {
             {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
           </div>
           {errors.general && <div className="text-red-500 text-sm mt-3 text-center">{errors.general}</div>}
-          <button type="submit" className={`w-full p-3 mt-4 text-white font-semibold rounded-lg ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"}`} disabled={loading}>{loading ? "Logging in..." : "Login"}</button>
+          <button
+            type="submit"
+            className={`w-full p-3 mt-4 text-white font-semibold rounded-lg transition-all duration-300 ${
+              loading ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+            } flex items-center justify-center`}
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <Loader2 className="animate-spin mr-2" size={20} /> {/* Loading spinner */}
+                Logging in...
+              </>
+            ) : (
+              "Login"
+            )}
+          </button>
         </form>
         <div className="text-center mt-6">
-          <p className="text-sm text-gray-600">Don't have an account? <Link href="/signup">Sign Up</Link></p>
+          <p className="text-sm text-gray-600">Don't have an account? <Link href="/signup" className="text-blue-600 hover:underline">Sign Up</Link></p>
         </div>
       </div>
     </motion.div>

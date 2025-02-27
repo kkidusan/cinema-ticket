@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { db,auth } from "../../firebaseconfig";
+import { db, auth } from "../../firebaseconfig";
 import { collection, addDoc, Timestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 
@@ -19,24 +19,24 @@ export default function VideoUploadForm() {
         screeningDate: "",
         uploadingDate: "",
         poster: "",
+        movieID: "", // New field for auto-generated ID
     });
 
     const [loading, setLoading] = useState(false);
     const router = useRouter();
     const [userEmail, setUserEmail] = useState(null);
-  
+
     useEffect(() => {
-      // Check if the user is authenticated
-      const user = auth.currentUser;
-  
-      if (!user) {
-        router.push("/login");
-      } else {
-        setUserEmail(user.email);
-      }
+        // Check if the user is authenticated
+        const user = auth.currentUser;
+
+        if (!user) {
+            router.push("/login");
+        } else {
+            setUserEmail(user.email);
+        }
     }, [router]);
-  
-  
+
     // Handle text input changes
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -51,8 +51,22 @@ export default function VideoUploadForm() {
         const reader = new FileReader();
         reader.readAsDataURL(file);
         reader.onloadend = () => {
-            setFormData((prev) => ({ ...prev, poster: reader.result })); // Store as base64
+            setFormData((prev) => ({
+                ...prev,
+                poster: reader.result, // Store as base64
+                movieID: generateMovieID(), // Generate 8-character unique ID
+            }));
         };
+    };
+
+    // Function to generate 8-character unique movie ID
+    const generateMovieID = () => {
+        const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let result = '';
+        for (let i = 0; i < 8; i++) {
+            result += characters.charAt(Math.floor(Math.random() * characters.length));
+        }
+        return result;
     };
 
     const handleSubmit = async (e) => {
@@ -67,7 +81,7 @@ export default function VideoUploadForm() {
 
         try {
             await addDoc(collection(db, "Movies"), {
-                email:userEmail ,
+                email: userEmail,
                 title: formData.title,
                 category: formData.category,
                 description: formData.description || "",
@@ -80,6 +94,7 @@ export default function VideoUploadForm() {
                 screeningDate: Timestamp.fromDate(new Date(formData.screeningDate)), // Convert date
                 uploadingDate: Timestamp.fromDate(new Date(formData.uploadingDate)), // Convert date
                 poster: formData.poster, // Store as Base64 string
+                movieID: formData.movieID, // Store auto-generated unique ID
                 createdAt: Timestamp.now(), // Store current time
             });
 

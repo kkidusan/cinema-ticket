@@ -145,18 +145,7 @@ export default function AboutPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-100">
-      {/* Header with Notification Icon */}
-      <header className="flex justify-between items-center p-5 bg-white shadow-md">
-        <h1 className="text-2xl font-bold">About Page</h1>
-        <div className="relative">
-          <Bell className="w-6 h-6 text-gray-700 cursor-pointer" />
-          {pendingOwners.length > 0 && (
-            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full px-2">
-              {pendingOwners.length}
-            </span>
-          )}
-        </div>
-      </header>
+    
 
       {/* Pending Approvals Section */}
       <div className="container mx-auto p-6">

@@ -25,7 +25,7 @@ export default function ChatApp() {
       if (user) {
         setUserEmail(user.email);
       } else {
-         router.push("/login"); // Uncomment to force login
+        router.push("/login"); // Uncomment to force login
       }
     });
 
@@ -46,7 +46,7 @@ export default function ChatApp() {
           if (!grouped[data.ownerEmail]) {
             grouped[data.ownerEmail] = [];
           }
-          grouped[data.ownerEmail].push(data);
+          grouped[data.ownerEmail].push({ ...data, id: doc.id });
 
           // Count new messages where show is false and sender is "owner"
           if (data.sender === "owner" && !data.show) {
@@ -74,7 +74,7 @@ export default function ChatApp() {
     // Using writeBatch for batch updates in the modular SDK
     const batch = writeBatch(db); // Corrected batch method
     selectedMsgs.forEach((msg) => {
-      if (!msg.show) {
+      if (msg.sender === "owner" && !msg.show) {
         const messageRef = doc(db, "messages", msg.id);
         batch.update(messageRef, { show: true }); // Mark messages as shown
       }
@@ -125,6 +125,13 @@ export default function ChatApp() {
     ownerEmail.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Get the last message for each chat
+  const getLastMessage = (messages) => {
+    if (messages.length === 0) return "No messages";
+    const lastMessage = messages[messages.length - 1];
+    return lastMessage.text;
+  };
+
   return (
     <div className="flex min-h-screen bg-gradient-to-r from-indigo-100 to-pink-100 dark:bg-gray-900 dark:text-white">
       {/* Sidebar with custom background color */}
@@ -163,6 +170,7 @@ export default function ChatApp() {
                     </span>
                   )}
                 </div>
+                {/* <p className="text-sm text-gray-600">{getLastMessage(messages)}</p> */}
               </motion.div>
             );
           })

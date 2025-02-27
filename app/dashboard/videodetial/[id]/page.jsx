@@ -1,15 +1,13 @@
-
-
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { db, collection, query, where, getDocs } from "../../../firebaseconfig";
 import { motion } from "framer-motion";
-import { use } from "react";  // Import React.use
+import { use } from "react"; // Import React.use
 
 export default function VideoDetail({ params }) {
   const router = useRouter();
-  const { id } = use(params); 
+  const { id } = use(params);
 
   const [video, setVideo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -20,15 +18,15 @@ export default function VideoDetail({ params }) {
     }
   }, [id]);
 
-  const fetchVideoDetails = async (videoTitle) => {
+  const fetchVideoDetails = async (videoID) => {
     try {
-      const q = query(collection(db, "Movies"), where("title", "==", videoTitle));
+      const q = query(collection(db, "Movies"), where("movieID", "==", videoID));
       const querySnapshot = await getDocs(q);
       if (!querySnapshot.empty) {
-        // If a video with the given title is found, set the data
+        // If a video with the given ID is found, set the data
         setVideo(querySnapshot.docs[0].data());
       } else {
-        console.error("No video found with the given title!");
+        console.error("No video found with the given ID!");
       }
     } catch (error) {
       console.error("Error fetching video details:", error);
@@ -56,19 +54,14 @@ export default function VideoDetail({ params }) {
         <img src={video.poster} alt={video.title} className="w-full h-64 object-cover rounded-md mb-4" />
         <p className="text-gray-600 dark:text-gray-300 mb-4">{video.description}</p>
 
-
         <div className="text-left text-gray-600 dark:text-gray-300 mb-4">
           <p><strong>Category:</strong> {video.category}</p>
           <p><strong>Duration:</strong> {video.duration} mins</p>
-          {/* <p><strong>Main Cast:</strong> {video.mainCast.join(", ")}</p> */}
           <p><strong>Cinema Name:</strong> {video.cinemaName}</p>
           <p><strong>Cinema Location:</strong> {video.cinemaLocation}</p>
           <p><strong>Available Site:</strong> {video.availableSite}</p>
           <p><strong>Ticket Price:</strong> ${video.ticketPrice}</p>
-          {/* <p><strong>Screening Date:</strong> {formatDate(video.screeningDate)}</p>
-          <p><strong>Uploading Date:</strong> {formatDate(video.uploadingDate)}</p> */}
         </div>
-
 
         <button
           onClick={() => router.back()}
@@ -80,10 +73,8 @@ export default function VideoDetail({ params }) {
           onClick={() => router.push(`/updateMovie/${id}`)}
           className="w-full bg-red-500 text-white py-2 rounded-lg mt-2 hover:bg-green-600"
         >
-          update data
+          Update Data
         </button>
-
-
       </motion.div>
     </div>
   );

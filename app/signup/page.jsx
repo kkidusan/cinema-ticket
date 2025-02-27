@@ -5,6 +5,8 @@ import { createUserWithEmailAndPassword } from "firebase/auth";
 import { collection, addDoc } from "firebase/firestore";
 import PhoneInput from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
+import { Loader2 } from "lucide-react"; // Importing a loading spinner icon
+import { useRouter } from "next/navigation";
 
 export default function RegisterForm() {
   const [formData, setFormData] = useState({
@@ -18,6 +20,7 @@ export default function RegisterForm() {
     tradeCertificate: "", // Store certificate as Base64
     countryCode: "+251",
   });
+  const router = useRouter();
 
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
@@ -36,7 +39,7 @@ export default function RegisterForm() {
     if (formData.countryCode === "+251") {
       const ethiopianRegex = /^9\d{8}$/;
       if (!ethiopianRegex.test(formData.phoneNumber)) {
-        newErrors.phoneNumber = "Phone number must be add 9 digits and start with +2519 .";
+        newErrors.phoneNumber = "Phone number must be 9 digits and start with +2519.";
       }
     } else if (!formData.phoneNumber.match(/^\d{7,15}$/)) {
       newErrors.phoneNumber = "Invalid phone number for the selected country.";
@@ -93,7 +96,7 @@ export default function RegisterForm() {
         approved: false,
       });
 
-      alert("Registration successful!");
+      router.push("/login");
       setFormData({
         firstName: "",
         lastName: "",
@@ -156,10 +159,17 @@ export default function RegisterForm() {
 
           <button
             type="submit"
-            className="col-span-2 w-full bg-blue-600 text-white font-semibold py-3 rounded-lg hover:bg-blue-700 transition-all duration-300 shadow-md disabled:opacity-50"
+            className="col-span-2 w-full bg-blue-600 text-white font-semibold py-3 rounded-lg hover:bg-blue-700 transition-all duration-300 shadow-md disabled:opacity-50 flex items-center justify-center"
             disabled={isLoading}
           >
-            {isLoading ? "Registering..." : "Register"}
+            {isLoading ? (
+              <>
+                <Loader2 className="animate-spin mr-2" size={20} /> {/* Loading spinner */}
+                Registering...
+              </>
+            ) : (
+              "Register"
+            )}
           </button>
         </form>
       </div>

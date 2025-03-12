@@ -7,23 +7,52 @@ import { Eye, EyeOff } from "lucide-react";
 
 export default function AboutPage() {
   const [userEmail, setUserEmail] = useState(null);
+  const [userRole, setUserRole] = useState(null); // Add role state
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [errors, setErrors] = useState([]);
   const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(true); // Add loading state
   const router = useRouter();
 
+  // Fetch user authentication details
   useEffect(() => {
-    const user = firebaseAuth.currentUser;
-    if (!user) {
-      router.push("/login");
-    } else {
-      setUserEmail(user.email);
-    }
+    const fetchUser = async () => {
+      try {
+        const response = await fetch("/api/validate", {
+          method: "GET",
+          credentials: "include",
+        });
+
+        if (!response.ok) throw new Error("Unauthorized");
+
+        const data = await response.json();
+        if (data.email && data.role) {
+          setUserEmail(data.email); // Set user email
+          setUserRole(data.role); // Set user role
+
+          // Redirect if the user is not an owner
+          if (data.role !== "owner") {
+            router.replace("/unauthorized"); // Redirect to unauthorized page
+            return;
+          }
+        } else {
+          throw new Error("No email or role found");
+        }
+      } catch (error) {
+        console.error("Authentication error:", error);
+        router.replace("/login");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
   }, [router]);
 
+  // Validate password function
   const validatePassword = (password) => {
     const errorMessages = [];
     if (password.length < 8) errorMessages.push("Password must be at least 8 characters long");
@@ -34,6 +63,7 @@ export default function AboutPage() {
     return errorMessages;
   };
 
+  // Handle password change
   const handlePasswordChange = async (e) => {
     e.preventDefault();
     setErrors([]);
@@ -62,6 +92,11 @@ export default function AboutPage() {
       setErrors([error.message]);
     }
   };
+
+  // Show loading state while fetching user data
+  if (loading) {
+    return <p className="text-center text-gray-500 mt-10">Loading...</p>;
+  }
 
   return (
     <div className="flex justify-center items-center min-h-screen bg-gray-100">

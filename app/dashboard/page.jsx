@@ -2,37 +2,69 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Sun, Moon, MessageCircle, Loader2 } from "lucide-react"; // Removed User icon
-import { auth, db } from "../firebaseconfig"; // Importing authentication and database configurations from firebase
-import { collection, query, where, onSnapshot, getDocs, doc, updateDoc } from "firebase/firestore"; // Firebase methods for querying and updating data
-import Footer from "../componet/Footer"; // Importing the Footer component
+import { Sun, Moon, MessageCircle, Loader2, LogOut } from "lucide-react";
+import { auth, db } from "../firebaseconfig";
+import { collection, query, where, onSnapshot, getDocs, doc, updateDoc } from "firebase/firestore";
+import Footer from "../componet/Footer";
 
 export default function Dashboard() {
   const [darkMode, setDarkMode] = useState(false);
   const [userEmail, setUserEmail] = useState("");
+  const [userRole, setUserRole] = useState(""); // Add role state
   const [userData, setUserData] = useState(null);
   const [upload, setUpload] = useState([]);
-  const [visibleCount, setVisibleCount] = useState(4); // Initially show 4 movies
+  const [visibleCount, setVisibleCount] = useState(4);
   const [messageCount, setMessageCount] = useState(0);
   const [messages, setMessages] = useState([]);
   const [userMovies, setUserMovies] = useState([]);
-  const [loading, setLoading] = useState(true); // Loading state
-  const [isApproved, setIsApproved] = useState(null); // Track if the user is approved (null initially)
+  const [loading, setLoading] = useState(true);
+  const [isApproved, setIsApproved] = useState(null);
   const router = useRouter();
 
+  // Fetch user email, role, and validate authentication
   useEffect(() => {
-    const savedTheme = localStorage.getItem("theme");
-    setDarkMode(savedTheme === "dark");
-    document.documentElement.classList.toggle("dark", savedTheme === "dark");
+    const fetchUser = async () => {
+      try {
+        const response = await fetch("/api/validate", {
+          method: "GET",
+          credentials: "include",
+        });
 
-    const authUser = auth.currentUser;
-    if (authUser) {
-      setUserEmail(authUser.email);
-      fetchUserData(authUser.email);
-    } else {
-      router.push("/login");
+        if (!response.ok) throw new Error("Unauthorized");
+
+        const data = await response.json();
+        if (data.email && data.role) {
+          setUserEmail(data.email);
+          setUserRole(data.role); // Set the user's role
+
+          // Redirect if the user is not an owner
+          if (data.role !== "owner") {
+            router.replace("/login"); // Redirect to unauthorized page
+            return;
+          }
+        } else {
+          throw new Error("No email or role found");
+        }
+      } catch (error) {
+        console.error("Authentication error:", error);
+        router.replace("/login");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
+  }, [router]);
+
+  // Fetch user data, uploads, messages, and movies when userEmail changes
+  useEffect(() => {
+    if (userEmail && userRole === "owner") {
+      fetchUserData(userEmail);
+      fetchUserUpload(userEmail);
+      fetchMessages(userEmail);
+      fetchUserMovies(userEmail);
     }
-  }, []);
+  }, [userEmail, userRole]);
 
   const fetchUserData = async (email) => {
     try {
@@ -44,20 +76,15 @@ export default function Dashboard() {
 
         // Check if the user is approved
         if (userDoc.approved === false) {
-          setIsApproved(false); // User is not approved
+          setIsApproved(false);
         } else {
-          setIsApproved(true); // User is approved
-          fetchUserUpload(email);
-          fetchMessages(email);
-          fetchUserMovies(email);
+          setIsApproved(true);
         }
       } else {
-        setIsApproved(false); // If no user data found, assume not approved
+        setIsApproved(false);
       }
     } catch (error) {
       console.error("Error fetching user data:", error);
-    } finally {
-      setLoading(false); // Set loading to false after fetching data
     }
   };
 
@@ -132,23 +159,38 @@ export default function Dashboard() {
     router.push(`/dashboard/videodetial/${movieID}`);
   };
 
-  // Handle Show More button click
   const handleShowMore = () => {
-    setVisibleCount(visibleCount + 4); // Increase visible count by 4
+    setVisibleCount(visibleCount + 4);
   };
 
   const handleShowLess = () => {
     setVisibleCount((prev) => Math.max(4, prev - 4));
   };
 
-  // Dynamic stats based on userMovies
+  const handleLogout = async () => {
+    try {
+      const response = await fetch("/api/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+
+      if (response.ok) {
+        router.replace("/");
+      } else {
+        throw new Error("Logout failed");
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+  };
+
   const stats = {
-    totalMovies: userMovies.length, // Total number of movies uploaded
-    averageRating: 4.5, // Static average rating
-    mostPopularGenre: "Action", // Static most popular genre
-    totalViews: 15000, // Static total views
-    totalLikes: 1200, // Static total likes
-    totalComments: 450, // Static total comments
+    totalMovies: userMovies.length,
+    averageRating: 4.5,
+    mostPopularGenre: "Action",
+    totalViews: 15000,
+    totalLikes: 1200,
+    totalComments: 450,
   };
 
   return (
@@ -215,6 +257,15 @@ export default function Dashboard() {
             <button onClick={toggleDarkMode} className="text-white hover:text-yellow-300 transition-colors">
               {darkMode ? <Moon size={28} /> : <Sun size={28} />}
             </button>
+
+            {/* Logout Button */}
+            <button
+              onClick={handleLogout}
+              className="text-white hover:text-yellow-300 transition-colors"
+              title="Logout"
+            >
+              <LogOut size={28} />
+            </button>
           </div>
         </div>
       </nav>
@@ -260,7 +311,7 @@ export default function Dashboard() {
                     Upload new videos by providing a title, description, and poster. Your videos will be added to the platform.
                   </p>
                   <button
-                    onClick={() => router.push("/dashboard/upload")}
+                    onClick={() => router.push("/dashboard/videoUploadDetail")}
                     className="mt-4 bg-blue-500 text-white px-6 py-3 rounded-lg shadow-md hover:bg-blue-600 transition-colors"
                   >
                     Upload New Video

@@ -1,35 +1,76 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { auth, db, collection, query, where, getDocs } from "../../firebaseconfig"; // Firebase Firestore
+import { auth, db } from "../../firebaseconfig"; // Firebase Firestore
+import { collection, query, where, getDocs } from "firebase/firestore"; // Firebase Firestore methods
 import { User } from "lucide-react"; // User icon for profile
 
 export default function Profile() {
   const [userEmail, setUserEmail] = useState(null);
+  const [userRole, setUserRole] = useState(null); // Add role state
   const [ownerData, setOwnerData] = useState(null);
+  const [loading, setLoading] = useState(true); // Loading state
   const router = useRouter();
 
+  // Fetch user email, role, and validate authentication
   useEffect(() => {
-    const fetchData = async (email) => {
+    const fetchUser = async () => {
       try {
-        const q = query(collection(db, "owner"), where("email", "==", email));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          setOwnerData(querySnapshot.docs[0].data());
+        const response = await fetch("/api/validate", {
+          method: "GET",
+          credentials: "include",
+        });
+
+        if (!response.ok) throw new Error("Unauthorized");
+
+        const data = await response.json();
+        if (data.email && data.role) {
+          setUserEmail(data.email); // Set user email
+          setUserRole(data.role); // Set user role
+
+          // Redirect if the user is not an owner
+          if (data.role !== "owner") {
+            router.replace("/unauthorized"); // Redirect to unauthorized page
+            return;
+          }
+        } else {
+          throw new Error("No email or role found");
         }
       } catch (error) {
-        console.error("Error fetching owner data:", error);
+        console.error("Authentication error:", error);
+        router.replace("/login");
+      } finally {
+        setLoading(false);
       }
     };
 
-    const user = auth.currentUser;
-    if (!user) {
-      router.push("/login");
-    } else {
-      setUserEmail(user.email);
-      fetchData(user.email);
-    }
+    fetchUser();
   }, [router]);
+
+  // Fetch owner data from Firestore when userEmail changes
+  useEffect(() => {
+    if (userEmail && userRole === "owner") {
+      const fetchOwnerData = async () => {
+        try {
+          const q = query(collection(db, "owner"), where("email", "==", userEmail));
+          const querySnapshot = await getDocs(q);
+
+          if (!querySnapshot.empty) {
+            const ownerDoc = querySnapshot.docs[0].data(); // Get the first document
+            setOwnerData(ownerDoc); // Set owner data
+          } else {
+            console.log("No owner found with email:", userEmail);
+          }
+        } catch (error) {
+          console.error("Error fetching owner data:", error);
+        } finally {
+          setLoading(false); // Set loading to false after fetching
+        }
+      };
+
+      fetchOwnerData();
+    }
+  }, [userEmail, userRole]); // Run this effect when userEmail or userRole changes
 
   const handleLogout = async () => {
     try {
@@ -52,7 +93,9 @@ export default function Profile() {
           <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">My Account</h2>
 
           {/* Displaying Owner Data */}
-          {ownerData ? (
+          {loading ? (
+            <p className="text-gray-600 text-center mt-4">Loading owner data...</p>
+          ) : ownerData ? (
             <div className="text-left space-y-3">
               <p className="text-gray-700">
                 <span className="font-semibold">Name:</span> {ownerData.firstName} {ownerData.lastName}
@@ -68,7 +111,7 @@ export default function Profile() {
               </p>
             </div>
           ) : (
-            <p className="text-gray-600 text-center mt-4">Loading owner data...</p>
+            <p className="text-gray-600 text-center mt-4">No owner data found.</p>
           )}
 
           {/* Buttons */}

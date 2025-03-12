@@ -8,21 +8,49 @@ import Image from "next/image";
 
 export default function AboutPage() {
   const [userEmail, setUserEmail] = useState(null);
+  const [userRole, setUserRole] = useState(null); // Add role state
   const [pendingOwners, setPendingOwners] = useState([]);
   const [openCertificate, setOpenCertificate] = useState(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [currentOwner, setCurrentOwner] = useState(null); // For keeping track of the owner in chat
   const [message, setMessage] = useState(""); // For the message input
   const [messages, setMessages] = useState([]); // Store the messages for the chat view
+  const [loading, setLoading] = useState(true); // Loading state for authentication
   const router = useRouter();
 
+  // Fetch user authentication details
   useEffect(() => {
-    const user = auth.currentUser;
-    if (!user) {
-      router.push("/login");
-    } else {
-      setUserEmail(user.email);
-    }
+    const fetchUser = async () => {
+      try {
+        const response = await fetch("/api/validate", {
+          method: "GET",
+          credentials: "include",
+        });
+
+        if (!response.ok) throw new Error("Unauthorized");
+
+        const data = await response.json();
+        if (data.email && data.role) {
+          setUserEmail(data.email); // Set user email
+          setUserRole(data.role); // Set user role
+
+          // Redirect if the user is not an admin
+          if (data.role !== "admin") {
+            router.replace("/login"); // Redirect to unauthorized page
+            return;
+          }
+        } else {
+          throw new Error("No email or role found");
+        }
+      } catch (error) {
+        console.error("Authentication error:", error);
+        router.replace("/login");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
   }, [router]);
 
   // Fetch pending owners from Firestore
@@ -42,14 +70,16 @@ export default function AboutPage() {
   };
 
   useEffect(() => {
-    fetchPendingOwners(); // Fetch data initially
+    if (userEmail && userRole === "admin") {
+      fetchPendingOwners(); // Fetch data initially
 
-    // Refresh the data every 3 minutes
-    const interval = setInterval(() => {
-      fetchPendingOwners();
-    }, 1); 
-    return () => clearInterval(interval); // Cleanup interval on unmount
-  }, []);
+      // Refresh the data every 3 minutes
+      const interval = setInterval(() => {
+        fetchPendingOwners();
+      }, 180000); // 3 minutes
+      return () => clearInterval(interval); // Cleanup interval on unmount
+    }
+  }, [userEmail, userRole]);
 
   // Approve Owner Function
   const handleApproveOwner = async (ownerId, ownerEmail) => {
@@ -79,7 +109,7 @@ export default function AboutPage() {
         text: message, // Using 'text' instead of 'message'
         sender: "admin", // Default sender is admin
         timestamp: new Date(),
-        show:false, // Default show is false
+        show: false, // Default show is false
       };
 
       // Send message to Firestore collection 'messages'
@@ -143,10 +173,13 @@ export default function AboutPage() {
     }
   };
 
+  // Show loading state while fetching user data
+  if (loading) {
+    return <p className="text-center text-gray-500 mt-10">Loading...</p>;
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-100">
-    
-
       {/* Pending Approvals Section */}
       <div className="container mx-auto p-6">
         <h2 className="text-xl font-semibold mb-4">Pending Approvals</h2>
@@ -218,7 +251,7 @@ export default function AboutPage() {
               <div className="h-64 overflow-y-scroll mb-4">
                 {messages.map((msg, index) => (
                   <div key={index} className="mb-2">
-                    <p className="font-bold">{msg.from}: </p>
+                    <p className="font-bold">{msg.sender}: </p>
                     <p>{msg.text}</p> {/* Changed 'message' to 'text' */}
                   </div>
                 ))}

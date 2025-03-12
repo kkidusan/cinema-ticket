@@ -3,20 +3,55 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { db, collection, query, where, getDocs } from "../../../firebaseconfig";
 import { motion } from "framer-motion";
-import { use } from "react"; // Import React.use
 
 export default function VideoDetail({ params }) {
   const router = useRouter();
-  const { id } = use(params);
+  const { id } = params;
 
   const [video, setVideo] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [userEmail, setUserEmail] = useState(null);
+  const [userRole, setUserRole] = useState(null); // Add role state
 
   useEffect(() => {
-    if (id) {
+    const fetchUser = async () => {
+      try {
+        const response = await fetch("/api/validate", {
+          method: "GET",
+          credentials: "include",
+        });
+
+        if (!response.ok) throw new Error("Unauthorized");
+
+        const data = await response.json();
+        if (data.email && data.role) {
+          setUserEmail(data.email); // Set user email
+          setUserRole(data.role); // Set user role
+
+          // Redirect if the user is not an owner
+          if (data.role !== "owner") {
+            router.replace("/login"); // Redirect to unauthorized page
+            return;
+          }
+        } else {
+          throw new Error("No email or role found");
+        }
+      } catch (error) {
+        console.error("Authentication error:", error);
+        router.replace("/login");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
+  }, [router]);
+
+  useEffect(() => {
+    if (id && userRole === "owner") {
       fetchVideoDetails(id);
     }
-  }, [id]);
+  }, [id, userRole]);
 
   const fetchVideoDetails = async (videoID) => {
     try {
@@ -65,13 +100,13 @@ export default function VideoDetail({ params }) {
 
         <button
           onClick={() => router.back()}
-          className="w-full bg-red-500 text-white py-2 rounded-lg mt-2 hover:bg-green-600"
+          className="w-full bg-blue-500 text-white py-2 rounded-lg mt-2 hover:bg-blue-600"
         >
           Go Back
         </button>
         <button
           onClick={() => router.push(`/updateMovie/${id}`)}
-          className="w-full bg-red-500 text-white py-2 rounded-lg mt-2 hover:bg-green-600"
+          className="w-full bg-green-500 text-white py-2 rounded-lg mt-2 hover:bg-green-600"
         >
           Update Data
         </button>

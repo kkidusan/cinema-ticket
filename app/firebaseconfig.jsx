@@ -1,11 +1,29 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, query, where, getDocs, orderBy, onSnapshot, addDoc, serverTimestamp,doc, updateDoc } from "firebase/firestore";
+import { 
+    getFirestore, 
+    collection, 
+    query, 
+    where, 
+    getDocs, 
+    orderBy, 
+    onSnapshot, 
+    addDoc, 
+    serverTimestamp, 
+    doc, 
+    updateDoc 
+} from "firebase/firestore";
 
-import { getAuth, setPersistence, browserSessionPersistence } from "firebase/auth";
+import { 
+    getAuth, 
+    setPersistence, 
+    browserSessionPersistence, 
+    signInWithEmailAndPassword, 
+    updatePassword 
+} from "firebase/auth";
+
 import { getStorage } from 'firebase/storage';
-import {  updatePassword } from "firebase/auth"; // Firebase Auth
 
-
+// Firebase Configuration
 const firebaseConfig = {
     apiKey: "AIzaSyAhW7-IqcrXlXGdjyZV8wrTljCFZCi2YxM",
     authDomain: "cimema-ticket.firebaseapp.com",
@@ -16,12 +34,28 @@ const firebaseConfig = {
     measurementId: "G-QVCCSFG6K7"
 };
 
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-const storage = getStorage(app);
+export const storage = getStorage(app);
+
 // Enable session persistence
 setPersistence(auth, browserSessionPersistence);
-export { addDoc, collection, query, where,storage, getDocs, updateDoc, doc, updatePassword };
-export { auth, db,orderBy, onSnapshot, serverTimestamp };
 
+// Export necessary Firebase modules
+export { 
+    addDoc, 
+    collection, 
+    query, 
+    where, 
+    storage, 
+    getDocs, 
+    updateDoc, 
+    doc, 
+    updatePassword, 
+    signInWithEmailAndPassword,  // ✅ Correctly Exported
+    orderBy, 
+    onSnapshot, 
+    serverTimestamp 
+};

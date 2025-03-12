@@ -9,58 +9,84 @@ import { FaPaperPlane } from "react-icons/fa"; // Correct import for the send ic
 
 export default function ChatApp() {
   const [userEmail, setUserEmail] = useState(null);
+  const [userRole, setUserRole] = useState(null); // Add role state
   const [groupedMessages, setGroupedMessages] = useState({}); // Holds grouped messages by ownerEmail
   const [selectedEmail, setSelectedEmail] = useState(null); // Track selected email
   const [selectedMessages, setSelectedMessages] = useState([]); // Messages for selected email
   const [message, setMessage] = useState(""); // State for input message
   const messageEndRef = useRef(null); // Ref for auto-scrolling
   const router = useRouter();
+  const [loading, setLoading] = useState(true); // State to manage loading status
 
   // Search query state
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Get authenticated user email
+  // Fetch user authentication details
   useEffect(() => {
-    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
-      if (user) {
-        setUserEmail(user.email);
-      } else {
-        router.push("/login"); // Uncomment to force login
-      }
-    });
+    const fetchUser = async () => {
+      try {
+        const response = await fetch("/api/validate", {
+          method: "GET",
+          credentials: "include",
+        });
 
-    return () => unsubscribeAuth();
+        if (!response.ok) throw new Error("Unauthorized");
+
+        const data = await response.json();
+        if (data.email && data.role) {
+          setUserEmail(data.email); // Set user email
+          setUserRole(data.role); // Set user role
+
+          // Redirect if the user is not an admin
+          if (data.role !== "admin") {
+            router.replace("/login"); // Redirect to unauthorized page
+            return;
+          }
+        } else {
+          throw new Error("No email or role found");
+        }
+      } catch (error) {
+        console.error("Authentication error:", error);
+        router.replace("/login");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
   }, [router]);
 
   // Fetch Messages from Firestore and group by ownerEmail
   useEffect(() => {
-    const q = query(collection(db, "messages"), orderBy("timestamp", "asc"));
+    if (userRole === "admin") {
+      const q = query(collection(db, "messages"), orderBy("timestamp", "asc"));
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const grouped = {};
-      const newMessageCounts = {}; // To store new message counts for each ownerEmail
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const grouped = {};
+        const newMessageCounts = {}; // To store new message counts for each ownerEmail
 
-      snapshot.docs.forEach((doc) => {
-        const data = doc.data();
-        if (data.ownerEmail) {
-          if (!grouped[data.ownerEmail]) {
-            grouped[data.ownerEmail] = [];
+        snapshot.docs.forEach((doc) => {
+          const data = doc.data();
+          if (data.ownerEmail) {
+            if (!grouped[data.ownerEmail]) {
+              grouped[data.ownerEmail] = [];
+            }
+            grouped[data.ownerEmail].push({ ...data, id: doc.id });
+
+            // Count new messages where show is false and sender is "owner"
+            if (data.sender === "owner" && !data.show) {
+              newMessageCounts[data.ownerEmail] = (newMessageCounts[data.ownerEmail] || 0) + 1;
+            }
           }
-          grouped[data.ownerEmail].push({ ...data, id: doc.id });
+        });
 
-          // Count new messages where show is false and sender is "owner"
-          if (data.sender === "owner" && !data.show) {
-            newMessageCounts[data.ownerEmail] = (newMessageCounts[data.ownerEmail] || 0) + 1;
-          }
-        }
+        setGroupedMessages(grouped);
+        setNewMessageCounts(newMessageCounts); // Set the new message counts
       });
 
-      setGroupedMessages(grouped);
-      setNewMessageCounts(newMessageCounts); // Set the new message counts
-    });
-
-    return () => unsubscribe();
-  }, []);
+      return () => unsubscribe();
+    }
+  }, [userRole]);
 
   // State to hold new message counts for each ownerEmail
   const [newMessageCounts, setNewMessageCounts] = useState({});

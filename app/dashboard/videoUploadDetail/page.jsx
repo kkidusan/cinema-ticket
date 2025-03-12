@@ -10,40 +10,65 @@ export default function VideoUploadForm() {
         title: "",
         category: "",
         description: "",
-        duration: "",
+        duration: "", // HH:MM format from time picker
         mainCast: "",
         cinemaName: "",
         cinemaLocation: "",
         availableSite: "",
         ticketPrice: "",
         screeningDate: "",
-        uploadingDate: "",
         poster: "",
-        movieID: "", // New field for auto-generated ID
+        movieID: "",
     });
 
     const [loading, setLoading] = useState(false);
+    const [errors, setErrors] = useState({});
     const router = useRouter();
     const [userEmail, setUserEmail] = useState(null);
+    const [userRole, setUserRole] = useState(null); // Add role state
 
+    // Fetch user email, role, and validate authentication
     useEffect(() => {
-        // Check if the user is authenticated
-        const user = auth.currentUser;
+        const fetchUser = async () => {
+            try {
+                const response = await fetch("/api/validate", {
+                    method: "GET",
+                    credentials: "include",
+                });
 
-        if (!user) {
-            router.push("/login");
-        } else {
-            setUserEmail(user.email);
-        }
+                if (!response.ok) throw new Error("Unauthorized");
+
+                const data = await response.json();
+                if (data.email && data.role) {
+                    setUserEmail(data.email); // Set user email
+                    setUserRole(data.role); // Set user role
+
+                    // Redirect if the user is not an owner
+                    if (data.role !== "owner") {
+                        router.replace("/login"); // Redirect to unauthorized page
+                        return;
+                    }
+                } else {
+                    throw new Error("No email or role found");
+                }
+            } catch (error) {
+                console.error("Authentication error:", error);
+                router.replace("/login");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchUser();
     }, [router]);
 
-    // Handle text input changes
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
+        setErrors((prev) => ({ ...prev, [name]: "" }));
     };
 
-    // Convert image to base64 string
+    // Convert image to base64
     const handleFileChange = (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -53,28 +78,41 @@ export default function VideoUploadForm() {
         reader.onloadend = () => {
             setFormData((prev) => ({
                 ...prev,
-                poster: reader.result, // Store as base64
-                movieID: generateMovieID(), // Generate 8-character unique ID
+                poster: reader.result,
+                movieID: generateMovieID(),
             }));
         };
     };
 
-    // Function to generate 8-character unique movie ID
+    // Generate 8-character unique movie ID
     const generateMovieID = () => {
-        const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        let result = '';
-        for (let i = 0; i < 8; i++) {
-            result += characters.charAt(Math.floor(Math.random() * characters.length));
-        }
-        return result;
+        const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        return Array.from({ length: 8 }, () => characters.charAt(Math.floor(Math.random() * characters.length))).join("");
+    };
+
+    // Validate form
+    const validateForm = () => {
+        const newErrors = {};
+        if (!formData.title.trim()) newErrors.title = "Title is required.";
+        if (!formData.category.trim()) newErrors.category = "Category is required.";
+        if (!formData.duration.trim()) newErrors.duration = "Duration is required.";
+        if (!formData.mainCast.trim()) newErrors.mainCast = "Main cast is required.";
+        if (!formData.cinemaName.trim()) newErrors.cinemaName = "Cinema name is required.";
+        if (!formData.cinemaLocation.trim()) newErrors.cinemaLocation = "Cinema location is required.";
+        if (!formData.availableSite.trim()) newErrors.availableSite = "Available site is required.";
+        if (!formData.ticketPrice) newErrors.ticketPrice = "Ticket price is required.";
+        if (!formData.screeningDate) newErrors.screeningDate = "Screening date is required.";
+        if (!formData.poster) newErrors.poster = "Poster image is required.";
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
 
-        if (!formData.poster) {
-            alert("Please upload a poster image.");
+        if (!validateForm()) {
             setLoading(false);
             return;
         }
@@ -85,24 +123,24 @@ export default function VideoUploadForm() {
                 title: formData.title,
                 category: formData.category,
                 description: formData.description || "",
-                duration: formData.duration,
+                duration: formData.duration + ":00", // Append ":00" to ensure HH:MM:SS format
                 mainCast: formData.mainCast,
                 cinemaName: formData.cinemaName,
                 cinemaLocation: formData.cinemaLocation,
                 availableSite: formData.availableSite,
                 ticketPrice: Number(formData.ticketPrice),
-                screeningDate: Timestamp.fromDate(new Date(formData.screeningDate)), // Convert date
-                uploadingDate: Timestamp.fromDate(new Date(formData.uploadingDate)), // Convert date
-                poster: formData.poster, // Store as Base64 string
-                movieID: formData.movieID, // Store auto-generated unique ID
-                createdAt: Timestamp.now(), // Store current time
+                screeningDate: Timestamp.fromDate(new Date(formData.screeningDate)),
+                uploadingDate: Timestamp.now(), // Automatically set current date
+                poster: formData.poster,
+                movieID: formData.movieID,
+                createdAt: Timestamp.now(),
             });
 
             alert("Movie uploaded successfully!");
             router.push("/dashboard");
         } catch (error) {
             console.error("Error uploading movie:", error);
-            alert("Failed to upload movie. Check console for details.");
+            alert("Failed to upload movie.");
         }
         setLoading(false);
     };
@@ -113,37 +151,25 @@ export default function VideoUploadForm() {
                 onSubmit={handleSubmit}
                 className="w-full max-w-2xl bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg"
             >
-                <h2 className="text-2xl font-bold mb-4 text-gray-800 dark:text-white">
-                    Upload Movie Details
-                </h2>
+                <h2 className="text-2xl font-bold mb-4 text-gray-800 dark:text-white">Upload Movie Details</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <InputField name="title" label="Movie Title" required onChange={handleChange} />
-                    <InputField name="category" label="Category" required onChange={handleChange} />
-                    <InputField name="duration" label="Duration (mins)" required onChange={handleChange} />
-                    <InputField name="mainCast" label="Main Cast" required onChange={handleChange} />
-                    <InputField name="cinemaName" label="Cinema Name" required onChange={handleChange} />
-                    <InputField name="cinemaLocation" label="Cinema Location" required onChange={handleChange} />
-                    <InputField name="availableSite" label="Available Site" required onChange={handleChange} />
-                    <InputField name="ticketPrice" label="Ticket Price" type="number" required onChange={handleChange} />
-                    <InputField name="screeningDate" label="Screening Date" type="date" required onChange={handleChange} />
-                    <InputField name="uploadingDate" label="Uploading Date" type="date" required onChange={handleChange} />
+                    <InputField name="title" label="Movie Title" onChange={handleChange} error={errors.title} />
+                    <InputField name="category" label="Category" onChange={handleChange} error={errors.category} />
+                    <InputField name="duration" label="Duration (HH:MM)" type="time" onChange={handleChange} error={errors.duration} />
+                    <InputField name="mainCast" label="Main Cast" onChange={handleChange} error={errors.mainCast} />
+                    <InputField name="cinemaName" label="Cinema Name" onChange={handleChange} error={errors.cinemaName} />
+                    <InputField name="cinemaLocation" label="Cinema Location" onChange={handleChange} error={errors.cinemaLocation} />
+                    <InputField name="availableSite" label="Available Site" onChange={handleChange} error={errors.availableSite} />
+                    <InputField name="ticketPrice" label="Ticket Price" type="number" onChange={handleChange} error={errors.ticketPrice} />
+                    <InputField name="screeningDate" label="Screening Date" type="date" onChange={handleChange} error={errors.screeningDate} />
                     <div>
                         <label className="block text-gray-700 dark:text-white">Poster (Image Only)</label>
-                        <input
-                            type="file"
-                            accept="image/*"
-                            required
-                            onChange={handleFileChange}
-                            className="mt-1 p-2 border rounded w-full dark:bg-gray-700"
-                        />
+                        <input type="file" accept="image/*" onChange={handleFileChange} className="mt-1 p-2 border rounded w-full dark:bg-gray-700" />
+                        {errors.poster && <p className="text-red-500 text-sm">{errors.poster}</p>}
                     </div>
                 </div>
                 <div className="mt-6">
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 disabled:bg-gray-500"
-                    >
+                    <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 disabled:bg-gray-500">
                         {loading ? "Uploading..." : "Submit"}
                     </button>
                 </div>
@@ -152,17 +178,12 @@ export default function VideoUploadForm() {
     );
 }
 
-function InputField({ name, label, type = "text", required, onChange }) {
+function InputField({ name, label, type = "text", onChange, error }) {
     return (
         <div>
             <label className="block text-gray-700 dark:text-white">{label}</label>
-            <input
-                type={type}
-                name={name}
-                required={required}
-                onChange={onChange}
-                className="mt-1 p-2 border rounded w-full dark:bg-gray-700"
-            />
+            <input type={type} name={name} onChange={onChange} className="mt-1 p-2 border rounded w-full dark:bg-gray-700" />
+            {error && <p className="text-red-500 text-sm">{error}</p>}
         </div>
     );
 }

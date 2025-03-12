@@ -12,38 +12,65 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
 const Cards = () => {
   const [userEmail, setUserEmail] = useState(null); // Move state inside the component
+  const [userRole, setUserRole] = useState(null); // Add role state
   const [darkMode, setDarkMode] = useState(false); // Dark mode state
   const [messageCount, setMessageCount] = useState(0); // Dynamic message count
   const [ownerCount, setOwnerCount] = useState(0); // Number of owners
   const [activeUsers, setActiveUsers] = useState(0); // Number of active users
   const [inactiveUsers, setInactiveUsers] = useState(0); // Number of inactive users
+  const [loading, setLoading] = useState(true); // Loading state for authentication
   const router = useRouter();
 
+  // Fetch user authentication details
   useEffect(() => {
-    // Check if the user is authenticated
-    const user = auth.currentUser;
+    const fetchUser = async () => {
+      try {
+        const response = await fetch("/api/validate", {
+          method: "GET",
+          credentials: "include",
+        });
 
-    if (!user) {
-      // Redirect to login page if user is not logged in
-      router.push("/login");
-    } else {
-      // Set user email if authenticated
-      setUserEmail(user.email);
-      // Fetch the message count in real-time
-      fetchMessageCount(user.email);
-      // Fetch the number of owners
-      fetchOwnerCount();
-      // Fetch active and inactive users
-      fetchUserStatus();
-    }
+        if (!response.ok) throw new Error("Unauthorized");
 
+        const data = await response.json();
+        if (data.email && data.role) {
+          setUserEmail(data.email); // Set user email
+          setUserRole(data.role); // Set user role
+
+          // Redirect if the user is not an admin
+          if (data.role !== "admin") {
+            router.replace("/login"); // Redirect to unauthorized page
+            return;
+          }
+        } else {
+          throw new Error("No email or role found");
+        }
+      } catch (error) {
+        console.error("Authentication error:", error);
+        router.replace("/login");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
+  }, [router]);
+
+  useEffect(() => {
     // Check for saved theme in localStorage
     const savedTheme = localStorage.getItem("theme");
     if (savedTheme === "dark") {
       setDarkMode(true);
       document.documentElement.classList.add("dark");
     }
-  }, [router]);
+
+    // Fetch data if user is authenticated and has the admin role
+    if (userEmail && userRole === "admin") {
+      fetchMessageCount(userEmail);
+      fetchOwnerCount();
+      fetchUserStatus();
+    }
+  }, [userEmail, userRole]);
 
   // Fetch the message count from Firestore in real-time
   const fetchMessageCount = async (email) => {
@@ -151,8 +178,12 @@ const Cards = () => {
       buttonText: "Manage Users",
       path: "/admin/usermanagement",
     },
-
   ];
+
+  // Show loading state while fetching user data
+  if (loading) {
+    return <p className="text-center text-gray-500 mt-10">Loading...</p>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4">

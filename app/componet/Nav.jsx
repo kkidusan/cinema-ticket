@@ -37,6 +37,27 @@ const Navbar1 = ({ messageCount, notificationCount, darkMode, toggleDarkMode }) 
     setShowProfile(!showProfile);
   };
 
+  // Logout function
+  const handleLogout = async () => {
+    try {
+      const response = await fetch("/api/logout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.ok) {
+        // Clear any client-side state if necessary
+        router.push("/"); // Redirect to home page or login page
+      } else {
+        console.error("Logout failed");
+      }
+    } catch (error) {
+      console.error("Error during logout:", error);
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-gray-800 shadow-md p-4 flex justify-between items-center relative">
       {/* Dynamic Header Title */}
@@ -124,7 +145,7 @@ const Navbar1 = ({ messageCount, notificationCount, darkMode, toggleDarkMode }) 
               Settings
             </button>
             <button
-              onClick={() => router.push("/logout")}
+              onClick={handleLogout}
               className="w-full text-left p-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
               Logout

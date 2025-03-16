@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { auth, reauthenticateWithCredential, EmailAuthProvider, updatePassword } from "firebase/auth";
 import { auth as firebaseAuth } from "../../../firebaseconfig";
 import { Eye, EyeOff } from "lucide-react";
+import { PuffLoader } from "react-spinners"; // Import PuffLoader
 
 export default function AboutPage() {
   const [userEmail, setUserEmail] = useState(null);
@@ -15,6 +16,7 @@ export default function AboutPage() {
   const [errors, setErrors] = useState([]);
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(true); // Add loading state
+  const [isAuthenticated, setIsAuthenticated] = useState(false); // Track authentication status
   const router = useRouter();
 
   // Fetch user authentication details
@@ -32,10 +34,11 @@ export default function AboutPage() {
         if (data.email && data.role) {
           setUserEmail(data.email); // Set user email
           setUserRole(data.role); // Set user role
+          setIsAuthenticated(true); // Mark user as authenticated
 
           // Redirect if the user is not an owner
           if (data.role !== "owner") {
-            router.replace("/unauthorized"); // Redirect to unauthorized page
+            router.replace("/login"); // Redirect to unauthorized page
             return;
           }
         } else {
@@ -45,7 +48,7 @@ export default function AboutPage() {
         console.error("Authentication error:", error);
         router.replace("/login");
       } finally {
-        setLoading(false);
+        setLoading(false); // Set loading to false after authentication
       }
     };
 
@@ -94,20 +97,25 @@ export default function AboutPage() {
   };
 
   // Show loading state while fetching user data
-  if (loading) {
-    return <p className="text-center text-gray-500 mt-10">Loading...</p>;
+  if (loading || !isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
+        <PuffLoader color="#36D7B7" size={100} /> {/* Replace with PuffLoader */}
+      </div>
+    );
   }
 
+  // Render the page content only after authentication is complete
   return (
-    <div className="flex justify-center items-center min-h-screen bg-gray-100">
-      <div className="max-w-md w-full bg-white p-8 rounded-lg shadow-lg text-center">
-        <h2 className="text-2xl font-bold text-gray-800">Change Password</h2>
-        <p className="text-gray-600 mt-4">User: {userEmail ? userEmail : "Loading..."}</p>
+    <div className="flex justify-center items-center min-h-screen bg-gray-100 dark:bg-gray-900">
+      <div className="max-w-md w-full bg-white dark:bg-gray-800 p-8 rounded-lg shadow-lg text-center">
+        <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Change Password</h2>
+        <p className="text-gray-600 dark:text-gray-300 mt-4">User: {userEmail ? userEmail : "Loading..."}</p>
 
         <form onSubmit={handlePasswordChange} className="mt-8">
           {/* Current Password Field */}
           <div className="mb-4 relative">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="currentPassword">
+            <label className="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" htmlFor="currentPassword">
               Current Password
             </label>
             <input
@@ -116,7 +124,7 @@ export default function AboutPage() {
               placeholder="Enter your current password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              className="w-full p-3 pr-10 border rounded-lg focus:outline-none focus:ring focus:ring-blue-300"
+              className="w-full p-3 pr-10 border rounded-lg focus:outline-none focus:ring focus:ring-blue-300 dark:bg-gray-700 dark:text-white"
             />
             <div
               className="absolute inset-y-0 right-3 pt-7 flex items-center cursor-pointer"
@@ -128,7 +136,7 @@ export default function AboutPage() {
 
           {/* New Password Field */}
           <div className="mb-4 relative">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="newPassword">
+            <label className="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" htmlFor="newPassword">
               New Password
             </label>
             <input
@@ -137,7 +145,7 @@ export default function AboutPage() {
               placeholder="Enter your new password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full p-3 pr-10 border rounded-lg focus:outline-none focus:ring focus:ring-blue-300"
+              className="w-full p-3 pr-10 border rounded-lg focus:outline-none focus:ring focus:ring-blue-300 dark:bg-gray-700 dark:text-white"
             />
             <div
               className="absolute inset-y-0 right-3 pt-7 flex items-center cursor-pointer"
@@ -157,7 +165,7 @@ export default function AboutPage() {
 
         {/* Display Errors */}
         {errors.length > 0 && (
-          <div className="mt-4 bg-red-100 text-red-700 p-3 rounded-lg">
+          <div className="mt-4 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 p-3 rounded-lg">
             <ul className="list-disc list-inside">
               {errors.map((error, index) => (
                 <li key={index}>{error}</li>

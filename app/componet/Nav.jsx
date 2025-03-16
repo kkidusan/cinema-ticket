@@ -65,43 +65,67 @@ const Navbar1 = ({ messageCount, notificationCount, darkMode, toggleDarkMode }) 
         {currentTitle}
       </h1>
       <div className="flex items-center space-x-6">
-        {/* Notification Icon */}
-        <button
-          onClick={handleNotificationClick}
-          className="relative p-2 text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-        >
-          <Bell size={24} />
-          <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full px-1.5">
-            {notificationCount}
-          </span>
-        </button>
+        {/* Notification Icon with Tooltip */}
+        <div className="relative group">
+          <button
+            onClick={handleNotificationClick}
+            className="p-2 text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+          >
+            <Bell size={24} />
+            <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full px-1.5">
+              {notificationCount}
+            </span>
+          </button>
+          <div className="absolute top-10 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-sm px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            Notifications
+            <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-800 rotate-45"></div>
+          </div>
+        </div>
 
-        {/* Message Icon */}
-        <button
-          onClick={handleMessageClick}
-          className="relative p-2 text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-        >
-          <MessageCircle size={24} />
-          <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full px-1.5">
-            {messageCount}
-          </span>
-        </button>
+        {/* Message Icon with Tooltip */}
+        <div className="relative group">
+          <button
+            onClick={handleMessageClick}
+            className="p-2 text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+          >
+            <MessageCircle size={24} />
+            <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full px-1.5">
+              {messageCount}
+            </span>
+          </button>
+          <div className="absolute top-10 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-sm px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            Messages
+            <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-800 rotate-45"></div>
+          </div>
+        </div>
 
-        {/* User Avatar */}
-        <button
-          onClick={toggleProfile}
-          className="p-2 flex items-center justify-center w-10 h-10 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
-        >
-          <span className="font-semibold text-lg">{userInitial}</span>
-        </button>
+        {/* User Avatar with Tooltip */}
+        <div className="relative group">
+          <button
+            onClick={toggleProfile}
+            className="p-2 flex items-center justify-center w-10 h-10 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
+          >
+            <span className="font-semibold text-lg">{userInitial}</span>
+          </button>
+          <div className="absolute top-10 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-sm px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            Profile
+            <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-800 rotate-45"></div>
+          </div>
+        </div>
 
-        {/* Dark Mode Toggle */}
-        <button
-          onClick={toggleDarkMode}
-          className="p-2 text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-        >
-          {darkMode ? <Sun size={24} /> : <Moon size={24} />}
-        </button>
+        {/* Dark Mode Toggle with Tooltip */}
+        <div className="relative group">
+          <button
+            onClick={toggleDarkMode}
+            className="p-2 text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+          >
+            {darkMode ? <Sun size={24} /> : <Moon size={24} />}
+          </button>
+          <div className="absolute top-10 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-sm px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            {darkMode ? "Light Mode" : "Dark Mode"}
+            <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-800 rotate-45"></div>
+          </div>
+        </div>
       </div>
 
       {/* Profile View */}

@@ -1,45 +1,75 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { auth, db, collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp } from "@/app/firebaseconfig"; // Ensure correct path
+import { auth, db, collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp } from "../../firebaseconfig"; // Ensure correct path
 import { ArrowLeft, Send, Paperclip } from "lucide-react";
+import { PacmanLoader } from "react-spinners"; // For an attractive loading spinner
 
 export default function Messages() {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
-  const [file, setFile] = useState(null);  // For file upload
+  const [file, setFile] = useState(null); // For file upload
+  const [isLoading, setIsLoading] = useState(true); // Loading state
+  const [userEmail, setUserEmail] = useState(null); // Store user email
+  const [userRole, setUserRole] = useState(null); // Store user role
+  const [isAuthenticated, setIsAuthenticated] = useState(false); // Authentication state
   const messagesEndRef = useRef(null);
   const router = useRouter();
 
   useEffect(() => {
-    const fetchMessages = async () => {
-      if (!auth.currentUser) {
-        router.push("/login");
-        return;
+    const fetchUser = async () => {
+      try {
+        const response = await fetch("/api/validate", {
+          method: "GET",
+          credentials: "include",
+        });
+
+        if (!response.ok) throw new Error("Unauthorized");
+
+        const data = await response.json();
+        if (data.email && data.role) {
+          setUserEmail(data.email);
+          setUserRole(data.role);
+          setIsAuthenticated(true);
+          if (data.role !== "owner") {
+            router.replace("/login");
+            return;
+          }
+        } else {
+          throw new Error("No email or role found");
+        }
+      } catch (error) {
+        console.error("Authentication error:", error);
+        router.replace("/login");
+      } finally {
+        setIsLoading(false); // Corrected here
       }
-
-      const userEmail = auth.currentUser.email;
-      const messagesRef = collection(db, "messages");
-      const q = query(
-        messagesRef,
-        where("ownerEmail", "==", userEmail),
-        orderBy("timestamp", "asc")
-      );
-
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const fetchedMessages = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setMessages(fetchedMessages);
-        scrollToBottom();
-      });
-
-      return () => unsubscribe();
     };
 
-    fetchMessages();
+    fetchUser();
   }, [router]);
+
+  // Fetch messages from Firestore
+  useEffect(() => {
+    if (!userEmail) return;
+
+    const q = query(
+      collection(db, "messages"),
+      where("ownerEmail", "==", userEmail),
+      orderBy("timestamp", "asc")
+    );
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const messagesData = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setMessages(messagesData);
+      scrollToBottom(); // Scroll to the bottom when new messages are fetched
+    });
+
+    return () => unsubscribe(); // Cleanup the listener
+  }, [userEmail]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -49,10 +79,10 @@ export default function Messages() {
     if (newMessage.trim() === "" && !file) return;
 
     const newMessageObj = {
-      ownerEmail: auth.currentUser.email,
+      ownerEmail: userEmail,
       text: newMessage,
       sender: "owner",
-      from: auth.currentUser.displayName || auth.currentUser.email,
+      from: auth.currentUser?.displayName || userEmail,
       show: true,
       timestamp: new Date(),
       status: "sending", // Set initial status as "sending"
@@ -63,25 +93,37 @@ export default function Messages() {
     setFile(null); // Reset file input
     scrollToBottom(); // Scroll to the bottom of the messages
 
-    // Send the message to Firestore
-    await addDoc(collection(db, "messages"), {
-      ownerEmail: auth.currentUser.email,
-      text: newMessage,
-      sender: "owner",
-      from: auth.currentUser.displayName || auth.currentUser.email,
-      show: false,
-      timestamp: serverTimestamp(),
-      status: "sending", // Set status as "sending"
-    });
+    try {
+      // Send the message to Firestore
+      const docRef = await addDoc(collection(db, "messages"), {
+        ownerEmail: userEmail,
+        text: newMessage,
+        sender: "owner",
+        from: auth.currentUser?.displayName || userEmail,
+        show: false,
+        timestamp: serverTimestamp(),
+        status: "sending", // Set status as "sending"
+      });
 
-    // Update the message status to "delivered" after sending it
-    setMessages((prevMessages) =>
-      prevMessages.map((msg) =>
-        msg.text === newMessageObj.text && msg.status === "sending"
-          ? { ...msg, status: "delivered" }
-          : msg
-      )
-    );
+      // Update the message status to "delivered" after sending it
+      setMessages((prevMessages) =>
+        prevMessages.map((msg) =>
+          msg.text === newMessageObj.text && msg.status === "sending"
+            ? { ...msg, id: docRef.id, status: "delivered" }
+            : msg
+        )
+      );
+    } catch (error) {
+      console.error("Error sending message:", error);
+      // Revert the message status to "failed" if there's an error
+      setMessages((prevMessages) =>
+        prevMessages.map((msg) =>
+          msg.text === newMessageObj.text && msg.status === "sending"
+            ? { ...msg, status: "failed" }
+            : msg
+        )
+      );
+    }
   };
 
   // Handle file change
@@ -91,6 +133,15 @@ export default function Messages() {
       setFile(selectedFile);
     }
   };
+
+  // Show loading spinner while validating user
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gradient-to-r from-indigo-100 via-purple-200 to-pink-100 dark:bg-gray-900">
+        <PacmanLoader color="#6D28D9" size={30} /> {/* Attractive loading spinner */}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-r from-indigo-100 via-purple-200 to-pink-100 dark:bg-gray-900 dark:text-white">
@@ -106,9 +157,9 @@ export default function Messages() {
       <div className="flex-grow p-4 overflow-y-auto space-y-4">
         <div className="grid gap-4">
           {messages.length > 0 ? (
-            messages.map((msg, index) => (
+            messages.map((msg) => (
               <div
-                key={msg.id || index} // Fallback to index if id is not available
+                key={msg.id}
                 className={`grid ${msg.sender === "owner" ? "justify-self-end" : "justify-self-start"}`}
               >
                 <div
@@ -117,11 +168,15 @@ export default function Messages() {
                   {/* Message Text */}
                   <p className="text-lg">{msg.text}</p>
 
-                  {/* Optionally, display file thumbnail or icon */}
-                  {file && (
-                    <div className="mt-2">
-                      <span className="text-sm text-gray-500">File: {file.name}</span>
-                    </div>
+                  {/* Message Status */}
+                  {msg.sender === "owner" && (
+                    <p className="text-xs mt-1 text-right">
+                      {msg.status === "sending"
+                        ? "Sending..."
+                        : msg.status === "delivered"
+                        ? "Delivered"
+                        : "Failed"}
+                    </p>
                   )}
                 </div>
               </div>

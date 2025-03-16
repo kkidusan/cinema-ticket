@@ -158,6 +158,21 @@ export default function ChatApp() {
     return lastMessage.text;
   };
 
+  // Show loading animation while validating authentication
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-100">
+        <div className="wave-loader">
+          <div></div>
+          <div></div>
+          <div></div>
+          <div></div>
+          <div></div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen bg-gradient-to-r from-indigo-100 to-pink-100 dark:bg-gray-900 dark:text-white">
       {/* Sidebar with custom background color */}

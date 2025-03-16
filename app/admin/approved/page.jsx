@@ -36,7 +36,7 @@ export default function AboutPage() {
 
           // Redirect if the user is not an admin
           if (data.role !== "admin") {
-            router.replace("/login"); // Redirect to unauthorized page
+            router.replace("/login"); // Redirect to login if not admin
             return;
           }
         } else {
@@ -173,9 +173,24 @@ export default function AboutPage() {
     }
   };
 
-  // Show loading state while fetching user data
+  // Show only the wave loader while loading
   if (loading) {
-    return <p className="text-center text-gray-500 mt-10">Loading...</p>;
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-100">
+        <div className="wave-loader">
+          <div></div>
+          <div></div>
+          <div></div>
+          <div></div>
+          <div></div>
+        </div>
+      </div>
+    );
+  }
+
+  // If not authenticated, show nothing (or redirect to login)
+  if (!userEmail || userRole !== "admin") {
+    return null;
   }
 
   return (

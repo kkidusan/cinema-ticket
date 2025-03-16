@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { auth, db } from "../../firebaseconfig"; // Firebase Firestore
 import { collection, query, where, getDocs } from "firebase/firestore"; // Firebase Firestore methods
 import { User } from "lucide-react"; // User icon for profile
+import { PuffLoader } from "react-spinners"; // Import PuffLoader
+import { motion } from "framer-motion"; // Import motion from framer-motion
 
 export default function Profile() {
   const [userEmail, setUserEmail] = useState(null);
@@ -81,6 +83,30 @@ export default function Profile() {
     }
   };
 
+  // Loading Spinner
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <motion.div
+          className="flex flex-col items-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <PuffLoader color="#36D7B7" size={100} /> {/* Replace with PuffLoader */}
+          <motion.p
+            className="mt-4 text-2xl font-bold text-gray-700 dark:text-gray-300"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5, duration: 0.5 }}
+          >
+          </motion.p>
+          
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-blue-100 to-indigo-200 p-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-lg overflow-hidden">
@@ -93,9 +119,7 @@ export default function Profile() {
           <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">My Account</h2>
 
           {/* Displaying Owner Data */}
-          {loading ? (
-            <p className="text-gray-600 text-center mt-4">Loading owner data...</p>
-          ) : ownerData ? (
+          {ownerData ? (
             <div className="text-left space-y-3">
               <p className="text-gray-700">
                 <span className="font-semibold">Name:</span> {ownerData.firstName} {ownerData.lastName}

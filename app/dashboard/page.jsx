@@ -2,15 +2,16 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Sun, Moon, MessageCircle, Loader2, LogOut } from "lucide-react";
+import { Sun, Moon, MessageCircle, LogOut } from "lucide-react";
 import { auth, db } from "../firebaseconfig";
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc } from "firebase/firestore";
 import Footer from "../componet/Footer";
+import { PuffLoader } from "react-spinners"; // Import PuffLoader
 
 export default function Dashboard() {
   const [darkMode, setDarkMode] = useState(false);
   const [userEmail, setUserEmail] = useState("");
-  const [userRole, setUserRole] = useState(""); // Add role state
+  const [userRole, setUserRole] = useState("");
   const [userData, setUserData] = useState(null);
   const [upload, setUpload] = useState([]);
   const [visibleCount, setVisibleCount] = useState(4);
@@ -19,6 +20,7 @@ export default function Dashboard() {
   const [userMovies, setUserMovies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isApproved, setIsApproved] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const router = useRouter();
 
   // Fetch user email, role, and validate authentication
@@ -35,11 +37,10 @@ export default function Dashboard() {
         const data = await response.json();
         if (data.email && data.role) {
           setUserEmail(data.email);
-          setUserRole(data.role); // Set the user's role
-
-          // Redirect if the user is not an owner
+          setUserRole(data.role);
+          setIsAuthenticated(true);
           if (data.role !== "owner") {
-            router.replace("/login"); // Redirect to unauthorized page
+            router.replace("/login");
             return;
           }
         } else {
@@ -58,13 +59,13 @@ export default function Dashboard() {
 
   // Fetch user data, uploads, messages, and movies when userEmail changes
   useEffect(() => {
-    if (userEmail && userRole === "owner") {
+    if (isAuthenticated && userEmail && userRole === "owner") {
       fetchUserData(userEmail);
       fetchUserUpload(userEmail);
       fetchMessages(userEmail);
       fetchUserMovies(userEmail);
     }
-  }, [userEmail, userRole]);
+  }, [isAuthenticated, userEmail, userRole]);
 
   const fetchUserData = async (email) => {
     try {
@@ -73,13 +74,7 @@ export default function Dashboard() {
       if (!querySnapshot.empty) {
         const userDoc = querySnapshot.docs[0].data();
         setUserData(userDoc);
-
-        // Check if the user is approved
-        if (userDoc.approved === false) {
-          setIsApproved(false);
-        } else {
-          setIsApproved(true);
-        }
+        setIsApproved(userDoc.approved !== false);
       } else {
         setIsApproved(false);
       }
@@ -119,8 +114,7 @@ export default function Dashboard() {
 
       onSnapshot(q, (querySnapshot) => {
         setMessageCount(querySnapshot.size);
-        const messagesData = querySnapshot.docs.map((doc) => doc.data());
-        setMessages(messagesData);
+        setMessages(querySnapshot.docs.map((doc) => doc.data()));
       });
     } catch (error) {
       console.error("Error fetching messages:", error);
@@ -193,6 +187,33 @@ export default function Dashboard() {
     totalComments: 450,
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <motion.div
+          className="flex flex-col items-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <PuffLoader color="#36D7B7" size={100} /> {/* Loading spinner */}
+          <motion.p
+            className="mt-4 text-2xl font-bold text-gray-700 dark:text-gray-300"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5, duration: 0.5 }}
+          >
+            Loading dashboard...
+          </motion.p>
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null; // or a redirect to login page
+  }
+
   return (
     <div className={`min-h-screen flex flex-col ${darkMode ? "bg-gray-900" : "bg-zinc-50"} transition-colors`}>
       {/* Navigation Bar */}
@@ -214,7 +235,7 @@ export default function Dashboard() {
           </motion.div>
 
           <div className="flex items-center space-x-6 ml-auto">
-            {/* Profile Button with Hover Text */}
+            {/* Profile Button */}
             <button
               onClick={() => router.push("/dashboard/profile")}
               className="relative flex items-center space-x-2 text-white text-lg font-medium hover:text-yellow-300 transition-colors group"
@@ -229,13 +250,12 @@ export default function Dashboard() {
                   U
                 </div>
               )}
-              {/* Hover Text */}
               <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-black text-white text-sm px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
                 Profile
               </span>
             </button>
 
-            {/* Message Button with Hover Text */}
+            {/* Message Button */}
             <button
               onClick={handleMessageClick}
               className="relative text-white hover:text-yellow-300 transition-colors group"
@@ -247,7 +267,6 @@ export default function Dashboard() {
                   {messageCount}
                 </span>
               )}
-              {/* Hover Text */}
               <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-black text-white text-sm px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
                 Message
               </span>
@@ -271,184 +290,172 @@ export default function Dashboard() {
       </nav>
 
       {/* Dashboard Content */}
-      <div className="flex-grow p-6">
-        {loading ? (
-          // Loading state
-          <div className="flex justify-center items-center h-40">
-            <Loader2 className="animate-spin text-blue-500" size={40} />
-            <p className="ml-3 text-gray-700 dark:text-gray-300">Loading dashboard...</p>
-          </div>
-        ) : isApproved === false ? (
-          // User is not approved
-          <div className="text-center text-gray-700 dark:text-gray-300">
-            <p className="text-xl">Your request is being processed. Please wait a few days.</p>
-          </div>
-        ) : (
-          // User is approved, show dashboard content
-          <>
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">Dashboard</h2>
+      {isApproved === false ? (
+        <div className="text-center text-gray-700 dark:text-gray-300">
+          <p className="text-xl">Your request is being processed. Please wait a few days.</p>
+        </div>
+      ) : (
+        <>
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">Dashboard</h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
-                <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">Owner's Role and Responsibilities</h3>
-                <ul className="list-disc pl-5 mt-4 text-gray-600 dark:text-gray-300">
-                  <li>Manage video uploads and oversee content shared on the platform.</li>
-                  <li>Approve or reject uploads based on platform guidelines.</li>
-                  <li>Handle real-time messages from the admin.</li>
-                  <li>Maintain personal settings and customize dashboard.</li>
-                </ul>
-              </div>
-
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
-                <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">Video Upload Management</h3>
-                <p className="mt-2 text-gray-600 dark:text-gray-300">
-                  The owner can upload, manage, and organize videos, providing details such as titles, descriptions, and posters.
-                </p>
-
-                <div className="bg-gray-100 dark:bg-gray-700 p-6 mt-6 rounded-lg shadow-md hover:shadow-xl transition-shadow">
-                  <h4 className="text-xl font-semibold text-gray-800 dark:text-white">Upload New Video</h4>
-                  <p className="mt-2 text-gray-600 dark:text-gray-300">
-                    Upload new videos by providing a title, description, and poster. Your videos will be added to the platform.
-                  </p>
-                  <button
-                    onClick={() => router.push("/dashboard/videoUploadDetail")}
-                    className="mt-4 bg-blue-500 text-white px-6 py-3 rounded-lg shadow-md hover:bg-blue-600 transition-colors"
-                  >
-                    Upload New Video
-                  </button>
-                </div>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
+              <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">Owner's Role and Responsibilities</h3>
+              <ul className="list-disc pl-5 mt-4 text-gray-600 dark:text-gray-300">
+                <li>Manage video uploads and oversee content shared on the platform.</li>
+                <li>Approve or reject uploads based on platform guidelines.</li>
+                <li>Handle real-time messages from the admin.</li>
+                <li>Maintain personal settings and customize dashboard.</li>
+              </ul>
             </div>
 
-            <div className="mt-10 text-center">
-              <h2 className="text-4xl font-extrabold bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 text-transparent bg-clip-text">
-                Your Posts on This Site
-              </h2>
-              <p className="mt-3 text-lg text-gray-700 dark:text-gray-300">
-                Explore and manage your uploaded videos with ease!
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
+              <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">Video Upload Management</h3>
+              <p className="mt-2 text-gray-600 dark:text-gray-300">
+                The owner can upload, manage, and organize videos, providing details such as titles, descriptions, and posters.
               </p>
-            </div>
 
-            {/* User Uploaded Movies Section */}
-            <div className="flex-grow p-6 mt-16">
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">
-                Your Uploaded Movies
-              </h2>
-
-              {userMovies.length === 0 ? (
-                // No movies uploaded
-                <div className="text-center text-gray-700 dark:text-gray-300">
-                  <p className="text-xl">You have not uploaded any movies.</p>
-                </div>
-              ) : (
-                // Display movies
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                    {userMovies.slice(0, visibleCount).map((movie, index) => (
-                      <div
-                        key={index}
-                        className="bg-gray-100 dark:bg-gray-700 p-6 rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer"
-                        onClick={() => handleMovieClick(movie.movieID)}
-                      >
-                        <p className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
-                          Movie ID: {movie.movieID}
-                        </p>
-                        <img
-                          src={movie.poster}
-                          alt="Movie Poster"
-                          className="rounded-lg w-full h-auto object-cover"
-                        />
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-6 text-center">
-                    {userMovies.length > visibleCount && (
-                      <button onClick={handleShowMore} className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600">
-                        Show More...
-                      </button>
-                    )}
-                    {visibleCount > 4 && (
-                      <button onClick={handleShowLess} className="ml-4 bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600">
-                        Show Less
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Statistical Analysis Section */}
-            <div className="mt-16 p-6">
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">
-                Statistical Analysis
-              </h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* Total Movies Uploaded */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
-                  <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">
-                    Total Movies Uploaded
-                  </h3>
-                  <p className="mt-4 text-4xl font-bold text-blue-500 dark:text-blue-300">
-                    {stats.totalMovies}
-                  </p>
-                </div>
-
-                {/* Average Rating */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
-                  <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">
-                    Average Rating
-                  </h3>
-                  <p className="mt-4 text-4xl font-bold text-green-500 dark:text-green-300">
-                    {stats.averageRating} ⭐
-                  </p>
-                </div>
-
-                {/* Most Popular Genre */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
-                  <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">
-                    Most Popular Genre
-                  </h3>
-                  <p className="mt-4 text-4xl font-bold text-purple-500 dark:text-purple-300">
-                    {stats.mostPopularGenre}
-                  </p>
-                </div>
-
-                {/* Total Views */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
-                  <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">
-                    Total Views
-                  </h3>
-                  <p className="mt-4 text-4xl font-bold text-yellow-500 dark:text-yellow-300">
-                    {stats.totalViews.toLocaleString()}
-                  </p>
-                </div>
-
-                {/* Total Likes */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
-                  <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">
-                    Total Likes
-                  </h3>
-                  <p className="mt-4 text-4xl font-bold text-pink-500 dark:text-pink-300">
-                    {stats.totalLikes.toLocaleString()}
-                  </p>
-                </div>
-
-                {/* Total Comments */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
-                  <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">
-                    Total Comments
-                  </h3>
-                  <p className="mt-4 text-4xl font-bold text-red-500 dark:text-red-300">
-                    {stats.totalComments.toLocaleString()}
-                  </p>
-                </div>
+              <div className="bg-gray-100 dark:bg-gray-700 p-6 mt-6 rounded-lg shadow-md hover:shadow-xl transition-shadow">
+                <h4 className="text-xl font-semibold text-gray-800 dark:text-white">Upload New Video</h4>
+                <p className="mt-2 text-gray-600 dark:text-gray-300">
+                  Upload new videos by providing a title, description, and poster. Your videos will be added to the platform.
+                </p>
+                <button
+                  onClick={() => router.push("/dashboard/videoUploadDetail")}
+                  className="mt-4 bg-blue-500 text-white px-6 py-3 rounded-lg shadow-md hover:bg-blue-600 transition-colors"
+                >
+                  Upload New Video
+                </button>
               </div>
             </div>
-          </>
-        )}
-      </div>
+          </div>
+
+          <div className="mt-10 text-center">
+            <h2 className="text-4xl font-extrabold bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 text-transparent bg-clip-text">
+              Your Posts on This Site
+            </h2>
+            <p className="mt-3 text-lg text-gray-700 dark:text-gray-300">
+              Explore and manage your uploaded videos with ease!
+            </p>
+          </div>
+
+          {/* User Uploaded Movies Section */}
+          <div className="flex-grow p-6 mt-16">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">
+              Your Uploaded Movies
+            </h2>
+
+            {userMovies.length === 0 ? (
+              <div className="text-center text-gray-700 dark:text-gray-300">
+                <p className="text-xl">You have not uploaded any movies.</p>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                  {userMovies.slice(0, visibleCount).map((movie, index) => (
+                    <div
+                      key={index}
+                      className="bg-gray-100 dark:bg-gray-700 p-6 rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer"
+                      onClick={() => handleMovieClick(movie.movieID)}
+                    >
+                      <p className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
+                        Movie ID: {movie.movieID}
+                      </p>
+                      <img
+                        src={movie.poster}
+                        alt="Movie Poster"
+                        className="rounded-lg w-full h-auto object-cover"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-6 text-center">
+                  {userMovies.length > visibleCount && (
+                    <button onClick={handleShowMore} className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600">
+                      Show More...
+                    </button>
+                  )}
+                  {visibleCount > 4 && (
+                    <button onClick={handleShowLess} className="ml-4 bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600">
+                      Show Less
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Statistical Analysis Section */}
+          <div className="mt-16 p-6">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">
+              Statistical Analysis
+            </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Total Movies Uploaded */}
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
+                <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">
+                  Total Movies Uploaded
+                </h3>
+                <p className="mt-4 text-4xl font-bold text-blue-500 dark:text-blue-300">
+                  {stats.totalMovies}
+                </p>
+              </div>
+
+              {/* Average Rating */}
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
+                <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">
+                  Average Rating
+                </h3>
+                <p className="mt-4 text-4xl font-bold text-green-500 dark:text-green-300">
+                  {stats.averageRating} ⭐
+                </p>
+              </div>
+
+              {/* Most Popular Genre */}
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
+                <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">
+                  Most Popular Genre
+                </h3>
+                <p className="mt-4 text-4xl font-bold text-purple-500 dark:text-purple-300">
+                  {stats.mostPopularGenre}
+                </p>
+              </div>
+
+              {/* Total Views */}
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
+                <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">
+                  Total Views
+                </h3>
+                <p className="mt-4 text-4xl font-bold text-yellow-500 dark:text-yellow-300">
+                  {stats.totalViews.toLocaleString()}
+                </p>
+              </div>
+
+              {/* Total Likes */}
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
+                <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">
+                  Total Likes
+                </h3>
+                <p className="mt-4 text-4xl font-bold text-pink-500 dark:text-pink-300">
+                  {stats.totalLikes.toLocaleString()}
+                </p>
+              </div>
+
+              {/* Total Comments */}
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
+                <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">
+                  Total Comments
+                </h3>
+                <p className="mt-4 text-4xl font-bold text-red-500 dark:text-red-300">
+                  {stats.totalComments.toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Footer */}
       <Footer />

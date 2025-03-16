@@ -1,12 +1,10 @@
 "use client";
-import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Home, Sun, Moon, ChevronLeft, ChevronRight, CheckCircle, CreditCard, MessageCircle } from "lucide-react";
 import { useDarkMode } from "../context/DarkModeContext"; // Import the dark mode hook
 
-const Sidebar = () => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
   const pathname = usePathname();
   const router = useRouter();
   const { darkMode, toggleDarkMode } = useDarkMode(); // Use dark mode context
@@ -32,7 +30,8 @@ const Sidebar = () => {
   return (
     <motion.div
       animate={{ width: isCollapsed ? 80 : 250 }}
-      className="fixed min-h-screen bg-gray-900 text-white dark:bg-gray-800 flex flex-col p-4 transition-all duration-300"
+      transition={{ duration: 0.3, ease: "easeInOut" }} // Add consistent animation
+      className="fixed min-h-screen bg-gray-900 text-white dark:bg-gray-800 flex flex-col p-4"
     >
       {/* Sidebar Toggle Button */}
       <button
@@ -42,10 +41,7 @@ const Sidebar = () => {
         {isCollapsed ? <ChevronRight size={24} /> : <ChevronLeft size={24} />}
       </button>
 
-      {/* Page Title */}
-      <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-        {currentTitle}
-      </h1>
+     
 
       {/* Dark Mode Toggle */}
       <div className="flex justify-center my-4">

@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { db, collection, query, where, getDocs } from "../../../firebaseconfig";
 import { motion } from "framer-motion";
+import { PuffLoader } from "react-spinners"; // Import PuffLoader
 
 export default function VideoDetail({ params }) {
   const router = useRouter();
@@ -70,23 +71,73 @@ export default function VideoDetail({ params }) {
   };
 
   if (loading) {
-    return <p className="text-center text-gray-500 mt-10">Loading...</p>;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <motion.div
+          className="flex flex-col items-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <PuffLoader color="#36D7B7" size={100} /> {/* Loading spinner */}
+          <motion.p
+            className="mt-4 text-2xl font-bold text-gray-700 dark:text-gray-300"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5, duration: 0.5 }}
+          >
+            Loading video details...
+          </motion.p>
+        </motion.div>
+      </div>
+    );
   }
 
   if (!video) {
-    return <p className="text-center text-red-500 mt-10">Video not found!</p>;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <motion.div
+          className="flex flex-col items-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <PuffLoader color="#FF6B6B" size={100} /> {/* Red spinner for "not found" state */}
+          <motion.p
+            className="mt-4 text-2xl font-bold text-gray-700 dark:text-gray-300"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5, duration: 0.5 }}
+          >
+          </motion.p>
+        </motion.div>
+      </div>
+    );
   }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-12">
+      {/* Fixed card width */}
       <motion.div
-        className="bg-white dark:bg-gray-900 shadow-lg rounded-xl p-6 text-center max-w-2xl"
+        className="bg-white dark:bg-gray-900 shadow-lg rounded-xl p-6 text-center w-[600px]"
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.3 }}
       >
         <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-4">{video.title}</h2>
-        <img src={video.poster} alt={video.title} className="w-full h-64 object-cover rounded-md mb-4" />
+        
+        {/* Video Player with Fixed Width and Aspect Ratio */}
+        <div className="w-full aspect-video mb-4"> {/* Maintain 16:9 aspect ratio */}
+          <video 
+            src={video.promotionVideo} 
+            controls 
+            controlsList="nodownload" // Disable download option
+            className="w-full h-full rounded-md"
+          >
+            Your browser does not support the video tag.
+          </video>
+        </div>
+
         <p className="text-gray-600 dark:text-gray-300 mb-4">{video.description}</p>
 
         <div className="text-left text-gray-600 dark:text-gray-300 mb-4">
@@ -98,18 +149,21 @@ export default function VideoDetail({ params }) {
           <p><strong>Ticket Price:</strong> ${video.ticketPrice}</p>
         </div>
 
-        <button
-          onClick={() => router.back()}
-          className="w-full bg-blue-500 text-white py-2 rounded-lg mt-2 hover:bg-blue-600"
-        >
-          Go Back
-        </button>
-        <button
-          onClick={() => router.push(`/updateMovie/${id}`)}
-          className="w-full bg-green-500 text-white py-2 rounded-lg mt-2 hover:bg-green-600"
-        >
-          Update Data
-        </button>
+        {/* Buttons in Flex Row */}
+        <div className="flex flex-row gap-4 mt-4">
+          <button
+            onClick={() => router.back()}
+            className="flex-1 bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600"
+          >
+            Go Back
+          </button>
+          <button
+            onClick={() => router.push(`/updateMovie/${id}`)}
+            className="flex-1 bg-green-500 text-white py-2 rounded-lg hover:bg-green-600"
+          >
+            Update Data
+          </button>
+        </div>
       </motion.div>
     </div>
   );

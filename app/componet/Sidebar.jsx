@@ -1,67 +1,69 @@
 "use client";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Home, Sun, Moon, ChevronLeft, ChevronRight, CheckCircle, CreditCard, MessageCircle } from "lucide-react";
-import { useDarkMode } from "../context/DarkModeContext"; // Import the dark mode hook
+import { ChevronLeft, ChevronRight } from "lucide-react"; // Keep Lucide for arrows
+import {
+  FaHome,
+  FaCheckCircle,
+  FaCommentDots,
+  FaCreditCard,
+  FaBullhorn,
+  FaUsers, // Updated icon for "Manage User"
+} from "react-icons/fa"; // Import all React Icons
 
 const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const { darkMode, toggleDarkMode } = useDarkMode(); // Use dark mode context
 
   // Mapping of paths to titles
   const pageTitles = {
-    "/admin": "Admin Dashboard",
+    "/admin": "OverView",
     "/admin/approved": "Approved Requests",
     "/admin/message": "Messages",
     "/admin/managetransaction": "Manage Transactions",
+    "/admin/promotion": "Post Promotion",
+    "/admin/manageuser": "Manage User",
   };
 
   // Get the current page title based on the pathname
   const currentTitle = pageTitles[pathname] || "Admin Dashboard";
 
   const menuItems = [
-    { name: "Home", icon: <Home size={isCollapsed ? 36 : 24} />, path: "/admin" },
-    { name: "Approved", icon: <CheckCircle size={isCollapsed ? 36 : 24} />, path: "/admin/approved" },
-    { name: "Message", icon: <MessageCircle size={isCollapsed ? 36 : 24} />, path: "/admin/message" },
-    { name: "Manage Transactions", icon: <CreditCard size={isCollapsed ? 36 : 24} />, path: "/admin/managetransaction" },
+    { name: "OverView", icon: <FaHome size={24} />, path: "/admin" },
+    { name: "Approved", icon: <FaCheckCircle size={24} />, path: "/admin/approved" },
+    { name: "Message", icon: <FaCommentDots size={24} />, path: "/admin/message" },
+    { name: "Manage Transactions", icon: <FaCreditCard size={24} />, path: "/admin/managetransaction" },
+    { name: "Manage User", icon: <FaUsers size={24} />, path: "/admin/manageuser" }, // Updated icon
+    { name: "Post Promotion", icon: <FaBullhorn size={24} />, path: "/admin/promotion" },
+
   ];
 
   return (
     <motion.div
       animate={{ width: isCollapsed ? 80 : 250 }}
-      transition={{ duration: 0.3, ease: "easeInOut" }} // Add consistent animation
-      className="fixed min-h-screen bg-gray-900 text-white dark:bg-gray-800 flex flex-col p-4"
+      transition={{ duration: 0.3, ease: "easeInOut" }}
+      className="fixed min-h-screen bg-zinc-200 text-gray-900 flex flex-col p-4"
     >
       {/* Sidebar Toggle Button */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="absolute -right-4 top-6 bg-gray-700 p-2 rounded-full"
+        className="absolute -right-4 top-1/2 transform -translate-y-1/2 bg-white p-2 rounded-full shadow-md hover:bg-gray-100 transition-colors"
       >
-        {isCollapsed ? <ChevronRight size={24} /> : <ChevronLeft size={24} />}
+        {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
       </button>
 
-     
-
-      {/* Dark Mode Toggle */}
-      <div className="flex justify-center my-4">
-        <button onClick={toggleDarkMode} className="p-2 bg-gray-700 rounded-full">
-          {darkMode ? <Sun size={24} /> : <Moon size={24} />}
-        </button>
-      </div>
-
       {/* Navigation Items */}
-      <nav className="flex-1 space-y-3">
+      <nav className="flex-1 space-y-3 mt-4">
         {menuItems.map(({ name, icon, path }) => (
           <div
             key={name}
             onClick={() => router.push(path)}
-            className={`flex items-center p-3 cursor-pointer hover:bg-gray-700 rounded-md transition-all ${
-              pathname === path ? "bg-gray-700" : ""
+            className={`flex items-center p-3 cursor-pointer hover:bg-gray-300 rounded-md transition-all ${
+              pathname === path ? "bg-gray-300" : ""
             }`}
           >
-            <span className="flex-shrink-0">{icon}</span>
-            {!isCollapsed && <span className="ml-3 text-lg">{name}</span>}
+            <span className="flex-shrink-0 text-gray-700">{icon}</span>
+            {!isCollapsed && <span className="ml-3 text-lg text-gray-900">{name}</span>}
           </div>
         ))}
       </nav>

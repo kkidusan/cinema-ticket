@@ -10,7 +10,8 @@ import {
     addDoc, 
     serverTimestamp, 
     doc, 
-    updateDoc 
+    updateDoc,
+    deleteDoc // ✅ Add deleteDoc here
 } from "firebase/firestore";
 
 import { 
@@ -28,7 +29,7 @@ const firebaseConfig = {
     apiKey: "AIzaSyAhW7-IqcrXlXGdjyZV8wrTljCFZCi2YxM",
     authDomain: "cimema-ticket.firebaseapp.com",
     projectId: "cimema-ticket",
-    storageBucket: "cimema-ticket.firebasestorage.app",
+    storageBucket: "cimema-ticket.appspot.com",
     messagingSenderId: "477107000918",
     appId: "1:477107000918:web:a80697a2bb034bf508cdf7",
     measurementId: "G-QVCCSFG6K7"
@@ -53,8 +54,9 @@ export {
     getDocs, 
     updateDoc, 
     doc, 
+    deleteDoc, // ✅ Export deleteDoc
     updatePassword, 
-    signInWithEmailAndPassword,  // ✅ Correctly Exported
+    signInWithEmailAndPassword, 
     orderBy, 
     onSnapshot, 
     serverTimestamp 

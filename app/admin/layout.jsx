@@ -132,15 +132,17 @@ const AdminLayout = ({ children }) => {
         style={{ paddingLeft: isCollapsed ? "80px" : "250px" }} // Adjust padding based on sidebar state
       >
         {/* Navbar */}
-        <Navbar1
-          messageCount={messageCount}
-          notificationCount={notificationCount} // Pass notification count to Navbar1
-          darkMode={darkMode}
-          toggleDarkMode={toggleDarkMode}
-        />
+        <div className="fixed top-0 left-0 right-0 z-50" style={{ marginLeft: isCollapsed ? "80px" : "250px" }}>
+          <Navbar1
+            messageCount={messageCount}
+            notificationCount={notificationCount} // Pass notification count to Navbar1
+            darkMode={darkMode}
+            toggleDarkMode={toggleDarkMode}
+          />
+        </div>
 
         {/* Page Content */}
-        <main className="flex-1 p-6 overflow-y-auto">{children}</main>
+        <main className="flex-1 p-6 overflow-y-auto mt-16">{children}</main>
       </div>
     </div>
   );

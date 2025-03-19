@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Sun, Moon, MessageCircle, LogOut } from "lucide-react";
+import { Sun, Moon, MessageCircle, LogOut, ArrowRight } from "lucide-react"; // Import ArrowRight
 import { auth, db } from "../firebaseconfig";
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc } from "firebase/firestore";
 import Footer from "../componet/Footer";
@@ -66,6 +66,24 @@ export default function Dashboard() {
       fetchUserMovies(userEmail);
     }
   }, [isAuthenticated, userEmail, userRole]);
+
+  // Real-time listener for user approval status
+  useEffect(() => {
+    if (isAuthenticated && userEmail) {
+      const q = query(collection(db, "owner"), where("email", "==", userEmail));
+      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        if (!querySnapshot.empty) {
+          const userDoc = querySnapshot.docs[0].data();
+          setIsApproved(userDoc.approved !== false); // Update isApproved in real-time
+        } else {
+          setIsApproved(false);
+        }
+      });
+
+      // Cleanup the listener on unmount
+      return () => unsubscribe();
+    }
+  }, [isAuthenticated, userEmail]);
 
   const fetchUserData = async (email) => {
     try {
@@ -197,14 +215,6 @@ export default function Dashboard() {
           transition={{ duration: 0.5 }}
         >
           <PuffLoader color="#36D7B7" size={100} /> {/* Loading spinner */}
-          <motion.p
-            className="mt-4 text-2xl font-bold text-gray-700 dark:text-gray-300"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5, duration: 0.5 }}
-          >
-            Loading dashboard...
-          </motion.p>
         </motion.div>
       </div>
     );
@@ -291,56 +301,116 @@ export default function Dashboard() {
 
       {/* Dashboard Content */}
       {isApproved === false ? (
-        <div className="text-center text-gray-700 dark:text-gray-300">
-          <p className="text-xl">Your request is being processed. Please wait a few days.</p>
+        <div className="min-h-screen flex items-center justify-center">
+          <motion.div
+            className="text-center"
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+          >
+            <motion.h1
+              className="text-4xl md:text-5xl font-extrabold bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 bg-clip-text text-transparent"
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.5, duration: 0.5 }}
+            >
+              Request Pending
+            </motion.h1>
+            <motion.p
+              className="mt-4 text-xl md:text-2xl text-gray-700 dark:text-gray-300"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1, duration: 0.8 }}
+            >
+              Your request is being processed. Please wait a few days.
+            </motion.p>
+            <motion.div
+              className="mt-8"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.5, duration: 0.8 }}
+            >
+              <div className="flex justify-center">
+                <div className="w-24 h-24 border-4 border-purple-500 rounded-full animate-spin border-t-transparent"></div>
+              </div>
+              <p className="mt-4 text-gray-600 dark:text-gray-400 text-sm">
+                We appreciate your patience!
+              </p>
+            </motion.div>
+          </motion.div>
         </div>
       ) : (
         <>
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">Dashboard</h2>
+          {/* Rest of the dashboard content */}
+          <div className="p-8 pt-24">
+            
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
-              <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">Owner's Role and Responsibilities</h3>
-              <ul className="list-disc pl-5 mt-4 text-gray-600 dark:text-gray-300">
-                <li>Manage video uploads and oversee content shared on the platform.</li>
-                <li>Approve or reject uploads based on platform guidelines.</li>
-                <li>Handle real-time messages from the admin.</li>
-                <li>Maintain personal settings and customize dashboard.</li>
-              </ul>
-            </div>
+            {/* Grid Layout for Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Owner's Role and Responsibilities Card */}
+              <motion.div
+                className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-gray-800 dark:to-gray-900 p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-shadow transform hover:scale-105"
+                whileHover={{ scale: 1.02 }}
+                transition={{ type: "spring", stiffness: 300 }}
+              >
+                <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-6">
+                  Owner's Role and Responsibilities
+                </h3>
+                <ul className="space-y-4 text-gray-700 dark:text-gray-300">
+                  <li className="flex items-center space-x-3">
+                    <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                    <span>Manage video uploads and oversee content shared on the platform.</span>
+                  </li>
+                  <li className="flex items-center space-x-3">
+                    <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+                    <span>Approve or reject uploads based on platform guidelines.</span>
+                  </li>
+                  <li className="flex items-center space-x-3">
+                    <span className="w-2 h-2 bg-pink-500 rounded-full"></span>
+                    <span>Handle real-time messages from the admin.</span>
+                  </li>
+                  <li className="flex items-center space-x-3">
+                    <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                    <span>Maintain personal settings and customize dashboard.</span>
+                  </li>
+                </ul>
+              </motion.div>
 
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
-              <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">Video Upload Management</h3>
-              <p className="mt-2 text-gray-600 dark:text-gray-300">
-                The owner can upload, manage, and organize videos, providing details such as titles, descriptions, and posters.
-              </p>
-
-              <div className="bg-gray-100 dark:bg-gray-700 p-6 mt-6 rounded-lg shadow-md hover:shadow-xl transition-shadow">
-                <h4 className="text-xl font-semibold text-gray-800 dark:text-white">Upload New Video</h4>
-                <p className="mt-2 text-gray-600 dark:text-gray-300">
-                  Upload new videos by providing a title, description, and poster. Your videos will be added to the platform.
+              {/* Video Upload Management Card */}
+              <motion.div
+                className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-800 dark:to-gray-900 p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-shadow transform hover:scale-105"
+                whileHover={{ scale: 1.02 }}
+                transition={{ type: "spring", stiffness: 300 }}
+              >
+                <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-6">
+                  Video Upload Management
+                </h3>
+                <p className="text-gray-700 dark:text-gray-300 mb-6">
+                  The owner can upload, manage, and organize videos, providing details such as titles, descriptions, and posters.
                 </p>
-                <button
-                  onClick={() => router.push("/dashboard/videoUploadDetail")}
-                  className="mt-4 bg-blue-500 text-white px-6 py-3 rounded-lg shadow-md hover:bg-blue-600 transition-colors"
-                >
-                  Upload New Video
-                </button>
-              </div>
-            </div>
-          </div>
 
-          <div className="mt-10 text-center">
-            <h2 className="text-4xl font-extrabold bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 text-transparent bg-clip-text">
-              Your Posts on This Site
-            </h2>
-            <p className="mt-3 text-lg text-gray-700 dark:text-gray-300">
-              Explore and manage your uploaded videos with ease!
-            </p>
+                {/* Upload New Video Section */}
+                <div className="bg-gradient-to-br from-blue-100 to-purple-100 dark:from-gray-700 dark:to-gray-800 p-6 rounded-xl shadow-md hover:shadow-lg transition-shadow">
+                  <h4 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">
+                    Upload New Video
+                  </h4>
+                  <p className="text-gray-700 dark:text-gray-300 mb-6">
+                    Upload new videos by providing a title, description, and poster. Your videos will be added to the platform.
+                  </p>
+                  <button
+                    onClick={() => router.push("/dashboard/videoUploadDetail")}
+                    className="group bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-lg shadow-md hover:shadow-lg transition-all transform hover:scale-105 flex items-center justify-center space-x-2"
+                  >
+                    <span>Upload New Video</span>
+                    <ArrowRight className="h-5 w-5 transform transition-transform group-hover:translate-x-1" />
+                  </button>
+                </div>
+              </motion.div>
+            </div>
           </div>
 
           {/* User Uploaded Movies Section */}
-          <div className="flex-grow p-6 mt-16">
+          <div className="flex-grow p-8">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">
               Your Uploaded Movies
             </h2>
@@ -387,7 +457,7 @@ export default function Dashboard() {
           </div>
 
           {/* Statistical Analysis Section */}
-          <div className="mt-16 p-6">
+          <div className="mt-16 p-8">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">
               Statistical Analysis
             </h2>

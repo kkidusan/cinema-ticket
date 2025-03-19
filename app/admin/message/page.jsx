@@ -2,24 +2,31 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "../../firebaseconfig";
-import { collection, query, onSnapshot, orderBy, addDoc, serverTimestamp, writeBatch, doc } from "firebase/firestore"; // Modular SDK imports
+import {
+  collection,
+  query,
+  onSnapshot,
+  orderBy,
+  addDoc,
+  serverTimestamp,
+  writeBatch,
+  doc,
+} from "firebase/firestore"; // Modular Firebase SDK imports
 import { motion } from "framer-motion";
-import { FaSearch } from "react-icons/fa"; // Importing the search icon
-import { FaPaperPlane } from "react-icons/fa"; // Correct import for the send icon
+import { FaSearch, FaPaperPlane } from "react-icons/fa"; // Icons for search and send
 
 export default function ChatApp() {
-  const [userEmail, setUserEmail] = useState(null);
-  const [userRole, setUserRole] = useState(null); // Add role state
-  const [groupedMessages, setGroupedMessages] = useState({}); // Holds grouped messages by ownerEmail
-  const [selectedEmail, setSelectedEmail] = useState(null); // Track selected email
-  const [selectedMessages, setSelectedMessages] = useState([]); // Messages for selected email
-  const [message, setMessage] = useState(""); // State for input message
-  const messageEndRef = useRef(null); // Ref for auto-scrolling
+  const [userEmail, setUserEmail] = useState(null); // Logged-in user's email
+  const [userRole, setUserRole] = useState(null); // User role (admin or not)
+  const [groupedMessages, setGroupedMessages] = useState({}); // Messages grouped by ownerEmail
+  const [selectedEmail, setSelectedEmail] = useState(null); // Selected chat (ownerEmail)
+  const [selectedMessages, setSelectedMessages] = useState([]); // Messages for the selected chat
+  const [message, setMessage] = useState(""); // Input message state
+  const [searchQuery, setSearchQuery] = useState(""); // Search query for filtering chats
+  const [newMessageCounts, setNewMessageCounts] = useState({}); // New message counts for each chat
+  const [loading, setLoading] = useState(true); // Loading state for authentication
+  const messageEndRef = useRef(null); // Ref for auto-scrolling to the bottom of the chat
   const router = useRouter();
-  const [loading, setLoading] = useState(true); // State to manage loading status
-
-  // Search query state
-  const [searchQuery, setSearchQuery] = useState("");
 
   // Fetch user authentication details
   useEffect(() => {
@@ -39,7 +46,7 @@ export default function ChatApp() {
 
           // Redirect if the user is not an admin
           if (data.role !== "admin") {
-            router.replace("/login"); // Redirect to unauthorized page
+            router.replace("/login"); // Redirect to login page
             return;
           }
         } else {
@@ -61,9 +68,10 @@ export default function ChatApp() {
     if (userRole === "admin") {
       const q = query(collection(db, "messages"), orderBy("timestamp", "asc"));
 
+      // Listen for real-time updates
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const grouped = {};
-        const newMessageCounts = {}; // To store new message counts for each ownerEmail
+        const newMessageCounts = {};
 
         snapshot.docs.forEach((doc) => {
           const data = doc.data();
@@ -81,15 +89,18 @@ export default function ChatApp() {
         });
 
         setGroupedMessages(grouped);
-        setNewMessageCounts(newMessageCounts); // Set the new message counts
+        setNewMessageCounts(newMessageCounts); // Update new message counts
+
+        // Update selectedMessages if the selected chat is open
+        if (selectedEmail) {
+          setSelectedMessages(grouped[selectedEmail] || []);
+        }
       });
 
+      // Clean up the listener on unmount
       return () => unsubscribe();
     }
-  }, [userRole]);
-
-  // State to hold new message counts for each ownerEmail
-  const [newMessageCounts, setNewMessageCounts] = useState({});
+  }, [userRole, selectedEmail]);
 
   // Handle email click to select a chat and mark messages as 'shown'
   const handleEmailClick = async (email) => {
@@ -97,8 +108,8 @@ export default function ChatApp() {
     const selectedMsgs = groupedMessages[email] || [];
     setSelectedMessages(selectedMsgs);
 
-    // Using writeBatch for batch updates in the modular SDK
-    const batch = writeBatch(db); // Corrected batch method
+    // Mark messages as shown using a batch update
+    const batch = writeBatch(db);
     selectedMsgs.forEach((msg) => {
       if (msg.sender === "owner" && !msg.show) {
         const messageRef = doc(db, "messages", msg.id);
@@ -118,11 +129,11 @@ export default function ChatApp() {
     if (message.trim() === "") return; // Don't send empty messages
 
     try {
-      // Add message to the selectedMessages array to show it immediately
+      // Add message to Firestore
       const newMessage = {
         ownerEmail: selectedEmail, // Set the selected email as the ownerEmail
         sender: "admin", // Sender as admin
-        show: false, // Initially the message is not shown (new)
+        show: true, // Admin messages are always shown
         text: message,
         timestamp: serverTimestamp(),
       };
@@ -130,7 +141,7 @@ export default function ChatApp() {
       // Update selectedMessages to show the message immediately
       setSelectedMessages((prevMessages) => [...prevMessages, newMessage]);
 
-      // Store the message with selectedEmail as ownerEmail
+      // Store the message in Firestore
       await addDoc(collection(db, "messages"), newMessage);
 
       setMessage(""); // Clear the input after sending
@@ -139,7 +150,7 @@ export default function ChatApp() {
     }
   };
 
-  // Scroll to the bottom of the chat
+  // Scroll to the bottom of the chat when new messages are added
   useEffect(() => {
     if (messageEndRef.current) {
       messageEndRef.current.scrollIntoView({ behavior: "smooth" });
@@ -175,7 +186,7 @@ export default function ChatApp() {
 
   return (
     <div className="flex min-h-screen bg-gradient-to-r from-indigo-100 to-pink-100 dark:bg-gray-900 dark:text-white">
-      {/* Sidebar with custom background color */}
+      {/* Sidebar */}
       <div className="w-1/4 bg-blue-50 shadow-lg p-4 overflow-y-auto h-screen">
         <h2 className="text-xl font-bold text-gray-800 mb-4">Chats</h2>
 
@@ -194,7 +205,7 @@ export default function ChatApp() {
         {/* Display Chats */}
         {filteredGroupedMessages.length > 0 ? (
           filteredGroupedMessages.map(([ownerEmail, messages]) => {
-            const newMessages = newMessageCounts[ownerEmail] || 0; // Get new messages count for the current ownerEmail
+            const newMessages = newMessageCounts[ownerEmail] || 0; // Get new messages count
             return (
               <motion.div
                 key={ownerEmail}
@@ -204,14 +215,13 @@ export default function ChatApp() {
               >
                 <div className="flex justify-between items-center">
                   <p className="font-semibold">{ownerEmail}</p>
-                  {/* Display new message count if it's greater than 0 */}
                   {newMessages > 0 && (
                     <span className="bg-red-500 text-white text-xs rounded-full px-2 py-1">
                       {newMessages}
                     </span>
                   )}
                 </div>
-                {/* <p className="text-sm text-gray-600">{getLastMessage(messages)}</p> */}
+                <p className="text-sm text-gray-600">{getLastMessage(messages)}</p>
               </motion.div>
             );
           })
@@ -220,7 +230,7 @@ export default function ChatApp() {
         )}
       </div>
 
-      {/* Main Body with gradient and gray header */}
+      {/* Main Chat Area */}
       <div className="flex-1 bg-gradient-to-r from-indigo-100 via-blue-200 to-blue-300 p-4 overflow-y-auto h-screen flex flex-col">
         {selectedEmail ? (
           <>
@@ -228,7 +238,7 @@ export default function ChatApp() {
               <h3 className="text-2xl font-bold">{selectedEmail}</h3>
             </div>
 
-            {/* Chat Grid */}
+            {/* Chat Messages */}
             <div className="flex-1 overflow-y-auto mb-4 space-y-4 flex flex-col">
               {selectedMessages.length > 0 ? (
                 selectedMessages.map((msg, index) => (

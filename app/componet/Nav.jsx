@@ -12,11 +12,14 @@ const Navbar1 = ({ messageCount, notificationCount, darkMode, toggleDarkMode }) 
 
   // Mapping of paths to titles
   const pageTitles = {
-    "/admin": "Admin Dashboard",
+    "/admin": "OverView",
     "/admin/approved": "Approved Requests",
     "/admin/message": "Messages",
     "/admin/managetransaction": "Manage Transactions",
-    "/admin/usermanagement": "User Management",
+    "/admin/promotion": "Post Promotion",
+    "/admin/manageuser": "Manage User",
+
+
   };
 
   // Get the current page title based on the pathname

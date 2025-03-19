@@ -2,21 +2,35 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "../../firebaseconfig";
-import { collection, query, where, getDocs, updateDoc, doc, setDoc } from "firebase/firestore";
-import { Bell, MessageCircle } from "lucide-react"; // Notification icon
+import { collection, query, where, onSnapshot, updateDoc, doc, setDoc } from "firebase/firestore";
 import Image from "next/image";
 
 export default function AboutPage() {
   const [userEmail, setUserEmail] = useState(null);
-  const [userRole, setUserRole] = useState(null); // Add role state
+  const [userRole, setUserRole] = useState(null);
   const [pendingOwners, setPendingOwners] = useState([]);
   const [openCertificate, setOpenCertificate] = useState(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [currentOwner, setCurrentOwner] = useState(null); // For keeping track of the owner in chat
-  const [message, setMessage] = useState(""); // For the message input
-  const [messages, setMessages] = useState([]); // Store the messages for the chat view
-  const [loading, setLoading] = useState(true); // Loading state for authentication
+  const [currentOwner, setCurrentOwner] = useState(null);
+  const [message, setMessage] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [certificateData, setCertificateData] = useState(null);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [ownerToApprove, setOwnerToApprove] = useState(null);
+  const [toast, setToast] = useState({ show: false, message: "", isSuccess: false });
   const router = useRouter();
+
+  // Function to show toast message and hide it after 3 seconds
+  const showToast = (message, isSuccess) => {
+    setToast({ show: true, message, isSuccess });
+
+    // Hide the toast after 3 seconds
+    setTimeout(() => {
+      setToast({ show: false, message: "", isSuccess: false });
+    }, 3000);
+  };
 
   // Fetch user authentication details
   useEffect(() => {
@@ -31,12 +45,11 @@ export default function AboutPage() {
 
         const data = await response.json();
         if (data.email && data.role) {
-          setUserEmail(data.email); // Set user email
-          setUserRole(data.role); // Set user role
+          setUserEmail(data.email);
+          setUserRole(data.role);
 
-          // Redirect if the user is not an admin
           if (data.role !== "admin") {
-            router.replace("/login"); // Redirect to login if not admin
+            router.replace("/login");
             return;
           }
         } else {
@@ -53,31 +66,23 @@ export default function AboutPage() {
     fetchUser();
   }, [router]);
 
-  // Fetch pending owners from Firestore
-  const fetchPendingOwners = async () => {
-    try {
-      const ownersRef = collection(db, "owner");
-      const q = query(ownersRef, where("approved", "==", false));
-      const querySnapshot = await getDocs(q);
-      const ownersData = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setPendingOwners(ownersData);
-    } catch (error) {
-      console.error("Error fetching pending owners:", error);
-    }
-  };
-
+  // Fetch pending owners from Firestore in real-time
   useEffect(() => {
     if (userEmail && userRole === "admin") {
-      fetchPendingOwners(); // Fetch data initially
+      const ownersRef = collection(db, "owner");
+      const q = query(ownersRef, where("approved", "==", false));
 
-      // Refresh the data every 3 minutes
-      const interval = setInterval(() => {
-        fetchPendingOwners();
-      }, 180000); // 3 minutes
-      return () => clearInterval(interval); // Cleanup interval on unmount
+      // Set up a real-time listener
+      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const ownersData = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setPendingOwners(ownersData);
+      });
+
+      // Clean up the listener when the component unmounts
+      return () => unsubscribe();
     }
   }, [userEmail, userRole]);
 
@@ -85,16 +90,19 @@ export default function AboutPage() {
   const handleApproveOwner = async (ownerId, ownerEmail) => {
     try {
       const ownerDocRef = doc(db, "owner", ownerId);
-      await updateDoc(ownerDocRef, {
-        approved: true,
-      });
+      await updateDoc(ownerDocRef, { approved: true });
 
-      // Update UI after approval
       setPendingOwners((prevOwners) =>
         prevOwners.filter((owner) => owner.email !== ownerEmail)
       );
+
+      showToast("Owner approved successfully!", true); // Show success toast
     } catch (error) {
       console.error("Error approving owner:", error);
+      showToast("Failed to approve owner.", false); // Show error toast
+    } finally {
+      setShowConfirmation(false);
+      setOwnerToApprove(null);
     }
   };
 
@@ -103,21 +111,16 @@ export default function AboutPage() {
     if (message.trim() === "") return;
 
     try {
-      // Prepare the message to be sent
       const newMessage = {
-        ownerEmail: currentOwner.email, // Store current owner's email
-        text: message, // Using 'text' instead of 'message'
-        sender: "admin", // Default sender is admin
+        ownerEmail: currentOwner.email,
+        text: message,
+        sender: "admin",
         timestamp: new Date(),
-        show: false, // Default show is false
       };
 
-      // Send message to Firestore collection 'messages'
       await setDoc(doc(db, "messages", `${currentOwner.email}_${Date.now()}`), newMessage);
-      setMessages((prevMessages) => [...prevMessages, newMessage]); // Update the local state with new message
-      setMessage(""); // Clear the message input
-
-      // Close the chat after sending the message
+      setMessages((prevMessages) => [...prevMessages, newMessage]);
+      setMessage("");
       setIsChatOpen(false);
     } catch (error) {
       console.error("Error sending message:", error);
@@ -140,12 +143,18 @@ export default function AboutPage() {
 
   useEffect(() => {
     if (currentOwner) {
-      fetchMessages(); // Fetch messages when chat is opened
+      fetchMessages();
     }
   }, [currentOwner]);
 
   // Function to render Base64 Trade Certificate
   const renderTradeCertificate = (certificateData) => {
+    const handleDoubleClick = () => {
+      setCertificateData(certificateData);
+      setIsFullScreen(true);
+      setOpenCertificate(null); // Close any open certificate
+    };
+
     if (certificateData.includes("data:image")) {
       return (
         <Image
@@ -153,27 +162,20 @@ export default function AboutPage() {
           alt="Trade Certificate"
           width={400}
           height={400}
-          className="rounded-md shadow-md"
+          className="rounded-md shadow-md cursor-pointer"
+          onDoubleClick={handleDoubleClick}
         />
       );
-    } else if (certificateData.includes("data:application/pdf")) {
-      const pdfData = certificateData.replace("data:application/pdf;base64,", "");
-      const pdfUrl = `data:application/pdf;base64,${pdfData}`;
-      
-      return (
-        <iframe
-          src={pdfUrl}
-          width="100%"
-          height="600px"
-          className="border-2 rounded-md"
-        />
-      );
+    } else if (certificateData.includes("data:application/pdf") || certificateData.includes("data:application/msword")) {
+      // Directly open PDF or Word files in full-screen mode
+      handleDoubleClick();
+      return null; // No preview for PDF or Word files
     } else {
       return <p className="text-gray-500">Invalid or unsupported Trade Certificate format.</p>;
     }
   };
 
-  // Show only the wave loader while loading
+  // Show loader while loading
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-100">
@@ -231,7 +233,10 @@ export default function AboutPage() {
                 {/* Flex container for Approve and New Chat buttons */}
                 <div className="flex gap-4 mt-4">
                   <button
-                    onClick={() => handleApproveOwner(owner.id, owner.email)}
+                    onClick={() => {
+                      setOwnerToApprove(owner);
+                      setShowConfirmation(true);
+                    }}
                     className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-700"
                   >
                     Approve
@@ -241,7 +246,7 @@ export default function AboutPage() {
                   <button
                     onClick={() => {
                       setIsChatOpen(true);
-                      setCurrentOwner(owner); // Set the current owner to start a chat
+                      setCurrentOwner(owner);
                     }}
                     className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-700"
                   >
@@ -256,45 +261,71 @@ export default function AboutPage() {
         </div>
       </div>
 
-      {/* Chat Modal or View */}
-      {isChatOpen && currentOwner && (
+      {/* Confirmation Dialog */}
+      {showConfirmation && (
         <div className="fixed inset-0 bg-gray-700 bg-opacity-50 flex justify-center items-center z-50">
           <div className="bg-white p-6 rounded-lg w-96">
-            <h3 className="text-xl font-semibold">Chat with {currentOwner.firstName} {currentOwner.lastName}</h3>
-            <div className="mt-4">
-              {/* Display messages */}
-              <div className="h-64 overflow-y-scroll mb-4">
-                {messages.map((msg, index) => (
-                  <div key={index} className="mb-2">
-                    <p className="font-bold">{msg.sender}: </p>
-                    <p>{msg.text}</p> {/* Changed 'message' to 'text' */}
-                  </div>
-                ))}
-              </div>
-
-              <textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="Type your message..."
-                rows="4"
-                className="w-full p-2 border border-gray-300 rounded-md"
-              ></textarea>
-            </div>
+            <h3 className="text-xl font-semibold">Confirm Approval</h3>
+            <p className="mt-4">Are you sure you want to approve {ownerToApprove.firstName} {ownerToApprove.lastName}?</p>
             <div className="flex gap-4 mt-4">
               <button
-                onClick={handleSendMessage}
-                className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                onClick={() => handleApproveOwner(ownerToApprove.id, ownerToApprove.email)}
+                className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-700"
               >
-                Send
+                Yes, Approve
               </button>
               <button
-                onClick={() => setIsChatOpen(false)}
+                onClick={() => {
+                  setShowConfirmation(false);
+                  showToast("Approval canceled.", false); // Show cancel toast
+                }}
                 className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-700"
               >
                 Cancel
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Full-Screen Modal for Certificates */}
+      {isFullScreen && certificateData && (
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex justify-center items-center z-50">
+          {certificateData.includes("data:image") ? (
+            <Image
+              src={certificateData}
+              alt="Trade Certificate"
+              width={800}
+              height={800}
+              className="rounded-md"
+            />
+          ) : (
+            <iframe
+              src={certificateData}
+              width="80%"
+              height="80%"
+              className="border-2 rounded-md"
+              title="Trade Certificate PDF"
+            />
+          )}
+          <button
+            onClick={() => {
+              setIsFullScreen(false);
+              setCertificateData(null); // Reset certificate data on close
+            }}
+            className="absolute top-4 right-4 text-white text-2xl"
+          >
+            &times;
+          </button>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toast.show && (
+        <div className={`fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 p-4 rounded-md text-white ${
+          toast.isSuccess ? "bg-green-500" : "bg-red-500"
+        }`}>
+          {toast.message}
         </div>
       )}
     </div>

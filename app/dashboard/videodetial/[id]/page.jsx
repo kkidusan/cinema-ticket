@@ -1,18 +1,22 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
-import { db, collection, query, where, getDocs } from "../../../firebaseconfig";
 import { motion } from "framer-motion";
-import { PuffLoader } from "react-spinners"; // Import PuffLoader
+import { db, collection, query, where, onSnapshot } from "../../../firebaseconfig";
+import { PuffLoader } from "react-spinners";
+import { FaArrowLeft } from "react-icons/fa";
 
 export default function VideoDetail({ params }) {
   const router = useRouter();
-  const { id } = params;
+  const unwrappedParams = use(params);
+  const { id } = unwrappedParams;
 
   const [video, setVideo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [userEmail, setUserEmail] = useState(null);
-  const [userRole, setUserRole] = useState(null); // Add role state
+  const [userRole, setUserRole] = useState(null);
+  const [soldTickets, setSoldTickets] = useState(0);
+  const [availableSite, setAvailableSite] = useState(0);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -26,12 +30,11 @@ export default function VideoDetail({ params }) {
 
         const data = await response.json();
         if (data.email && data.role) {
-          setUserEmail(data.email); // Set user email
-          setUserRole(data.role); // Set user role
+          setUserEmail(data.email);
+          setUserRole(data.role);
 
-          // Redirect if the user is not an owner
           if (data.role !== "owner") {
-            router.replace("/login"); // Redirect to unauthorized page
+            router.replace("/login");
             return;
           }
         } else {
@@ -50,44 +53,37 @@ export default function VideoDetail({ params }) {
 
   useEffect(() => {
     if (id && userRole === "owner") {
-      fetchVideoDetails(id);
+      const q = query(collection(db, "Movies"), where("movieID", "==", id));
+
+      // Realtime fetch using onSnapshot
+      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        if (!querySnapshot.empty) {
+          const movieData = querySnapshot.docs[0].data();
+          setVideo(movieData);
+          setSoldTickets(movieData.soldTickets || 0);
+          setAvailableSite(movieData.availableSite || 0);
+        } else {
+          console.error("No video found with the given ID!");
+        }
+        setLoading(false);
+      });
+
+      // Cleanup subscription on unmount
+      return () => unsubscribe();
     }
   }, [id, userRole]);
 
-  const fetchVideoDetails = async (videoID) => {
-    try {
-      const q = query(collection(db, "Movies"), where("movieID", "==", videoID));
-      const querySnapshot = await getDocs(q);
-      if (!querySnapshot.empty) {
-        // If a video with the given ID is found, set the data
-        setVideo(querySnapshot.docs[0].data());
-      } else {
-        console.error("No video found with the given ID!");
-      }
-    } catch (error) {
-      console.error("Error fetching video details:", error);
-    }
-    setLoading(false);
-  };
-
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen bg-zinc-100 flex items-center justify-center">
         <motion.div
           className="flex flex-col items-center"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <PuffLoader color="#36D7B7" size={100} /> {/* Loading spinner */}
-          <motion.p
-            className="mt-4 text-2xl font-bold text-gray-700 dark:text-gray-300"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5, duration: 0.5 }}
-          >
-            Loading video details...
-          </motion.p>
+          <PuffLoader color="#3b82f6" size={100} />
+        
         </motion.div>
       </div>
     );
@@ -95,76 +91,182 @@ export default function VideoDetail({ params }) {
 
   if (!video) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen bg-zinc-100 flex items-center justify-center">
         <motion.div
           className="flex flex-col items-center"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <PuffLoader color="#FF6B6B" size={100} /> {/* Red spinner for "not found" state */}
+          <PuffLoader color="#ef4444" size={100} />
           <motion.p
-            className="mt-4 text-2xl font-bold text-gray-700 dark:text-gray-300"
+            className="mt-4 text-2xl font-bold text-zinc-700"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5, duration: 0.5 }}
           >
+            Movie not found!
           </motion.p>
         </motion.div>
       </div>
     );
   }
 
+  // Calculate ticket statistics
+  const totalTickets = soldTickets + availableSite;
+  const soldPercentage = totalTickets > 0 ? (soldTickets / totalTickets) * 100 : 0;
+  const availablePercentage = totalTickets > 0 ? (availableSite / totalTickets) * 100 : 0;
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-12">
-      {/* Fixed card width */}
-      <motion.div
-        className="bg-white dark:bg-gray-900 shadow-lg rounded-xl p-6 text-center w-[600px]"
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.3 }}
-      >
-        <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-4">{video.title}</h2>
-        
-        {/* Video Player with Fixed Width and Aspect Ratio */}
-        <div className="w-full aspect-video mb-4"> {/* Maintain 16:9 aspect ratio */}
-          <video 
-            src={video.promotionVideo} 
-            controls 
-            controlsList="nodownload" // Disable download option
-            className="w-full h-full rounded-md"
-          >
-            Your browser does not support the video tag.
-          </video>
-        </div>
-
-        <p className="text-gray-600 dark:text-gray-300 mb-4">{video.description}</p>
-
-        <div className="text-left text-gray-600 dark:text-gray-300 mb-4">
-          <p><strong>Category:</strong> {video.category}</p>
-          <p><strong>Duration:</strong> {video.duration} mins</p>
-          <p><strong>Cinema Name:</strong> {video.cinemaName}</p>
-          <p><strong>Cinema Location:</strong> {video.cinemaLocation}</p>
-          <p><strong>Available Site:</strong> {video.availableSite}</p>
-          <p><strong>Ticket Price:</strong> ${video.ticketPrice}</p>
-        </div>
-
-        {/* Buttons in Flex Row */}
-        <div className="flex flex-row gap-4 mt-4">
-          <button
+    <div className="min-h-screen bg-zinc-100">
+      {/* Navigation Header */}
+      <div className="bg-zinc-100 border-b border-zinc-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <motion.button
             onClick={() => router.back()}
-            className="flex-1 bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600"
+            className="flex items-center text-zinc-600 hover:text-zinc-800 transition-colors"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
           >
-            Go Back
-          </button>
-          <button
-            onClick={() => router.push(`/updateMovie/${id}`)}
-            className="flex-1 bg-green-500 text-white py-2 rounded-lg hover:bg-green-600"
-          >
-            Update Data
-          </button>
+            <FaArrowLeft className="mr-2 h-5 w-5" />
+            <span className="text-lg font-medium">Back to Dashboard</span>
+          </motion.button>
         </div>
-      </motion.div>
+      </div>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+        >
+          {/* Movie Header */}
+          <motion.div
+            className="mb-8 text-center"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.4 }}
+          >
+            <h1 className="text-4xl font-bold text-zinc-800 mb-4">{video.title}</h1>
+            <p className="text-lg text-zinc-600 max-w-3xl mx-auto">
+              {video.description}
+            </p>
+          </motion.div>
+
+          {/* Movie Details Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Left Column - Poster */}
+            <motion.div
+              className="flex justify-center"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.4, duration: 0.5 }}
+            >
+              <div className="w-full max-w-md rounded-2xl overflow-hidden shadow-lg bg-white p-4 hover:shadow-xl transition-shadow">
+                <div className="aspect-video bg-zinc-100 rounded-lg overflow-hidden mx-auto">
+                  <motion.img
+                    src={video.poster}
+                    alt={video.title}
+                    className="w-full h-full object-contain scale-90"
+                    initial={{ scale: 0.9 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.6, duration: 0.5 }}
+                    onError={(e) => {
+                      e.target.src = '/default-poster.jpg';
+                      e.target.onerror = null;
+                    }}
+                  />
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Right Column - Details */}
+            <motion.div
+              className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.6, staggerChildren: 0.1 }}
+            >
+              {[
+                { label: "Category", value: video.category },
+                { label: "Duration", value: `${video.duration} minutes` },
+                { label: "Cinema Name", value: video.cinemaName },
+                { label: "Location", value: video.cinemaLocation },
+                { label: "Available On", value: video.availableSite },
+                { label: "Ticket Price", value: `$${video.ticketPrice}` },
+              ].map((item, index) => (
+                <motion.div
+                  key={index}
+                  className="bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.7 + index * 0.1, duration: 0.4 }}
+                >
+                  <h3 className="text-sm font-semibold text-zinc-500 mb-1">{item.label}</h3>
+                  <p className="text-lg font-medium text-zinc-800">{item.value}</p>
+                </motion.div>
+              ))}
+            </motion.div>
+          </div>
+
+          {/* Ticket Statistics */}
+          <motion.div
+            className="mt-8 bg-white p-8 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.8, duration: 0.4 }}
+          >
+            <h2 className="text-2xl font-bold text-zinc-800 mb-6">Ticket Statistics</h2>
+            <div className="space-y-6">
+              <div>
+                <p className="text-lg font-medium text-zinc-700 mb-2">
+                  Sold Tickets: <span className="font-bold">{soldTickets}</span>
+                </p>
+                <div className="w-full bg-zinc-200 rounded-full h-3">
+                  <motion.div
+                    className="bg-green-500 h-3 rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${soldPercentage}%` }}
+                    transition={{ delay: 0.9, duration: 0.6 }}
+                  />
+                </div>
+              </div>
+              <div>
+                <p className="text-lg font-medium text-zinc-700 mb-2">
+                  Available Tickets: <span className="font-bold">{availableSite}</span>
+                </p>
+                <div className="w-full bg-zinc-200 rounded-full h-3">
+                  <motion.div
+                    className="bg-blue-500 h-3 rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${availablePercentage}%` }}
+                    transition={{ delay: 1, duration: 0.6 }}
+                  />
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Action Buttons */}
+          <motion.div
+            className="mt-8 flex flex-col sm:flex-row gap-4"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.1, duration: 0.4 }}
+          >
+            
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="w-full sm:w-auto px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              onClick={() => router.push(`/updateMovie/${id}`)}
+            >
+              Edit Movie Details
+            </motion.button>
+          </motion.div>
+        </motion.div>
+      </main>
     </div>
   );
 }

@@ -6,6 +6,10 @@ import { collection, addDoc, Timestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { toGregorian, toEthiopian } from "ethiopian-date";
 import { PuffLoader } from "react-spinners";
+import { ThemeContext } from "../../context/ThemeContext";
+import { useContext } from "react";
+import { motion } from "framer-motion";
+import { FaArrowLeft, FaArrowRight, FaCheck } from "react-icons/fa";
 
 export default function VideoUploadForm() {
     const [formData, setFormData] = useState({
@@ -24,14 +28,16 @@ export default function VideoUploadForm() {
         movieID: "",
     });
 
-    const [loading, setLoading] = useState(true); // Start with loading true
-    const [authLoading, setAuthLoading] = useState(true); // Separate state for auth loading
+    const [loading, setLoading] = useState(true);
+    const [authLoading, setAuthLoading] = useState(true);
     const [errors, setErrors] = useState({});
     const router = useRouter();
     const [userEmail, setUserEmail] = useState("");
-    const [userRole, setUserRole] = useState(""); // Add state for user role
+    const [userRole, setUserRole] = useState("");
+    const { theme } = useContext(ThemeContext);
+    const [currentStep, setCurrentStep] = useState(1);
+    const totalSteps = 4;
 
-    // Fetch the current user's email, role, and validate authentication
     useEffect(() => {
         const fetchUser = async () => {
             try {
@@ -46,9 +52,8 @@ export default function VideoUploadForm() {
                 if (data.email && data.role) {
                     setUserEmail(data.email);
                     setUserRole(data.role);
-                    setAuthLoading(false); // Stop auth loading once authenticated
+                    setAuthLoading(false);
 
-                    // Redirect if the user is not an owner
                     if (data.role !== "owner") {
                         router.replace("/login");
                         return;
@@ -67,14 +72,12 @@ export default function VideoUploadForm() {
         fetchUser();
     }, [router]);
 
-    // Handle input changes
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
         setErrors((prev) => ({ ...prev, [name]: "" }));
     };
 
-    // Convert image to base64
     const handleFileChange = (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -90,7 +93,6 @@ export default function VideoUploadForm() {
         };
     };
 
-    // Handle video upload to Cloudinary
     const handleVideoUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -120,48 +122,60 @@ export default function VideoUploadForm() {
         }
     };
 
-    // Generate 8-character unique movie ID
     const generateMovieID = () => {
         const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         return Array.from({ length: 8 }, () => characters.charAt(Math.floor(Math.random() * characters.length))).join("");
     };
 
-    // Validate form
-    const validateForm = () => {
+    const validateStep = (step) => {
         const newErrors = {};
 
-        // Validate ticketPrice is an integer
-        if (!formData.ticketPrice || !Number.isInteger(Number(formData.ticketPrice))) {
-            newErrors.ticketPrice = "Ticket price must be a whole number.";
+        switch (step) {
+            case 1:
+                if (!formData.title.trim()) newErrors.title = "Title is required";
+                if (!formData.category.trim()) newErrors.category = "Category is required";
+                if (!formData.duration.trim()) newErrors.duration = "Duration is required";
+                break;
+            case 2:
+                if (!formData.mainCast.trim()) newErrors.mainCast = "Main cast is required";
+                if (!formData.cinemaName.trim()) newErrors.cinemaName = "Cinema name is required";
+                if (!formData.cinemaLocation.trim()) newErrors.cinemaLocation = "Cinema location is required";
+                break;
+            case 3:
+                if (!formData.availableSite.trim()) newErrors.availableSite = "Available site is required";
+                if (!formData.ticketPrice || !Number.isInteger(Number(formData.ticketPrice))) {
+                    newErrors.ticketPrice = "Ticket price must be a whole number";
+                }
+                if (!formData.screeningDate) newErrors.screeningDate = "Screening date is required";
+                break;
+            case 4:
+                if (!formData.description.trim()) newErrors.description = "Description is required";
+                if (!formData.poster) newErrors.poster = "Poster image is required";
+                if (!formData.promotionVideo) newErrors.promotionVideo = "Promotion video is required";
+                break;
+            default:
+                break;
         }
-
-        // Validate screeningDate is provided
-        if (!formData.screeningDate) {
-            newErrors.screeningDate = "Screening date is required.";
-        }
-
-        // Other validations
-        if (!formData.title.trim()) newErrors.title = "Title is required.";
-        if (!formData.category.trim()) newErrors.category = "Category is required.";
-        if (!formData.duration.trim()) newErrors.duration = "Duration is required.";
-        if (!formData.mainCast.trim()) newErrors.mainCast = "Main cast is required.";
-        if (!formData.cinemaName.trim()) newErrors.cinemaName = "Cinema name is required.";
-        if (!formData.cinemaLocation.trim()) newErrors.cinemaLocation = "Cinema location is required.";
-        if (!formData.availableSite.trim()) newErrors.availableSite = "Available site is required.";
-        if (!formData.poster) newErrors.poster = "Poster image is required.";
-        if (!formData.description.trim()) newErrors.description = "Description is required.";
-        if (!formData.promotionVideo) newErrors.promotionVideo = "Promotion video is required.";
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
 
-    // Handle form submission
+    const handleNext = () => {
+        if (validateStep(currentStep)) {
+            setCurrentStep((prev) => prev + 1);
+        }
+    };
+
+    const handleBack = () => {
+        setCurrentStep((prev) => prev - 1);
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
 
-        if (!validateForm()) {
+        if (!validateStep(currentStep)) {
             setLoading(false);
             return;
         }
@@ -178,12 +192,13 @@ export default function VideoUploadForm() {
                 cinemaLocation: formData.cinemaLocation,
                 availableSite: formData.availableSite,
                 ticketPrice: Number(formData.ticketPrice),
-                screeningDate: Timestamp.fromDate(new Date(formData.screeningDate)),
+                screeningDate: formData.screeningDate, // Store Ethiopian date directly
                 uploadingDate: Timestamp.now(),
                 poster: formData.poster,
                 promotionVideo: formData.promotionVideo,
                 movieID: formData.movieID,
                 createdAt: Timestamp.now(),
+                isEthiopianDate: true, // Add flag to identify Ethiopian dates
             });
 
             alert("Movie uploaded successfully!");
@@ -195,89 +210,230 @@ export default function VideoUploadForm() {
         setLoading(false);
     };
 
-    // Show loading spinner while authenticating
     if (authLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-                <PuffLoader color="#36D7B7" size={100} />
+            <div className={`min-h-screen flex items-center justify-center ${theme === "light" ? "bg-zinc-100" : "bg-zinc-900"}`}>
+                <PuffLoader color="#3b82f6" size={100} />
             </div>
         );
     }
 
+    const steps = [
+        {
+            title: "Basic Info",
+            fields: [
+                { name: "title", label: "Movie Title", type: "text" },
+                { name: "category", label: "Category", type: "text" },
+                { name: "duration", label: "Duration (HH:MM)", type: "time" },
+            ]
+        },
+        {
+            title: "Cast & Venue",
+            fields: [
+                { name: "mainCast", label: "Main Cast (comma separated)", type: "text" },
+                { name: "cinemaName", label: "Cinema Name", type: "text" },
+                { name: "cinemaLocation", label: "Cinema Location", type: "text" },
+            ]
+        },
+        {
+            title: "Ticket Info",
+            fields: [
+                { name: "availableSite", label: "Available Site", type: "text" },
+                { name: "ticketPrice", label: "Ticket Price (ETB)", type: "number" },
+                { name: "screeningDate", label: "Screening Date", type: "custom" },
+            ]
+        },
+        {
+            title: "Media",
+            fields: [
+                { name: "description", label: "Description", type: "textarea" },
+                { name: "poster", label: "Poster (Image Only)", type: "file", accept: "image/*" },
+                { name: "promotionVideo", label: "Promotion Video (Video Only)", type: "file", accept: "video/*" },
+            ]
+        }
+    ];
+
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-6">
-            <form
-                onSubmit={handleSubmit}
-                className="w-full max-w-2xl bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg"
-            >
-                <h2 className="text-2xl font-bold mb-4 text-gray-800 dark:text-white">Upload Movie Details</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <InputField name="title" label="Movie Title" onChange={handleChange} error={errors.title} />
-                    <InputField name="category" label="Category" onChange={handleChange} error={errors.category} />
-                    <InputField name="duration" label="Duration (HH:MM)" type="time" onChange={handleChange} error={errors.duration} />
-                    <InputField name="mainCast" label="Main Cast" onChange={handleChange} error={errors.mainCast} />
-                    <InputField name="cinemaName" label="Cinema Name" onChange={handleChange} error={errors.cinemaName} />
-                    <InputField name="cinemaLocation" label="Cinema Location" onChange={handleChange} error={errors.cinemaLocation} />
-                    <InputField name="availableSite" label="Available Site" onChange={handleChange} error={errors.availableSite} />
-                    <InputField name="ticketPrice" label="Ticket Price" type="number" step="1" onChange={handleChange} error={errors.ticketPrice} />
-                    <EthiopianDatePicker
-                        name="screeningDate"
-                        label="Screening Date (Ethiopian Calendar)"
-                        onChange={handleChange}
-                        error={errors.screeningDate}
-                    />
-                    <InputField name="description" label="Description" type="textarea" onChange={handleChange} error={errors.description} />
-                    <div>
-                        <label className="block text-gray-700 dark:text-white">Poster (Image Only)</label>
-                        <input type="file" accept="image/*" onChange={handleFileChange} className="mt-1 p-2 border rounded w-full dark:bg-gray-700" />
-                        {errors.poster && <p className="text-red-500 text-sm">{errors.poster}</p>}
-                    </div>
-                    <div>
-                        <label className="block text-gray-700 dark:text-white">Promotion Video (Video Only)</label>
-                        <input type="file" accept="video/*" onChange={handleVideoUpload} className="mt-1 p-2 border rounded w-full dark:bg-gray-700" />
-                        {errors.promotionVideo && <p className="text-red-500 text-sm">{errors.promotionVideo}</p>}
+        <div className={`min-h-screen ${theme === "light" ? "bg-zinc-100" : "bg-zinc-900"}`}>
+            {/* Navigation Header */}
+            <div className={`${theme === "light" ? "bg-white border-b border-zinc-200" : "bg-zinc-900 border-b border-zinc-700"}`}>
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                    <div className="flex items-center justify-between">
+                        <motion.button
+                            onClick={() => router.back()}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg ${theme === "light" ? "text-zinc-600 hover:bg-zinc-100" : "text-zinc-400 hover:bg-zinc-800"} transition-colors`}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                        >
+                            <FaArrowLeft className="h-5 w-5" />
+                            <span className="text-lg font-medium">Back</span>
+                        </motion.button>
+
+                        {/* Modern Progress Indicator */}
+                        <div className="flex items-center gap-4">
+                            {steps.map((step, index) => (
+                                <div key={index} className="flex items-center gap-2">
+                                    <motion.div 
+                                        className={`flex items-center justify-center w-8 h-8 rounded-full ${currentStep > index + 1 ? "bg-green-500" : currentStep === index + 1 ? "bg-blue-600" : theme === "light" ? "bg-zinc-200" : "bg-zinc-700"} text-white`}
+                                        whileHover={{ scale: 1.1 }}
+                                    >
+                                        {currentStep > index + 1 ? <FaCheck size={14} /> : index + 1}
+                                    </motion.div>
+                                    <span className={`hidden md:inline ${currentStep === index + 1 ? "font-semibold" : ""} ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>
+                                        {step.title}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
-                <div className="mt-6">
-                    <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 disabled:bg-gray-500">
-                        {loading ? "Uploading..." : "Submit"}
-                    </button>
-                </div>
-            </form>
+            </div>
+
+            {/* Main Content */}
+            <div className="flex items-center justify-center p-4 sm:p-6">
+                <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className={`w-full max-w-2xl rounded-xl shadow-lg overflow-hidden ${theme === "light" ? "bg-white" : "bg-zinc-800"} p-6 sm:p-8`}
+                >
+                    <div className="mb-6">
+                        <h2 className={`text-2xl font-bold ${theme === "light" ? "text-zinc-800" : "text-white"}`}>
+                            {steps[currentStep - 1].title}
+                        </h2>
+                        <p className={`mt-1 ${theme === "light" ? "text-zinc-500" : "text-zinc-400"}`}>
+                            Step {currentStep} of {totalSteps}
+                        </p>
+                    </div>
+
+                    <form onSubmit={handleSubmit} autoComplete="off">
+                        <div className="space-y-5">
+                            {steps[currentStep - 1].fields.map((field, index) => (
+                                <div key={index}>
+                                    <label className={`block text-sm font-medium mb-1 ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>
+                                        {field.label}
+                                        <span className="text-red-500">*</span>
+                                    </label>
+                                    {field.type === "textarea" ? (
+                                        <textarea
+                                            name={field.name}
+                                            value={formData[field.name]}
+                                            onChange={handleChange}
+                                            className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === "light" ? "bg-white border-zinc-300" : "bg-zinc-700 border-zinc-600"} ${errors[field.name] ? "border-red-500" : ""}`}
+                                            rows={4}
+                                            autoComplete="off"
+                                        />
+                                    ) : field.type === "file" ? (
+                                        <div className={`mt-1 flex items-center justify-center w-full px-3 py-6 border-2 border-dashed rounded-md ${theme === "light" ? "bg-zinc-50 border-zinc-300" : "bg-zinc-700 border-zinc-600"} ${errors[field.name] ? "border-red-500" : ""}`}>
+                                            <div className="text-center">
+                                                <p className={`mb-2 ${theme === "light" ? "text-zinc-500" : "text-zinc-400"}`}>
+                                                    Click to upload {field.accept.includes("image") ? "an image" : "a video"}
+                                                </p>
+                                                <input
+                                                    type="file"
+                                                    name={field.name}
+                                                    accept={field.accept}
+                                                    onChange={field.name === "poster" ? handleFileChange : handleVideoUpload}
+                                                    className="hidden"
+                                                    id={field.name}
+                                                />
+                                                <label 
+                                                    htmlFor={field.name}
+                                                    className={`inline-flex items-center px-4 py-2 rounded-md cursor-pointer ${theme === "light" ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-blue-700 text-white hover:bg-blue-800"}`}
+                                                >
+                                                    Choose File
+                                                </label>
+                                                {formData[field.name] && (
+                                                    <p className={`mt-2 text-sm ${theme === "light" ? "text-green-600" : "text-green-400"}`}>
+                                                        File selected
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : field.type === "custom" ? (
+                                        <EthiopianDatePicker
+                                            name={field.name}
+                                            value={formData[field.name]}
+                                            onChange={handleChange}
+                                            error={errors[field.name]}
+                                            theme={theme}
+                                        />
+                                    ) : (
+                                        <input
+                                            type={field.type}
+                                            name={field.name}
+                                            value={formData[field.name]}
+                                            onChange={handleChange}
+                                            className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === "light" ? "bg-white border-zinc-300" : "bg-zinc-700 border-zinc-600"} ${errors[field.name] ? "border-red-500" : ""}`}
+                                            step={field.type === "number" ? "1" : undefined}
+                                            autoComplete="off"
+                                        />
+                                    )}
+                                    {errors[field.name] && (
+                                        <p className="mt-1 text-sm text-red-500">{errors[field.name]}</p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Navigation Buttons */}
+                        <div className="mt-8 flex justify-between">
+                            <motion.button
+                                type="button"
+                                onClick={handleBack}
+                                disabled={currentStep === 1}
+                                className={`flex items-center gap-2 px-6 py-2 rounded-md ${theme === "light" ? "text-zinc-700 hover:bg-zinc-100" : "text-zinc-300 hover:bg-zinc-700"} transition-colors disabled:opacity-50`}
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                            >
+                                <FaArrowLeft size={16} />
+                                Previous
+                            </motion.button>
+                            
+                            {currentStep < totalSteps ? (
+                                <motion.button
+                                    type="button"
+                                    onClick={handleNext}
+                                    className={`flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium rounded-md hover:from-blue-700 hover:to-purple-700 transition-all`}
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                >
+                                    Next
+                                    <FaArrowRight size={16} />
+                                </motion.button>
+                            ) : (
+                                <motion.button
+                                    type="submit"
+                                    disabled={loading}
+                                    className={`flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-green-600 to-blue-600 text-white font-medium rounded-md hover:from-green-700 hover:to-blue-700 transition-all disabled:opacity-70`}
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                >
+                                    {loading ? (
+                                        <>
+                                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                            Uploading...
+                                        </>
+                                    ) : (
+                                        "Submit Movie"
+                                    )}
+                                </motion.button>
+                            )}
+                        </div>
+                    </form>
+                </motion.div>
+            </div>
         </div>
     );
 }
 
-function InputField({ name, label, type = "text", onChange, error }) {
-    return (
-        <div>
-            <label className="block text-gray-700 dark:text-white">{label}</label>
-            {type === "textarea" ? (
-                <textarea
-                    name={name}
-                    onChange={onChange}
-                    className="mt-1 p-2 border rounded w-full dark:bg-gray-700"
-                    rows={4}
-                />
-            ) : (
-                <input
-                    type={type}
-                    name={name}
-                    onChange={onChange}
-                    className="mt-1 p-2 border rounded w-full dark:bg-gray-700"
-                    step={type === "number" ? "1" : undefined}
-                />
-            )}
-            {error && <p className="text-red-500 text-sm">{error}</p>}
-        </div>
-    );
-}
-
-function EthiopianDatePicker({ name, label, onChange, error }) {
-    const [selectedDate, setSelectedDate] = useState("");
+function EthiopianDatePicker({ name, value, onChange, error, theme }) {
+    const [ethiopianDate, setEthiopianDate] = useState("");
     const [time, setTime] = useState("");
 
-    // Get current Ethiopian date
     const getCurrentEthiopianDate = () => {
         const today = new Date();
         const [ethYear, ethMonth, ethDay] = toEthiopian(
@@ -288,71 +444,47 @@ function EthiopianDatePicker({ name, label, onChange, error }) {
         return `${ethYear}-${String(ethMonth).padStart(2, "0")}-${String(ethDay).padStart(2, "0")}`;
     };
 
-    // Initialize with current Ethiopian date
     useEffect(() => {
         const currentEthiopianDate = getCurrentEthiopianDate();
-        setSelectedDate(currentEthiopianDate);
-
-        // Convert Ethiopian date to Gregorian date
-        const [ethYear, ethMonth, ethDay] = currentEthiopianDate.split("-");
-        const [gregYear, gregMonth, gregDay] = toGregorian(Number(ethYear), Number(ethMonth), Number(ethDay));
-
-        // Construct a valid Date object
-        const gregorianDate = new Date(gregYear, gregMonth - 1, gregDay);
-        const screeningDate = gregorianDate.toISOString().split("T")[0] + "T00:00";
-        onChange({ target: { name, value: screeningDate } });
+        setEthiopianDate(currentEthiopianDate);
+        setTime("00:00");
+        // Store the combined Ethiopian date and time
+        onChange({ target: { name, value: `${currentEthiopianDate}T00:00` } });
     }, []);
 
     const handleDateChange = (e) => {
         const { value } = e.target;
-        setSelectedDate(value);
-
-        // Convert Ethiopian date to Gregorian date
-        const [ethYear, ethMonth, ethDay] = value.split("-");
-        const [gregYear, gregMonth, gregDay] = toGregorian(Number(ethYear), Number(ethMonth), Number(ethDay));
-
-        // Construct a valid Date object
-        const gregorianDate = new Date(gregYear, gregMonth - 1, gregDay);
-        const screeningDate = gregorianDate.toISOString().split("T")[0] + `T${time}`;
-        onChange({ target: { name, value: screeningDate } });
+        setEthiopianDate(value);
+        // Store the combined Ethiopian date and time
+        onChange({ target: { name, value: `${value}T${time}` } });
     };
 
     const handleTimeChange = (e) => {
         const { value } = e.target;
         setTime(value);
-
-        // Combine Ethiopian date and time into a single string for the form
-        if (selectedDate) {
-            const [ethYear, ethMonth, ethDay] = selectedDate.split("-");
-            const [gregYear, gregMonth, gregDay] = toGregorian(Number(ethYear), Number(ethMonth), Number(ethDay));
-
-            // Construct a valid Date object
-            const gregorianDate = new Date(gregYear, gregMonth - 1, gregDay);
-            const screeningDate = gregorianDate.toISOString().split("T")[0] + `T${value}`;
-            onChange({ target: { name, value: screeningDate } });
+        if (ethiopianDate) {
+            // Store the combined Ethiopian date and time
+            onChange({ target: { name, value: `${ethiopianDate}T${value}` } });
         }
     };
 
     return (
         <div>
-            <label className="block text-gray-700 dark:text-white">{label}</label>
             <div className="flex gap-2">
                 <input
                     type="date"
-                    value={selectedDate}
+                    value={ethiopianDate}
                     onChange={handleDateChange}
-                    className="mt-1 p-2 border rounded w-1/2 dark:bg-gray-700"
+                    className={`mt-1 block w-1/2 px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === "light" ? "bg-white border-zinc-300" : "bg-zinc-700 border-zinc-600"} ${error ? "border-red-500" : ""}`}
                 />
                 <input
                     type="time"
-                    name="time"
-                    placeholder="Time"
                     value={time}
                     onChange={handleTimeChange}
-                    className="mt-1 p-2 border rounded w-1/2 dark:bg-gray-700"
+                    className={`mt-1 block w-1/2 px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === "light" ? "bg-white border-zinc-300" : "bg-zinc-700 border-zinc-600"} ${error ? "border-red-500" : ""}`}
                 />
             </div>
-            {error && <p className="text-red-500 text-sm">{error}</p>}
+            {error && <p className="mt-1 text-sm text-red-500">{error}</p>}
         </div>
     );
 }

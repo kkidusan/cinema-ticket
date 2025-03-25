@@ -1,9 +1,12 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useContext } from "react";
 import { useRouter } from "next/navigation";
-import { auth, db, collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, deleteDoc } from "../../firebaseconfig";
-import { ArrowLeft, Send, Paperclip, Trash } from "lucide-react";
+import { auth, db, collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, deleteDoc, updateDoc } from "../../firebaseconfig";
+import { ArrowLeft, Send, Paperclip, Trash2, Edit, Copy, Reply, Pin, X } from "lucide-react";
 import { PacmanLoader } from "react-spinners";
+import { toast, ToastContainer } from "react-toastify"; // For toast messages
+import "react-toastify/dist/ReactToastify.css"; // Toast styles
+import { ThemeContext } from "../../context/ThemeContext"; // Import ThemeContext
 
 export default function Messages() {
   const [messages, setMessages] = useState([]);
@@ -13,14 +16,16 @@ export default function Messages() {
   const [userEmail, setUserEmail] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [selectedMessages, setSelectedMessages] = useState([]); // Track selected messages
-  const [isSelectMode, setIsSelectMode] = useState(false); // Toggle select mode
+  const [selectedMessage, setSelectedMessage] = useState(null); // Track selected message for actions
+  const [showActionCard, setShowActionCard] = useState(false); // Toggle action card visibility
+  const [actionCardPosition, setActionCardPosition] = useState({ top: 0, left: 0 }); // Position of the action card
+  const [editingMessageId, setEditingMessageId] = useState(null); // Track message being edited
+  const [replyingToMessage, setReplyingToMessage] = useState(null); // Track replied message
   const messagesEndRef = useRef(null);
   const router = useRouter();
+  const { theme } = useContext(ThemeContext); // Get theme from context
 
-  // Track last tap time for double-tap detection
-  const lastTapRef = useRef(0);
-
+  // Fetch user authentication and role
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -76,55 +81,81 @@ export default function Messages() {
     return () => unsubscribe();
   }, [userEmail]);
 
+  // Scroll to the bottom of the chat
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // Send a new message or save an edited message
   const sendMessage = async () => {
     if (newMessage.trim() === "" && !file) return;
 
-    const newMessageObj = {
-      ownerEmail: userEmail,
-      text: newMessage,
-      sender: "owner",
-      from: auth.currentUser?.displayName || userEmail,
-      show: true,
-      timestamp: new Date(),
-      status: "sending",
-    };
-
-    setMessages((prevMessages) => [...prevMessages, newMessageObj]);
-    setNewMessage("");
-    setFile(null);
-    scrollToBottom();
-
-    try {
-      const docRef = await addDoc(collection(db, "messages"), {
+    if (editingMessageId) {
+      // Save edited message
+      try {
+        await updateDoc(doc(db, "messages", editingMessageId), {
+          text: newMessage,
+        });
+        setMessages((prevMessages) =>
+          prevMessages.map((msg) =>
+            msg.id === editingMessageId ? { ...msg, text: newMessage } : msg
+          )
+        );
+        setEditingMessageId(null);
+        setNewMessage("");
+        toast.success("Message updated successfully!"); // Show success toast
+      } catch (error) {
+        console.error("Error updating message:", error);
+        toast.error("Failed to update message."); // Show error toast
+      }
+    } else {
+      // Send new message
+      const newMessageObj = {
         ownerEmail: userEmail,
         text: newMessage,
         sender: "owner",
         from: auth.currentUser?.displayName || userEmail,
-        show: false,
-        timestamp: serverTimestamp(),
+        show: true,
+        timestamp: new Date(),
         status: "sending",
-      });
+        replyTo: replyingToMessage ? replyingToMessage.id : null, // Add replyTo field
+      };
 
-      setMessages((prevMessages) =>
-        prevMessages.map((msg) =>
-          msg.text === newMessageObj.text && msg.status === "sending"
-            ? { ...msg, id: docRef.id, status: "delivered" }
-            : msg
-        )
-      );
-    } catch (error) {
-      console.error("Error sending message:", error);
-      setMessages((prevMessages) =>
-        prevMessages.map((msg) =>
-          msg.text === newMessageObj.text && msg.status === "sending"
-            ? { ...msg, status: "failed" }
-            : msg
-        )
-      );
+      setMessages((prevMessages) => [...prevMessages, newMessageObj]);
+      setNewMessage("");
+      setFile(null);
+      setReplyingToMessage(null); // Clear replied message
+      scrollToBottom();
+
+      try {
+        const docRef = await addDoc(collection(db, "messages"), {
+          ownerEmail: userEmail,
+          text: newMessage,
+          sender: "owner",
+          from: auth.currentUser?.displayName || userEmail,
+          show: false,
+          timestamp: serverTimestamp(),
+          status: "sending",
+          replyTo: replyingToMessage ? replyingToMessage.id : null, // Add replyTo field
+        });
+
+        setMessages((prevMessages) =>
+          prevMessages.map((msg) =>
+            msg.text === newMessageObj.text && msg.status === "sending"
+              ? { ...msg, id: docRef.id, status: "delivered" }
+              : msg
+          )
+        );
+      } catch (error) {
+        console.error("Error sending message:", error);
+        setMessages((prevMessages) =>
+          prevMessages.map((msg) =>
+            msg.text === newMessageObj.text && msg.status === "sending"
+              ? { ...msg, status: "failed" }
+              : msg
+          )
+        );
+      }
     }
   };
 
@@ -143,92 +174,143 @@ export default function Messages() {
     }
   };
 
-  // Toggle select mode
-  const toggleSelectMode = () => {
-    setIsSelectMode(!isSelectMode);
-    if (!isSelectMode) {
-      setSelectedMessages([]); // Clear selections when exiting select mode
+  // Handle double-click or right-click to show action card
+  const handleMessageAction = (message, e) => {
+    if (message.sender === "owner") {
+      e.preventDefault(); // Prevent default context menu
+      setSelectedMessage(message);
+      setShowActionCard(true);
+
+      // Calculate position for the action card
+      const messageElement = e.currentTarget;
+      const rect = messageElement.getBoundingClientRect();
+      setActionCardPosition({
+        top: rect.top + window.scrollY,
+        left: rect.left - 200, // Position to the left of the message
+      });
     }
   };
 
-  // Handle message selection
-  const handleMessageSelect = (messageId) => {
-    if (isSelectMode) {
-      setSelectedMessages((prevSelected) =>
-        prevSelected.includes(messageId)
-          ? prevSelected.filter((id) => id !== messageId) // Deselect
-          : [...prevSelected, messageId] // Select
-      );
+  // Handle delete message
+  const handleDeleteMessage = async () => {
+    if (selectedMessage) {
+      const confirmDelete = window.confirm("Are you sure you want to delete this message?");
+      if (confirmDelete) {
+        try {
+          await deleteDoc(doc(db, "messages", selectedMessage.id));
+          setMessages((prevMessages) => prevMessages.filter((msg) => msg.id !== selectedMessage.id));
+          setShowActionCard(false);
+          toast.success("Message deleted successfully!"); // Show success toast
+        } catch (error) {
+          console.error("Error deleting message:", error);
+          toast.error("Failed to delete message."); // Show error toast
+        }
+      }
     }
   };
 
-  // Delete a single message
-  const deleteMessage = async (messageId) => {
-    try {
-      await deleteDoc(doc(db, "messages", messageId));
-      setMessages((prevMessages) =>
-        prevMessages.filter((msg) => msg.id !== messageId)
-      );
-    } catch (error) {
-      console.error("Error deleting message:", error);
+  // Handle edit message
+  const handleEditMessage = () => {
+    if (selectedMessage) {
+      setEditingMessageId(selectedMessage.id);
+      setNewMessage(selectedMessage.text); // Prefill input field
+      setReplyingToMessage(null); // Clear reply if any
+      setShowActionCard(false);
     }
   };
 
-  // Handle double-click or double-tap
-  const handleDoubleClickOrTap = (messageId) => {
-    const now = Date.now();
-    const DOUBLE_TAP_DELAY = 300; // 300ms delay for double-tap
-    if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
-      deleteMessage(messageId); // Delete the message on double-tap/double-click
+  // Handle copy message
+  const handleCopyMessage = () => {
+    if (selectedMessage) {
+      navigator.clipboard.writeText(selectedMessage.text).then(() => {
+        toast.success("Message copied to clipboard!"); // Show success toast
+      });
+      setShowActionCard(false);
     }
-    lastTapRef.current = now;
   };
 
+  // Handle reply message
+  const handleReplyMessage = () => {
+    if (selectedMessage) {
+      setReplyingToMessage(selectedMessage);
+      setShowActionCard(false);
+    }
+  };
+
+  // Handle pin message
+  const handlePinMessage = async () => {
+    if (selectedMessage) {
+      try {
+        await updateDoc(doc(db, "messages", selectedMessage.id), {
+          pinned: true,
+        });
+        toast.success("Message pinned to the top!"); // Show success toast
+        setShowActionCard(false);
+      } catch (error) {
+        console.error("Error pinning message:", error);
+        toast.error("Failed to pin message."); // Show error toast
+      }
+    }
+  };
+
+  // Close action card when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (showActionCard && !e.target.closest(".action-card")) {
+        setShowActionCard(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showActionCard]);
+
+  // Loading state
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gradient-to-r from-indigo-100 via-purple-200 to-pink-100 dark:bg-gray-900">
-        <PacmanLoader color="#6D28D9" size={30} />
+      <div className={`flex items-center justify-center h-screen ${theme === "light" ? "bg-gradient-to-r from-indigo-100 via-purple-200 to-pink-100" : "bg-gray-900"}`}>
+        <PacmanLoader color={theme === "light" ? "#6D28D9" : "#FFFFFF"} size={30} />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-r from-indigo-100 via-purple-200 to-pink-100 dark:bg-gray-900 dark:text-white">
+    <div className={`flex flex-col h-screen ${theme === "light" ? "bg-gradient-to-r from-indigo-100 via-purple-200 to-pink-100" : "bg-gray-900"}`}>
       {/* Header */}
-      <div className="flex items-center justify-between p-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md">
+      <div className={`flex items-center justify-between p-4 ${theme === "light" ? "bg-gradient-to-r from-purple-600 to-pink-600" : "bg-gray-800"} text-white shadow-md`}>
         <button onClick={() => router.push("/dashboard")} className="text-white">
           <ArrowLeft size={24} />
         </button>
         <h2 className="text-xl font-semibold">Messages</h2>
-        <button
-          onClick={toggleSelectMode}
-          className={`p-2 rounded-lg ${isSelectMode ? "bg-red-500" : "bg-purple-500"}`}
-        >
-          {isSelectMode ? "Cancel" : "Select"}
-        </button>
+        <div className="w-10"></div> {/* Placeholder for alignment */}
       </div>
 
       {/* Chat Messages Grid */}
-      <div className="flex-grow p-4 overflow-y-auto space-y-4">
+      <div className={`flex-grow p-4 overflow-y-auto space-y-4 custom-scrollbar ${theme === "light" ? "bg-white" : "bg-gray-900"}`}>
         <div className="grid gap-4">
           {messages.length > 0 ? (
             messages.map((msg) => (
               <div
                 key={msg.id}
                 className={`grid ${msg.sender === "owner" ? "justify-self-end" : "justify-self-start"}`}
-                onClick={() => handleMessageSelect(msg.id)}
-                onDoubleClick={() => handleDoubleClickOrTap(msg.id)} // Double-click for desktop
-                onTouchEnd={() => handleDoubleClickOrTap(msg.id)} // Double-tap for touch devices
+                onDoubleClick={(e) => handleMessageAction(msg, e)}
+                onContextMenu={(e) => handleMessageAction(msg, e)}
+                style={{ cursor: msg.sender === "owner" ? "pointer" : "default" }}
               >
                 <div
                   className={`max-w-lg p-4 rounded-lg ${
                     msg.sender === "owner"
                       ? "bg-gradient-to-r from-blue-400 to-blue-600 text-white"
-                      : "bg-gray-300 text-black"
-                  } shadow-lg ${
-                    selectedMessages.includes(msg.id) ? "ring-2 ring-purple-500" : ""
-                  }`}
+                      : theme === "light"
+                      ? "bg-gray-300 text-black"
+                      : "bg-gray-700 text-white"
+                  } shadow-lg`}
                 >
+                  {msg.replyTo && (
+                    <div className={`text-sm ${theme === "light" ? "text-gray-600" : "text-gray-400"} mb-2`}>
+                      Replying to: {messages.find((m) => m.id === msg.replyTo)?.text}
+                    </div>
+                  )}
                   <p className="text-lg">{msg.text}</p>
                   {msg.sender === "owner" && (
                     <p className="text-xs mt-1 text-right">
@@ -243,53 +325,113 @@ export default function Messages() {
               </div>
             ))
           ) : (
-            <p className="text-center text-gray-500">No messages yet.</p>
+            <p className={`text-center ${theme === "light" ? "text-gray-500" : "text-gray-400"}`}>No messages yet.</p>
           )}
         </div>
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Field */}
-      <div className="p-4 bg-gradient-to-r from-blue-100 via-blue-200 to-blue-300 dark:bg-gray-800 flex items-center shadow-md space-x-3 rounded-lg">
-        {isSelectMode ? (
+      {/* Action Card */}
+      {showActionCard && (
+        <div
+          className={`absolute action-card ${theme === "light" ? "bg-white" : "bg-gray-800"} shadow-lg rounded-lg p-2 w-48 z-50`}
+          style={{ top: actionCardPosition.top, left: actionCardPosition.left }}
+        >
           <button
-            onClick={() => deleteSelectedMessages()}
-            className="bg-red-500 text-white px-4 py-2 rounded-xl flex items-center space-x-2"
+            onClick={handleDeleteMessage}
+            className="flex items-center space-x-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left"
           >
-            <Trash size={20} />
-            <span>Delete</span>
+            <Trash2 size={16} className="text-red-500" />
+            <span className="text-sm">Delete</span>
           </button>
-        ) : (
-          <>
-            <label htmlFor="file-upload" className="cursor-pointer">
-              <Paperclip size={20} className="text-gray-500 hover:text-gray-700 dark:text-gray-300" />
-              <input
-                id="file-upload"
-                type="file"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-            </label>
+          <button
+            onClick={handleEditMessage}
+            className="flex items-center space-x-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left"
+          >
+            <Edit size={16} className="text-blue-500" />
+            <span className="text-sm">Edit</span>
+          </button>
+          <button
+            onClick={handleCopyMessage}
+            className="flex items-center space-x-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left"
+          >
+            <Copy size={16} className="text-green-500" />
+            <span className="text-sm">Copy</span>
+          </button>
+          <button
+            onClick={handleReplyMessage}
+            className="flex items-center space-x-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left"
+          >
+            <Reply size={16} className="text-purple-500" />
+            <span className="text-sm">Reply</span>
+          </button>
+          <button
+            onClick={handlePinMessage}
+            className="flex items-center space-x-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left"
+          >
+            <Pin size={16} className="text-yellow-500" />
+            <span className="text-sm">Pin</span>
+          </button>
+        </div>
+      )}
 
-            <input
-              type="text"
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type a message..."
-              className="flex-grow p-3 border rounded-xl dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-
+      {/* Input Field with Reply Preview */}
+      <div className={`p-4 ${theme === "light" ? "bg-gradient-to-r from-blue-100 via-blue-200 to-blue-300" : "bg-gray-800"} flex flex-col shadow-md space-y-2 rounded-lg`}>
+        {replyingToMessage && (
+          <div className={`flex items-center justify-between p-2 ${theme === "light" ? "bg-gray-100" : "bg-gray-700"} rounded-lg`}>
+            <div className={`text-sm ${theme === "light" ? "text-gray-600" : "text-gray-300"}`}>
+              Replying to: {replyingToMessage.text}
+            </div>
             <button
-              onClick={sendMessage}
-              className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-2 rounded-xl flex items-center space-x-2"
+              onClick={() => setReplyingToMessage(null)}
+              className={`text-gray-500 hover:text-gray-700 ${theme === "light" ? "" : "dark:text-gray-300"}`}
             >
-              <Send size={20} />
-              <span>Send</span>
+              <X size={16} />
             </button>
-          </>
+          </div>
         )}
+        <div className="flex items-center space-x-3">
+          <label htmlFor="file-upload" className="cursor-pointer">
+            <Paperclip size={20} className={`text-gray-500 hover:text-gray-700 ${theme === "light" ? "" : "dark:text-gray-300"}`} />
+            <input
+              id="file-upload"
+              type="file"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+          </label>
+
+          <input
+            type="text"
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Type a message..."
+            className={`flex-grow p-3 border rounded-xl ${theme === "light" ? "bg-white" : "bg-gray-700 text-white"} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+          />
+
+          <button
+            onClick={sendMessage}
+            className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-2 rounded-xl flex items-center space-x-2"
+          >
+            <Send size={20} />
+            <span>Send</span>
+          </button>
+        </div>
       </div>
+
+      {/* Toast Container */}
+      <ToastContainer
+        position="bottom-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
     </div>
   );
 }

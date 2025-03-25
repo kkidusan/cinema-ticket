@@ -1,15 +1,17 @@
 "use client";
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, use, useContext } from "react"; // Add useContext here
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { db, collection, query, where, onSnapshot } from "../../../firebaseconfig";
 import { PuffLoader } from "react-spinners";
 import { FaArrowLeft } from "react-icons/fa";
+import { ThemeContext } from "../../../context/ThemeContext"; // Ensure ThemeContext is imported
 
 export default function VideoDetail({ params }) {
   const router = useRouter();
   const unwrappedParams = use(params);
   const { id } = unwrappedParams;
+  const { theme } = useContext(ThemeContext); // Use ThemeContext
 
   const [video, setVideo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -75,15 +77,14 @@ export default function VideoDetail({ params }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-100 flex items-center justify-center">
+      <div className={`min-h-screen ${theme === "light" ? "bg-zinc-100" : "bg-gray-900"} flex items-center justify-center`}>
         <motion.div
           className="flex flex-col items-center"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <PuffLoader color="#3b82f6" size={100} />
-        
+          <PuffLoader color={theme === "light" ? "#3b82f6" : "#818cf8"} size={100} />
         </motion.div>
       </div>
     );
@@ -91,14 +92,14 @@ export default function VideoDetail({ params }) {
 
   if (!video) {
     return (
-      <div className="min-h-screen bg-zinc-100 flex items-center justify-center">
+      <div className={`min-h-screen ${theme === "light" ? "bg-zinc-100" : "bg-gray-900"} flex items-center justify-center`}>
         <motion.div
           className="flex flex-col items-center"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <PuffLoader color="#ef4444" size={100} />
+          <PuffLoader color={theme === "light" ? "#ef4444" : "#f87171"} size={100} />
           <motion.p
             className="mt-4 text-2xl font-bold text-zinc-700"
             initial={{ opacity: 0 }}
@@ -118,13 +119,13 @@ export default function VideoDetail({ params }) {
   const availablePercentage = totalTickets > 0 ? (availableSite / totalTickets) * 100 : 0;
 
   return (
-    <div className="min-h-screen bg-zinc-100">
+    <div className={`min-h-screen ${theme === "light" ? "bg-zinc-100" : "bg-gray-900"}`}>
       {/* Navigation Header */}
-      <div className="bg-zinc-100 border-b border-zinc-200">
+      <div className={`${theme === "light" ? "bg-zinc-100 border-b border-zinc-200" : "bg-gray-800 border-b border-gray-700"}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <motion.button
             onClick={() => router.back()}
-            className="flex items-center text-zinc-600 hover:text-zinc-800 transition-colors"
+            className={`flex items-center ${theme === "light" ? "text-zinc-600 hover:text-zinc-800" : "text-gray-300 hover:text-gray-100"} transition-colors`}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
@@ -148,8 +149,10 @@ export default function VideoDetail({ params }) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.4 }}
           >
-            <h1 className="text-4xl font-bold text-zinc-800 mb-4">{video.title}</h1>
-            <p className="text-lg text-zinc-600 max-w-3xl mx-auto">
+            <h1 className={`text-4xl font-bold ${theme === "light" ? "text-zinc-800" : "text-white"} mb-4`}>
+              {video.title}
+            </h1>
+            <p className={`text-lg ${theme === "light" ? "text-zinc-600" : "text-gray-300"} max-w-3xl mx-auto`}>
               {video.description}
             </p>
           </motion.div>
@@ -163,7 +166,7 @@ export default function VideoDetail({ params }) {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.4, duration: 0.5 }}
             >
-              <div className="w-full max-w-md rounded-2xl overflow-hidden shadow-lg bg-white p-4 hover:shadow-xl transition-shadow">
+              <div className={`w-full max-w-md rounded-2xl overflow-hidden shadow-lg ${theme === "light" ? "bg-white" : "bg-gray-800"} p-4 hover:shadow-xl transition-shadow`}>
                 <div className="aspect-video bg-zinc-100 rounded-lg overflow-hidden mx-auto">
                   <motion.img
                     src={video.poster}
@@ -198,13 +201,17 @@ export default function VideoDetail({ params }) {
               ].map((item, index) => (
                 <motion.div
                   key={index}
-                  className="bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+                  className={`${theme === "light" ? "bg-white" : "bg-gray-800"} p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow`}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.7 + index * 0.1, duration: 0.4 }}
                 >
-                  <h3 className="text-sm font-semibold text-zinc-500 mb-1">{item.label}</h3>
-                  <p className="text-lg font-medium text-zinc-800">{item.value}</p>
+                  <h3 className={`text-sm font-semibold ${theme === "light" ? "text-zinc-500" : "text-gray-400"} mb-1`}>
+                    {item.label}
+                  </h3>
+                  <p className={`text-lg font-medium ${theme === "light" ? "text-zinc-800" : "text-white"}`}>
+                    {item.value}
+                  </p>
                 </motion.div>
               ))}
             </motion.div>
@@ -212,15 +219,17 @@ export default function VideoDetail({ params }) {
 
           {/* Ticket Statistics */}
           <motion.div
-            className="mt-8 bg-white p-8 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+            className={`mt-8 ${theme === "light" ? "bg-white" : "bg-gray-800"} p-8 rounded-xl shadow-sm hover:shadow-md transition-shadow`}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.8, duration: 0.4 }}
           >
-            <h2 className="text-2xl font-bold text-zinc-800 mb-6">Ticket Statistics</h2>
+            <h2 className={`text-2xl font-bold ${theme === "light" ? "text-zinc-800" : "text-white"} mb-6`}>
+              Ticket Statistics
+            </h2>
             <div className="space-y-6">
               <div>
-                <p className="text-lg font-medium text-zinc-700 mb-2">
+                <p className={`text-lg font-medium ${theme === "light" ? "text-zinc-700" : "text-gray-300"} mb-2`}>
                   Sold Tickets: <span className="font-bold">{soldTickets}</span>
                 </p>
                 <div className="w-full bg-zinc-200 rounded-full h-3">
@@ -233,7 +242,7 @@ export default function VideoDetail({ params }) {
                 </div>
               </div>
               <div>
-                <p className="text-lg font-medium text-zinc-700 mb-2">
+                <p className={`text-lg font-medium ${theme === "light" ? "text-zinc-700" : "text-gray-300"} mb-2`}>
                   Available Tickets: <span className="font-bold">{availableSite}</span>
                 </p>
                 <div className="w-full bg-zinc-200 rounded-full h-3">
@@ -255,11 +264,10 @@ export default function VideoDetail({ params }) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 1.1, duration: 0.4 }}
           >
-            
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="w-full sm:w-auto px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className={`w-full sm:w-auto px-8 py-3 ${theme === "light" ? "bg-blue-600 text-white" : "bg-blue-700 text-white"} rounded-lg hover:bg-blue-700 transition-colors`}
               onClick={() => router.push(`/updateMovie/${id}`)}
             >
               Edit Movie Details

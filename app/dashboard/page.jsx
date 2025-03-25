@@ -1,15 +1,16 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Sun, Moon, MessageCircle, LogOut, ArrowRight } from "lucide-react"; // Import ArrowRight
+import { User, MessageCircle, LogOut, Upload } from "lucide-react"; // Added Upload icon
 import { auth, db } from "../firebaseconfig";
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc } from "firebase/firestore";
 import Footer from "../componet/Footer";
-import { PuffLoader } from "react-spinners"; // Import PuffLoader
+import { PuffLoader } from "react-spinners";
+import ThemeToggle from "../componet/ThemeToggle";
+import { ThemeContext } from "../context/ThemeContext";
 
 export default function Dashboard() {
-  const [darkMode, setDarkMode] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [userRole, setUserRole] = useState("");
   const [userData, setUserData] = useState(null);
@@ -22,6 +23,7 @@ export default function Dashboard() {
   const [isApproved, setIsApproved] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const router = useRouter();
+  const { theme } = useContext(ThemeContext);
 
   // Fetch user email, role, and validate authentication
   useEffect(() => {
@@ -74,7 +76,7 @@ export default function Dashboard() {
       const unsubscribe = onSnapshot(q, (querySnapshot) => {
         if (!querySnapshot.empty) {
           const userDoc = querySnapshot.docs[0].data();
-          setIsApproved(userDoc.approved !== false); // Update isApproved in real-time
+          setIsApproved(userDoc.approved !== false);
         } else {
           setIsApproved(false);
         }
@@ -160,13 +162,6 @@ export default function Dashboard() {
     }
   };
 
-  const toggleDarkMode = () => {
-    const newMode = !darkMode;
-    setDarkMode(newMode);
-    localStorage.setItem("theme", newMode ? "dark" : "light");
-    document.documentElement.classList.toggle("dark", newMode);
-  };
-
   const handleMovieClick = (movieID) => {
     router.push(`/dashboard/videodetial/${movieID}`);
   };
@@ -207,14 +202,14 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className={`min-h-screen flex items-center justify-center ${theme === "light" ? "bg-zinc-50" : "bg-gray-900"}`}>
         <motion.div
           className="flex flex-col items-center"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <PuffLoader color="#36D7B7" size={100} /> {/* Loading spinner */}
+          <PuffLoader color="#36D7B7" size={100} />
         </motion.div>
       </div>
     );
@@ -225,9 +220,9 @@ export default function Dashboard() {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col ${darkMode ? "bg-gray-900" : "bg-zinc-50"} transition-colors`}>
+    <div className={`min-h-screen flex flex-col ${theme === "light" ? "bg-zinc-50" : "bg-gray-900"}`}>
       {/* Navigation Bar */}
-      <nav className="fixed w-full bg-gradient-to-r from-blue-500 via-purple-600 to-pink-500 dark:from-gray-800 dark:to-gray-700 shadow-lg z-50">
+      <nav className={`fixed w-full ${theme === "light" ? "bg-gradient-to-r from-blue-500 via-purple-600 to-pink-500" : "bg-gradient-to-r from-gray-800 via-gray-700 to-gray-900"} shadow-lg z-50`}>
         <div className="max-w-7xl mx-auto px-6 lg:px-8 flex justify-between h-16 items-center">
           <motion.div
             className="text-2xl font-extrabold text-white"
@@ -246,62 +241,58 @@ export default function Dashboard() {
 
           <div className="flex items-center space-x-6 ml-auto">
             {/* Profile Button */}
-            <button
-              onClick={() => router.push("/dashboard/profile")}
-              className="relative flex items-center space-x-2 text-white text-lg font-medium hover:text-yellow-300 transition-colors group"
-              title="Profile"
-            >
-              {userData ? (
-                <div className="w-9 h-9 flex items-center justify-center bg-blue-500 rounded-full text-white font-bold">
-                  {userData.firstName.charAt(0).toUpperCase()}
-                </div>
-              ) : (
-                <div className="w-6 h-6 flex items-center justify-center bg-blue-500 rounded-full text-white font-bold">
-                  U
-                </div>
-              )}
-              <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-black text-white text-sm px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="relative group">
+              <button
+                onClick={() => router.push("/dashboard/profile")}
+                className={`p-2 rounded-full ${theme === "light" ? "text-black hover:bg-[#a21caf]" : "text-white hover:bg-[#a21caf]"} transition-all`}
+              >
+                <User size={28} /> {/* Lucide User icon */}
+              </button>
+              <span className="absolute top-12 left-1/2 transform -translate-x-1/2 bg-black text-white text-sm px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
                 Profile
               </span>
-            </button>
+            </div>
 
             {/* Message Button */}
-            <button
-              onClick={handleMessageClick}
-              className="relative text-white hover:text-yellow-300 transition-colors group"
-              title="Message"
-            >
-              <MessageCircle size={28} />
-              {messageCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full px-2">
-                  {messageCount}
-                </span>
-              )}
-              <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-black text-white text-sm px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                Message
+            <div className="relative group">
+              <button
+                onClick={handleMessageClick}
+                className={`p-2 rounded-full ${theme === "light" ? "text-black hover:bg-[#a21caf]" : "text-white hover:bg-[#a21caf]"} transition-all`}
+              >
+                <MessageCircle size={28} /> {/* Lucide MessageCircle icon */}
+                {messageCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">
+                    {messageCount}
+                  </span>
+                )}
+              </button>
+              <span className="absolute top-12 left-1/2 transform -translate-x-1/2 bg-black text-white text-sm px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                Messages
               </span>
-            </button>
+            </div>
 
-            {/* Dark Mode Toggle Button */}
-            <button onClick={toggleDarkMode} className="text-white hover:text-yellow-300 transition-colors">
-              {darkMode ? <Moon size={28} /> : <Sun size={28} />}
-            </button>
+            {/* Theme Toggle */}
+            <ThemeToggle />
 
             {/* Logout Button */}
-            <button
-              onClick={handleLogout}
-              className="text-white hover:text-yellow-300 transition-colors"
-              title="Logout"
-            >
-              <LogOut size={28} />
-            </button>
+            <div className="relative group">
+              <button
+                onClick={handleLogout}
+                className={`p-2 rounded-full ${theme === "light" ? "text-black hover:bg-[#a21caf]" : "text-white hover:bg-[#a21caf]"} transition-all`}
+              >
+                <LogOut size={28} /> {/* Lucide LogOut icon */}
+              </button>
+              <span className="absolute top-12 left-1/2 transform -translate-x-1/2 bg-black text-white text-sm px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                Logout
+              </span>
+            </div>
           </div>
         </div>
       </nav>
 
       {/* Dashboard Content */}
       {isApproved === false ? (
-        <div className="min-h-screen flex items-center justify-center">
+        <div className={`min-h-screen flex items-center justify-center ${theme === "light" ? "bg-zinc-50" : "bg-gray-900"}`}>
           <motion.div
             className="text-center"
             initial={{ opacity: 0, y: -50 }}
@@ -317,7 +308,7 @@ export default function Dashboard() {
               Request Pending
             </motion.h1>
             <motion.p
-              className="mt-4 text-xl md:text-2xl text-gray-700 dark:text-gray-300"
+              className={`mt-4 text-xl md:text-2xl ${theme === "light" ? "text-gray-700" : "text-gray-300"}`}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 1, duration: 0.8 }}
@@ -333,7 +324,7 @@ export default function Dashboard() {
               <div className="flex justify-center">
                 <div className="w-24 h-24 border-4 border-purple-500 rounded-full animate-spin border-t-transparent"></div>
               </div>
-              <p className="mt-4 text-gray-600 dark:text-gray-400 text-sm">
+              <p className={`mt-4 ${theme === "light" ? "text-gray-600" : "text-gray-400"} text-sm`}>
                 We appreciate your patience!
               </p>
             </motion.div>
@@ -343,66 +334,64 @@ export default function Dashboard() {
         <>
           {/* Rest of the dashboard content */}
           <div className="p-8 pt-24">
-            
-
             {/* Grid Layout for Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Owner's Role and Responsibilities Card */}
               <motion.div
-                className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-gray-800 dark:to-gray-900 p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-shadow transform hover:scale-105"
+                className={`${theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"} p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-shadow transform hover:scale-105`}
                 whileHover={{ scale: 1.02 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
-                <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-6">
+                <h3 className={`text-2xl font-bold ${theme === "light" ? "text-gray-800" : "text-gray-100"} mb-6`}>
                   Owner's Role and Responsibilities
                 </h3>
-                <ul className="space-y-4 text-gray-700 dark:text-gray-300">
+                <ul className="space-y-4">
                   <li className="flex items-center space-x-3">
                     <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                    <span>Manage video uploads and oversee content shared on the platform.</span>
+                    <span className={`${theme === "light" ? "text-gray-700" : "text-gray-300"}`}>Manage video uploads and oversee content shared on the platform.</span>
                   </li>
                   <li className="flex items-center space-x-3">
                     <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
-                    <span>Approve or reject uploads based on platform guidelines.</span>
+                    <span className={`${theme === "light" ? "text-gray-700" : "text-gray-300"}`}>Approve or reject uploads based on platform guidelines.</span>
                   </li>
                   <li className="flex items-center space-x-3">
                     <span className="w-2 h-2 bg-pink-500 rounded-full"></span>
-                    <span>Handle real-time messages from the admin.</span>
+                    <span className={`${theme === "light" ? "text-gray-700" : "text-gray-300"}`}>Handle real-time messages from the admin.</span>
                   </li>
                   <li className="flex items-center space-x-3">
                     <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-                    <span>Maintain personal settings and customize dashboard.</span>
+                    <span className={`${theme === "light" ? "text-gray-700" : "text-gray-300"}`}>Maintain personal settings and customize dashboard.</span>
                   </li>
                 </ul>
               </motion.div>
 
               {/* Video Upload Management Card */}
               <motion.div
-                className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-800 dark:to-gray-900 p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-shadow transform hover:scale-105"
+                className={`${theme === "light" ? "bg-gradient-to-br from-purple-50 to-pink-50" : "bg-gradient-to-br from-gray-800 to-gray-900"} p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-shadow transform hover:scale-105`}
                 whileHover={{ scale: 1.02 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
-                <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-6">
+                <h3 className={`text-2xl font-bold ${theme === "light" ? "text-gray-800" : "text-gray-100"} mb-6`}>
                   Video Upload Management
                 </h3>
-                <p className="text-gray-700 dark:text-gray-300 mb-6">
+                <p className={`${theme === "light" ? "text-gray-700" : "text-gray-300"} mb-6`}>
                   The owner can upload, manage, and organize videos, providing details such as titles, descriptions, and posters.
                 </p>
 
                 {/* Upload New Video Section */}
-                <div className="bg-gradient-to-br from-blue-100 to-purple-100 dark:from-gray-700 dark:to-gray-800 p-6 rounded-xl shadow-md hover:shadow-lg transition-shadow">
-                  <h4 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">
+                <div className={`${theme === "light" ? "bg-gradient-to-br from-blue-100 to-purple-100" : "bg-gradient-to-br from-gray-700 to-gray-800"} p-6 rounded-xl shadow-md hover:shadow-lg transition-shadow`}>
+                  <h4 className={`text-xl font-semibold ${theme === "light" ? "text-gray-800" : "text-gray-100"} mb-4`}>
                     Upload New Video
                   </h4>
-                  <p className="text-gray-700 dark:text-gray-300 mb-6">
+                  <p className={`${theme === "light" ? "text-gray-700" : "text-gray-300"} mb-6`}>
                     Upload new videos by providing a title, description, and poster. Your videos will be added to the platform.
                   </p>
                   <button
                     onClick={() => router.push("/dashboard/videoUploadDetail")}
-                    className="group bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-lg shadow-md hover:shadow-lg transition-all transform hover:scale-105 flex items-center justify-center space-x-2"
+                    className={`bg-transparent border-2 ${theme === "light" ? "border-[#a21caf] text-black" : "border-[#a21caf] text-white"} px-4 py-2 rounded-md transition-all hover:bg-[#a21caf] hover:text-white flex items-center space-x-2`}
                   >
+                    <Upload size={20} /> {/* Added Upload icon */}
                     <span>Upload New Video</span>
-                    <ArrowRight className="h-5 w-5 transform transition-transform group-hover:translate-x-1" />
                   </button>
                 </div>
               </motion.div>
@@ -411,12 +400,12 @@ export default function Dashboard() {
 
           {/* User Uploaded Movies Section */}
           <div className="flex-grow p-8">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">
+            <h2 className={`text-3xl font-bold ${theme === "light" ? "text-gray-900" : "text-gray-100"} mb-6`}>
               Your Uploaded Movies
             </h2>
 
             {userMovies.length === 0 ? (
-              <div className="text-center text-gray-700 dark:text-gray-300">
+              <div className={`text-center ${theme === "light" ? "text-gray-700" : "text-gray-300"}`}>
                 <p className="text-xl">You have not uploaded any movies.</p>
               </div>
             ) : (
@@ -425,10 +414,10 @@ export default function Dashboard() {
                   {userMovies.slice(0, visibleCount).map((movie, index) => (
                     <div
                       key={index}
-                      className="bg-gray-100 dark:bg-gray-700 p-6 rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer"
+                      className={`${theme === "light" ? "bg-gray-100" : "bg-gray-800"} p-6 rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer`}
                       onClick={() => handleMovieClick(movie.movieID)}
                     >
-                      <p className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
+                      <p className={`text-lg font-semibold ${theme === "light" ? "text-gray-800" : "text-gray-100"} mb-4`}>
                         Movie ID: {movie.movieID}
                       </p>
                       <img
@@ -442,12 +431,18 @@ export default function Dashboard() {
 
                 <div className="mt-6 text-center">
                   {userMovies.length > visibleCount && (
-                    <button onClick={handleShowMore} className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600">
+                    <button
+                      onClick={handleShowMore}
+                      className={`bg-transparent border-2 ${theme === "light" ? "border-[#a21caf] text-black" : "border-[#a21caf] text-white"} px-4 py-2 rounded-md transition-all hover:bg-[#a21caf] hover:text-white mr-4`}
+                    >
                       Show More...
                     </button>
                   )}
                   {visibleCount > 4 && (
-                    <button onClick={handleShowLess} className="ml-4 bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600">
+                    <button
+                      onClick={handleShowLess}
+                      className={`bg-transparent border-2 ${theme === "light" ? "border-[#a21caf] text-black" : "border-[#a21caf] text-white"} px-4 py-2 rounded-md transition-all hover:bg-[#a21caf] hover:text-white`}
+                    >
                       Show Less
                     </button>
                   )}
@@ -458,67 +453,67 @@ export default function Dashboard() {
 
           {/* Statistical Analysis Section */}
           <div className="mt-16 p-8">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">
+            <h2 className={`text-3xl font-bold ${theme === "light" ? "text-gray-900" : "text-gray-100"} mb-6`}>
               Statistical Analysis
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* Total Movies Uploaded */}
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
-                <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">
+              <div className={`${theme === "light" ? "bg-white" : "bg-gray-800"} p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}>
+                <h3 className={`text-2xl font-semibold ${theme === "light" ? "text-gray-800" : "text-gray-100"}`}>
                   Total Movies Uploaded
                 </h3>
-                <p className="mt-4 text-4xl font-bold text-blue-500 dark:text-blue-300">
+                <p className="mt-4 text-4xl font-bold text-blue-500">
                   {stats.totalMovies}
                 </p>
               </div>
 
               {/* Average Rating */}
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
-                <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">
+              <div className={`${theme === "light" ? "bg-white" : "bg-gray-800"} p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}>
+                <h3 className={`text-2xl font-semibold ${theme === "light" ? "text-gray-800" : "text-gray-100"}`}>
                   Average Rating
                 </h3>
-                <p className="mt-4 text-4xl font-bold text-green-500 dark:text-green-300">
+                <p className="mt-4 text-4xl font-bold text-green-500">
                   {stats.averageRating} ⭐
                 </p>
               </div>
 
               {/* Most Popular Genre */}
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
-                <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">
+              <div className={`${theme === "light" ? "bg-white" : "bg-gray-800"} p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}>
+                <h3 className={`text-2xl font-semibold ${theme === "light" ? "text-gray-800" : "text-gray-100"}`}>
                   Most Popular Genre
                 </h3>
-                <p className="mt-4 text-4xl font-bold text-purple-500 dark:text-purple-300">
+                <p className="mt-4 text-4xl font-bold text-purple-500">
                   {stats.mostPopularGenre}
                 </p>
               </div>
 
               {/* Total Views */}
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
-                <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">
+              <div className={`${theme === "light" ? "bg-white" : "bg-gray-800"} p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}>
+                <h3 className={`text-2xl font-semibold ${theme === "light" ? "text-gray-800" : "text-gray-100"}`}>
                   Total Views
                 </h3>
-                <p className="mt-4 text-4xl font-bold text-yellow-500 dark:text-yellow-300">
+                <p className="mt-4 text-4xl font-bold text-yellow-500">
                   {stats.totalViews.toLocaleString()}
                 </p>
               </div>
 
               {/* Total Likes */}
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
-                <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">
+              <div className={`${theme === "light" ? "bg-white" : "bg-gray-800"} p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}>
+                <h3 className={`text-2xl font-semibold ${theme === "light" ? "text-gray-800" : "text-gray-100"}`}>
                   Total Likes
                 </h3>
-                <p className="mt-4 text-4xl font-bold text-pink-500 dark:text-pink-300">
+                <p className="mt-4 text-4xl font-bold text-pink-500">
                   {stats.totalLikes.toLocaleString()}
                 </p>
               </div>
 
               {/* Total Comments */}
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
-                <h3 className="text-2xl font-semibold text-gray-800 dark:text-white">
+              <div className={`${theme === "light" ? "bg-white" : "bg-gray-800"} p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}>
+                <h3 className={`text-2xl font-semibold ${theme === "light" ? "text-gray-800" : "text-gray-100"}`}>
                   Total Comments
                 </h3>
-                <p className="mt-4 text-4xl font-bold text-red-500 dark:text-red-300">
+                <p className="mt-4 text-4xl font-bold text-red-500">
                   {stats.totalComments.toLocaleString()}
                 </p>
               </div>

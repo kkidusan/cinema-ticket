@@ -1,11 +1,14 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "../../firebaseconfig";
-import { collection, query, where, onSnapshot, updateDoc, doc, setDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, updateDoc, doc, setDoc, getDocs } from "firebase/firestore";
 import Image from "next/image";
+import { motion } from "framer-motion";
+import { ThemeContext } from "../../context/ThemeContext"; // Import ThemeContext
 
 export default function AboutPage() {
+  const { theme } = useContext(ThemeContext); // Use ThemeContext
   const [userEmail, setUserEmail] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const [pendingOwners, setPendingOwners] = useState([]);
@@ -116,12 +119,12 @@ export default function AboutPage() {
         text: message,
         sender: "admin",
         timestamp: new Date(),
+        show: false,
       };
 
       await setDoc(doc(db, "messages", `${currentOwner.email}_${Date.now()}`), newMessage);
       setMessages((prevMessages) => [...prevMessages, newMessage]);
       setMessage("");
-      setIsChatOpen(false);
     } catch (error) {
       console.error("Error sending message:", error);
     }
@@ -178,7 +181,7 @@ export default function AboutPage() {
   // Show loader while loading
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-100">
+      <div className={`flex items-center justify-center h-screen ${theme === "light" ? "bg-gray-100" : "bg-gray-900"}`}>
         <div className="wave-loader">
           <div></div>
           <div></div>
@@ -196,27 +199,32 @@ export default function AboutPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-100">
+    <div className={`flex flex-col min-h-screen ${theme === "light" ? "bg-gray-100" : "bg-gray-900"}`}>
       {/* Pending Approvals Section */}
       <div className="container mx-auto p-6">
-        <h2 className="text-xl font-semibold mb-4">Pending Approvals</h2>
+        <h2 className={`text-xl font-semibold mb-4 ${theme === "light" ? "text-gray-900" : "text-white"}`}>Pending Approvals</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {pendingOwners.length > 0 ? (
             pendingOwners.map((owner) => (
-              <div key={owner.id} className="bg-white p-4 shadow-lg rounded-xl">
-                <h3 className="text-lg font-bold">
+              <motion.div
+                key={owner.id}
+                className={`bg-gradient-to-br from-blue-50 to-purple-50 dark:from-gray-800 dark:to-gray-900 p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-shadow transform hover:scale-105`}
+                whileHover={{ scale: 1.02 }}
+                transition={{ type: "spring", stiffness: 300 }}
+              >
+                <h3 className={`text-lg font-bold ${theme === "light" ? "text-gray-900" : "text-white"}`}>
                   {owner.firstName} {owner.lastName}
                 </h3>
-                <p className="text-gray-600">{owner.email}</p>
-                <p className="text-gray-600">{owner.location}</p>
-                <p className="text-gray-600">{owner.phoneNumber}</p>
+                <p className={`text-gray-600 ${theme === "light" ? "text-gray-600" : "text-white"}`}>{owner.email}</p>
+                <p className={`text-gray-600 ${theme === "light" ? "text-gray-600" : "text-white"}`}>{owner.location}</p>
+                <p className={`text-gray-600 ${theme === "light" ? "text-gray-600" : "text-white"}`}>{owner.phoneNumber}</p>
 
                 {/* Button to open the certificate */}
                 {owner.tradeCertificate && (
                   <div className="mt-4">
                     <button
                       onClick={() => setOpenCertificate(owner.id)}
-                      className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                      className={`bg-transparent border-2 ${theme === "light" ? "border-[#a21caf] text-black" : "border-[#a21caf] text-white"} px-4 py-2 rounded-md transition-all hover:bg-[#a21caf]`}
                     >
                       Read Certificate
                     </button>
@@ -237,7 +245,7 @@ export default function AboutPage() {
                       setOwnerToApprove(owner);
                       setShowConfirmation(true);
                     }}
-                    className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-700"
+                    className={`bg-transparent border-2 ${theme === "light" ? "border-[#a21caf] text-black" : "border-[#a21caf] text-white"} px-4 py-2 rounded-md transition-all hover:bg-[#a21caf]`}
                   >
                     Approve
                   </button>
@@ -248,15 +256,15 @@ export default function AboutPage() {
                       setIsChatOpen(true);
                       setCurrentOwner(owner);
                     }}
-                    className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                    className={`bg-transparent border-2 ${theme === "light" ? "border-[#a21caf] text-black" : "border-[#a21caf] text-white"} px-4 py-2 rounded-md transition-all hover:bg-[#a21caf]`}
                   >
                     New Chat
                   </button>
                 </div>
-              </div>
+              </motion.div>
             ))
           ) : (
-            <p className="text-gray-500">No pending approvals.</p>
+            <p className={`text-gray-500 ${theme === "light" ? "text-gray-600" : "text-gray-400"}`}>No pending approvals.</p>
           )}
         </div>
       </div>
@@ -265,23 +273,79 @@ export default function AboutPage() {
       {showConfirmation && (
         <div className="fixed inset-0 bg-gray-700 bg-opacity-50 flex justify-center items-center z-50">
           <div className="bg-white p-6 rounded-lg w-96">
-            <h3 className="text-xl font-semibold">Confirm Approval</h3>
-            <p className="mt-4">Are you sure you want to approve {ownerToApprove.firstName} {ownerToApprove.lastName}?</p>
+            <h3 className={`text-xl font-semibold ${theme === "light" ? "text-gray-900" : "text-white"}`}>Confirm Approval</h3>
+            <p className={`mt-4 ${theme === "light" ? "text-gray-900" : "text-white"}`}>
+              Are you sure you want to approve {ownerToApprove.firstName} {ownerToApprove.lastName}?
+            </p>
             <div className="flex gap-4 mt-4">
               <button
                 onClick={() => handleApproveOwner(ownerToApprove.id, ownerToApprove.email)}
-                className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-700"
+                className={`bg-transparent border-2 ${theme === "light" ? "border-[#a21caf] text-black" : "border-[#a21caf] text-white"} px-4 py-2 rounded-md transition-all hover:bg-[#86efac]`}
               >
                 Yes, Approve
               </button>
               <button
                 onClick={() => {
                   setShowConfirmation(false);
-                  showToast("Approval canceled.", false); // Show cancel toast
+                  showToast("Approval canceled.", false);
                 }}
-                className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-700"
+                className={`bg-transparent border-2 ${theme === "light" ? "border-[#a21caf] text-black" : "border-[#a21caf] text-white"} px-4 py-2 rounded-md transition-all hover:bg-[#86efac]`}
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Chatting Card */}
+      {isChatOpen && currentOwner && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+          <div className="bg-white p-6 rounded-lg w-96 shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className={`text-xl font-semibold ${theme === "light" ? "text-gray-900" : "text-white"}`}>Chat with {currentOwner.firstName}</h3>
+              <button
+                onClick={() => setIsChatOpen(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Chat Messages */}
+            <div className="h-64 overflow-y-auto mb-4 border border-gray-200 rounded-lg p-4">
+              {messages.map((msg, index) => (
+                <div
+                  key={index}
+                  className={`mb-2 ${msg.sender === "admin" ? "text-right" : "text-left"}`}
+                >
+                  <div
+                    className={`inline-block p-2 rounded-lg ${
+                      msg.sender === "admin"
+                        ? "bg-[#ef86e6] text-white"
+                        : "bg-gray-200 text-black"
+                    }`}
+                  >
+                    {msg.text}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Message Input */}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Type a message..."
+                className="flex-1 p-2 border border-gray-300 rounded-lg"
+              />
+              <button
+                onClick={handleSendMessage}
+                className="bg-[#86efac] text-white px-4 py-2 rounded-lg hover:bg-[#4ade80] transition-all"
+              >
+                Send
               </button>
             </div>
           </div>
@@ -311,7 +375,7 @@ export default function AboutPage() {
           <button
             onClick={() => {
               setIsFullScreen(false);
-              setCertificateData(null); // Reset certificate data on close
+              setCertificateData(null);
             }}
             className="absolute top-4 right-4 text-white text-2xl"
           >

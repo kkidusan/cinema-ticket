@@ -184,23 +184,24 @@ export default function Profile() {
         pauseOnHover
         theme={theme === "light" ? "light" : "dark"}
       />
-      {/* Navigation Header */}
-      <div className={`${theme === "light" ? "bg-zinc-100 border-b border-zinc-200" : "bg-zinc-900 border-b border-zinc-700"}`}>
+      
+      {/* Navigation Header with zinc-100 gradient */}
+      <div className={`sticky top-0 z-50 ${theme === "light" ? "bg-gradient-to-br from-zinc-100 to-zinc-200" : "bg-gradient-to-br from-gray-800 to-gray-900"} border-b ${theme === "light" ? "border-zinc-200" : "border-zinc-700"}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <motion.button
-            onClick={() => router.back()}
-            className={`flex items-center ${theme === "light" ? "text-zinc-600 hover:text-zinc-800" : "text-zinc-400 hover:text-zinc-200"} transition-colors`}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <FaArrowLeft className="mr-2 h-5 w-5" />
-            <span className="text-lg font-medium">Back</span>
-          </motion.button>
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => router.back()}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg ${theme === "light" ? "text-purple-700 hover:bg-purple-100" : "text-purple-300 hover:bg-purple-800"} transition-colors`}
+            >
+              <FaArrowLeft className="h-5 w-5" />
+              <span className="text-lg font-medium">Back</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="flex items-center justify-center p-4">
+      <div className="flex items-center justify-center p-4 pt-24"> {/* Added pt-24 to account for fixed header */}
         <motion.div
           className={`w-full max-w-md rounded-2xl shadow-lg overflow-hidden ${
             theme === "light"

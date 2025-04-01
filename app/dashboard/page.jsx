@@ -2,7 +2,7 @@
 import { useState, useEffect, useContext } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { User, MessageCircle, LogOut, Upload } from "lucide-react"; // Added Upload icon
+import { User, MessageCircle, LogOut, Upload } from "lucide-react";
 import { auth, db } from "../firebaseconfig";
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc } from "firebase/firestore";
 import Footer from "../componet/Footer";
@@ -216,22 +216,22 @@ export default function Dashboard() {
   }
 
   if (!isAuthenticated) {
-    return null; // or a redirect to login page
+    return null;
   }
 
   return (
     <div className={`min-h-screen flex flex-col ${theme === "light" ? "bg-zinc-50" : "bg-gray-900"}`}>
-      {/* Navigation Bar */}
-      <nav className={`fixed w-full ${theme === "light" ? "bg-gradient-to-r from-blue-500 via-purple-600 to-pink-500" : "bg-gradient-to-r from-gray-800 via-gray-700 to-gray-900"} shadow-lg z-50`}>
+      {/* Navigation Header with updated zinc-100 gradient */}
+      <nav className={`fixed w-full ${theme === "light" ? "bg-gradient-to-br from-zinc-100 to-zinc-200" : "bg-gradient-to-br from-gray-800 to-gray-900"} border-b ${theme === "light" ? "border-zinc-200" : "border-zinc-700"} shadow-lg z-50`}>
         <div className="max-w-7xl mx-auto px-6 lg:px-8 flex justify-between h-16 items-center">
           <motion.div
-            className="text-2xl font-extrabold text-white"
+            className="text-2xl font-extrabold"
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.8 }}
           >
             {userData ? (
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-yellow-300 via-orange-500 to-red-500">
+              <span className={`${theme === "light" ? "text-purple-700" : "text-purple-300"}`}>
                 {userData.firstName} {userData.lastName}
               </span>
             ) : (
@@ -244,9 +244,9 @@ export default function Dashboard() {
             <div className="relative group">
               <button
                 onClick={() => router.push("/dashboard/profile")}
-                className={`p-2 rounded-full ${theme === "light" ? "text-black hover:bg-[#a21caf]" : "text-white hover:bg-[#a21caf]"} transition-all`}
+                className={`p-2 rounded-full ${theme === "light" ? "text-purple-700 hover:bg-purple-100" : "text-purple-300 hover:bg-purple-800"} transition-colors`}
               >
-                <User size={28} /> {/* Lucide User icon */}
+                <User size={28} />
               </button>
               <span className="absolute top-12 left-1/2 transform -translate-x-1/2 bg-black text-white text-sm px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
                 Profile
@@ -257,9 +257,9 @@ export default function Dashboard() {
             <div className="relative group">
               <button
                 onClick={handleMessageClick}
-                className={`p-2 rounded-full ${theme === "light" ? "text-black hover:bg-[#a21caf]" : "text-white hover:bg-[#a21caf]"} transition-all`}
+                className={`p-2 rounded-full ${theme === "light" ? "text-purple-700 hover:bg-purple-100" : "text-purple-300 hover:bg-purple-800"} transition-colors`}
               >
-                <MessageCircle size={28} /> {/* Lucide MessageCircle icon */}
+                <MessageCircle size={28} />
                 {messageCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">
                     {messageCount}
@@ -278,9 +278,9 @@ export default function Dashboard() {
             <div className="relative group">
               <button
                 onClick={handleLogout}
-                className={`p-2 rounded-full ${theme === "light" ? "text-black hover:bg-[#a21caf]" : "text-white hover:bg-[#a21caf]"} transition-all`}
+                className={`p-2 rounded-full ${theme === "light" ? "text-purple-700 hover:bg-purple-100" : "text-purple-300 hover:bg-purple-800"} transition-colors`}
               >
-                <LogOut size={28} /> {/* Lucide LogOut icon */}
+                <LogOut size={28} />
               </button>
               <span className="absolute top-12 left-1/2 transform -translate-x-1/2 bg-black text-white text-sm px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
                 Logout
@@ -338,7 +338,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Owner's Role and Responsibilities Card */}
               <motion.div
-                className={`${theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"} p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-shadow transform hover:scale-105`}
+                className={`${theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"} p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-shadow`}
                 whileHover={{ scale: 1.02 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
@@ -367,7 +367,7 @@ export default function Dashboard() {
 
               {/* Video Upload Management Card */}
               <motion.div
-                className={`${theme === "light" ? "bg-gradient-to-br from-purple-50 to-pink-50" : "bg-gradient-to-br from-gray-800 to-gray-900"} p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-shadow transform hover:scale-105`}
+                className={`${theme === "light" ? "bg-gradient-to-br from-purple-50 to-pink-50" : "bg-gradient-to-br from-gray-800 to-gray-900"} p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-shadow`}
                 whileHover={{ scale: 1.02 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
@@ -388,9 +388,9 @@ export default function Dashboard() {
                   </p>
                   <button
                     onClick={() => router.push("/dashboard/videoUploadDetail")}
-                    className={`bg-transparent border-2 ${theme === "light" ? "border-[#a21caf] text-black" : "border-[#a21caf] text-white"} px-4 py-2 rounded-md transition-all hover:bg-[#a21caf] hover:text-white flex items-center space-x-2`}
+                    className={`bg-transparent border-2 ${theme === "light" ? "border-purple-600 text-purple-700" : "border-purple-400 text-purple-300"} px-4 py-2 rounded-md transition-all hover:bg-purple-600 hover:text-white flex items-center space-x-2`}
                   >
-                    <Upload size={20} /> {/* Added Upload icon */}
+                    <Upload size={20} />
                     <span>Upload New Video</span>
                   </button>
                 </div>
@@ -414,7 +414,7 @@ export default function Dashboard() {
                   {userMovies.slice(0, visibleCount).map((movie, index) => (
                     <div
                       key={index}
-                      className={`${theme === "light" ? "bg-gray-100" : "bg-gray-800"} p-6 rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer`}
+                      className={`${theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"} p-6 rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer`}
                       onClick={() => handleMovieClick(movie.movieID)}
                     >
                       <p className={`text-lg font-semibold ${theme === "light" ? "text-gray-800" : "text-gray-100"} mb-4`}>
@@ -433,7 +433,7 @@ export default function Dashboard() {
                   {userMovies.length > visibleCount && (
                     <button
                       onClick={handleShowMore}
-                      className={`bg-transparent border-2 ${theme === "light" ? "border-[#a21caf] text-black" : "border-[#a21caf] text-white"} px-4 py-2 rounded-md transition-all hover:bg-[#a21caf] hover:text-white mr-4`}
+                      className={`bg-transparent border-2 ${theme === "light" ? "border-purple-600 text-purple-700" : "border-purple-400 text-purple-300"} px-4 py-2 rounded-md transition-all hover:bg-purple-600 hover:text-white mr-4`}
                     >
                       Show More...
                     </button>
@@ -441,7 +441,7 @@ export default function Dashboard() {
                   {visibleCount > 4 && (
                     <button
                       onClick={handleShowLess}
-                      className={`bg-transparent border-2 ${theme === "light" ? "border-[#a21caf] text-black" : "border-[#a21caf] text-white"} px-4 py-2 rounded-md transition-all hover:bg-[#a21caf] hover:text-white`}
+                      className={`bg-transparent border-2 ${theme === "light" ? "border-purple-600 text-purple-700" : "border-purple-400 text-purple-300"} px-4 py-2 rounded-md transition-all hover:bg-purple-600 hover:text-white`}
                     >
                       Show Less
                     </button>
@@ -459,7 +459,7 @@ export default function Dashboard() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* Total Movies Uploaded */}
-              <div className={`${theme === "light" ? "bg-white" : "bg-gray-800"} p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}>
+              <div className={`${theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"} p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}>
                 <h3 className={`text-2xl font-semibold ${theme === "light" ? "text-gray-800" : "text-gray-100"}`}>
                   Total Movies Uploaded
                 </h3>
@@ -469,7 +469,7 @@ export default function Dashboard() {
               </div>
 
               {/* Average Rating */}
-              <div className={`${theme === "light" ? "bg-white" : "bg-gray-800"} p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}>
+              <div className={`${theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"} p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}>
                 <h3 className={`text-2xl font-semibold ${theme === "light" ? "text-gray-800" : "text-gray-100"}`}>
                   Average Rating
                 </h3>
@@ -479,7 +479,7 @@ export default function Dashboard() {
               </div>
 
               {/* Most Popular Genre */}
-              <div className={`${theme === "light" ? "bg-white" : "bg-gray-800"} p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}>
+              <div className={`${theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"} p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}>
                 <h3 className={`text-2xl font-semibold ${theme === "light" ? "text-gray-800" : "text-gray-100"}`}>
                   Most Popular Genre
                 </h3>
@@ -489,7 +489,7 @@ export default function Dashboard() {
               </div>
 
               {/* Total Views */}
-              <div className={`${theme === "light" ? "bg-white" : "bg-gray-800"} p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}>
+              <div className={`${theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"} p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}>
                 <h3 className={`text-2xl font-semibold ${theme === "light" ? "text-gray-800" : "text-gray-100"}`}>
                   Total Views
                 </h3>
@@ -499,7 +499,7 @@ export default function Dashboard() {
               </div>
 
               {/* Total Likes */}
-              <div className={`${theme === "light" ? "bg-white" : "bg-gray-800"} p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}>
+              <div className={`${theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"} p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}>
                 <h3 className={`text-2xl font-semibold ${theme === "light" ? "text-gray-800" : "text-gray-100"}`}>
                   Total Likes
                 </h3>
@@ -509,7 +509,7 @@ export default function Dashboard() {
               </div>
 
               {/* Total Comments */}
-              <div className={`${theme === "light" ? "bg-white" : "bg-gray-800"} p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}>
+              <div className={`${theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"} p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}>
                 <h3 className={`text-2xl font-semibold ${theme === "light" ? "text-gray-800" : "text-gray-100"}`}>
                   Total Comments
                 </h3>

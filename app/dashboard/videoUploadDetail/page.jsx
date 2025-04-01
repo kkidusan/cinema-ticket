@@ -37,6 +37,10 @@ export default function VideoUploadForm() {
     const { theme } = useContext(ThemeContext);
     const [currentStep, setCurrentStep] = useState(1);
     const totalSteps = 4;
+    const [touched, setTouched] = useState({
+        poster: false,
+        promotionVideo: false
+    });
 
     useEffect(() => {
         const fetchUser = async () => {
@@ -90,12 +94,16 @@ export default function VideoUploadForm() {
                 poster: reader.result,
                 movieID: generateMovieID(),
             }));
+            setErrors((prev) => ({ ...prev, poster: "" }));
+            setTouched((prev) => ({ ...prev, poster: true }));
         };
     };
 
     const handleVideoUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
+
+        setTouched((prev) => ({ ...prev, promotionVideo: true }));
 
         const formData = new FormData();
         formData.append("file", file);
@@ -116,9 +124,11 @@ export default function VideoUploadForm() {
                     ...prev,
                     promotionVideo: data.secure_url,
                 }));
+                setErrors((prev) => ({ ...prev, promotionVideo: "" }));
             }
         } catch (error) {
             console.error("Error uploading video:", error);
+            setErrors((prev) => ({ ...prev, promotionVideo: "Failed to upload video" }));
         }
     };
 
@@ -150,8 +160,8 @@ export default function VideoUploadForm() {
                 break;
             case 4:
                 if (!formData.description.trim()) newErrors.description = "Description is required";
-                if (!formData.poster) newErrors.poster = "Poster image is required";
-                if (!formData.promotionVideo) newErrors.promotionVideo = "Promotion video is required";
+                if (!formData.poster && touched.poster) newErrors.poster = "Poster image is required";
+                if (!formData.promotionVideo && touched.promotionVideo) newErrors.promotionVideo = "Promotion video is required";
                 break;
             default:
                 break;
@@ -162,6 +172,13 @@ export default function VideoUploadForm() {
     };
 
     const handleNext = () => {
+        if (currentStep === 4) {
+            setTouched({
+                poster: true,
+                promotionVideo: true
+            });
+        }
+        
         if (validateStep(currentStep)) {
             setCurrentStep((prev) => prev + 1);
         }
@@ -174,6 +191,11 @@ export default function VideoUploadForm() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
+
+        setTouched({
+            poster: true,
+            promotionVideo: true
+        });
 
         if (!validateStep(currentStep)) {
             setLoading(false);
@@ -192,13 +214,13 @@ export default function VideoUploadForm() {
                 cinemaLocation: formData.cinemaLocation,
                 availableSite: formData.availableSite,
                 ticketPrice: Number(formData.ticketPrice),
-                screeningDate: formData.screeningDate, // Store Ethiopian date directly
+                screeningDate: formData.screeningDate,
                 uploadingDate: Timestamp.now(),
                 poster: formData.poster,
                 promotionVideo: formData.promotionVideo,
                 movieID: formData.movieID,
                 createdAt: Timestamp.now(),
-                isEthiopianDate: true, // Add flag to identify Ethiopian dates
+                isEthiopianDate: true,
             });
 
             alert("Movie uploaded successfully!");
@@ -255,31 +277,25 @@ export default function VideoUploadForm() {
 
     return (
         <div className={`min-h-screen ${theme === "light" ? "bg-zinc-100" : "bg-zinc-900"}`}>
-            {/* Navigation Header */}
-            <div className={`${theme === "light" ? "bg-white border-b border-zinc-200" : "bg-zinc-900 border-b border-zinc-700"}`}>
+            {/* Navigation Header with zinc-100 gradient */}
+            <div className={`${theme === "light" ? "bg-gradient-to-br from-zinc-100 to-zinc-200" : "bg-gradient-to-br from-gray-800 to-gray-900"} border-b ${theme === "light" ? "border-zinc-200" : "border-zinc-700"}`}>
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                     <div className="flex items-center justify-between">
-                        <motion.button
+                        <button
                             onClick={() => router.back()}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg ${theme === "light" ? "text-zinc-600 hover:bg-zinc-100" : "text-zinc-400 hover:bg-zinc-800"} transition-colors`}
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg ${theme === "light" ? "text-purple-700 hover:bg-purple-100" : "text-purple-300 hover:bg-purple-800"} transition-colors`}
                         >
                             <FaArrowLeft className="h-5 w-5" />
                             <span className="text-lg font-medium">Back</span>
-                        </motion.button>
+                        </button>
 
-                        {/* Modern Progress Indicator */}
                         <div className="flex items-center gap-4">
                             {steps.map((step, index) => (
                                 <div key={index} className="flex items-center gap-2">
-                                    <motion.div 
-                                        className={`flex items-center justify-center w-8 h-8 rounded-full ${currentStep > index + 1 ? "bg-green-500" : currentStep === index + 1 ? "bg-blue-600" : theme === "light" ? "bg-zinc-200" : "bg-zinc-700"} text-white`}
-                                        whileHover={{ scale: 1.1 }}
-                                    >
+                                    <div className={`flex items-center justify-center w-8 h-8 rounded-full ${currentStep > index + 1 ? "bg-green-500" : currentStep === index + 1 ? "bg-purple-600" : theme === "light" ? "bg-purple-200" : "bg-purple-800"} text-white`}>
                                         {currentStep > index + 1 ? <FaCheck size={14} /> : index + 1}
-                                    </motion.div>
-                                    <span className={`hidden md:inline ${currentStep === index + 1 ? "font-semibold" : ""} ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>
+                                    </div>
+                                    <span className={`hidden md:inline ${currentStep === index + 1 ? "font-semibold" : ""} ${theme === "light" ? "text-purple-700" : "text-purple-300"}`}>
                                         {step.title}
                                     </span>
                                 </div>
@@ -289,13 +305,15 @@ export default function VideoUploadForm() {
                 </div>
             </div>
 
-            {/* Main Content */}
+            {/* Main Content (with animations) */}
             <div className="flex items-center justify-center p-4 sm:p-6">
-                <motion.div 
+                <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3 }}
-                    className={`w-full max-w-2xl rounded-xl shadow-lg overflow-hidden ${theme === "light" ? "bg-white" : "bg-zinc-800"} p-6 sm:p-8`}
+                    className={`w-full max-w-4xl ${theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"} p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-all`}
+                    whileHover={{ scale: 1.02 }}
+                    transition={{ type: "spring", stiffness: 300 }}
                 >
                     <div className="mb-6">
                         <h2 className={`text-2xl font-bold ${theme === "light" ? "text-zinc-800" : "text-white"}`}>
@@ -319,15 +337,32 @@ export default function VideoUploadForm() {
                                             name={field.name}
                                             value={formData[field.name]}
                                             onChange={handleChange}
-                                            className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === "light" ? "bg-white border-zinc-300" : "bg-zinc-700 border-zinc-600"} ${errors[field.name] ? "border-red-500" : ""}`}
+                                            className={`mt-1 block w-full px-3 py-2 rounded-md shadow-sm focus:outline-none focus:ring-2 ${
+                                                errors[field.name] 
+                                                    ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500" 
+                                                    : theme === "light" 
+                                                        ? "border border-zinc-300 focus:border-blue-500 focus:ring-blue-500" 
+                                                        : "border border-zinc-600 focus:border-blue-500 focus:ring-blue-500"
+                                            } ${theme === "light" ? "bg-white" : "bg-zinc-700"}`}
                                             rows={4}
                                             autoComplete="off"
                                         />
                                     ) : field.type === "file" ? (
-                                        <div className={`mt-1 flex items-center justify-center w-full px-3 py-6 border-2 border-dashed rounded-md ${theme === "light" ? "bg-zinc-50 border-zinc-300" : "bg-zinc-700 border-zinc-600"} ${errors[field.name] ? "border-red-500" : ""}`}>
+                                        <div className={`mt-1 flex flex-col items-center justify-center w-full px-3 py-6 border-2 border-dashed rounded-md transition-colors ${
+                                            (errors[field.name] && touched[field.name]) 
+                                                ? "border-red-500 bg-red-50/50" 
+                                                : theme === "light" 
+                                                    ? "border-zinc-300 bg-zinc-50 hover:border-zinc-400" 
+                                                    : "border-zinc-600 bg-zinc-800 hover:border-zinc-500"
+                                        }`}>
                                             <div className="text-center">
-                                                <p className={`mb-2 ${theme === "light" ? "text-zinc-500" : "text-zinc-400"}`}>
-                                                    Click to upload {field.accept.includes("image") ? "an image" : "a video"}
+                                                <p className={`mb-2 ${(errors[field.name] && touched[field.name]) ? "text-red-500 font-medium" : theme === "light" ? "text-zinc-500" : "text-zinc-400"}`}>
+                                                    {formData[field.name] 
+                                                        ? "File selected" 
+                                                        : (errors[field.name] && touched[field.name]) 
+                                                            ? `Please upload ${field.accept.includes("image") ? "an image" : "a video"}`
+                                                            : `Click to upload ${field.accept.includes("image") ? "an image" : "a video"}`
+                                                    }
                                                 </p>
                                                 <input
                                                     type="file"
@@ -339,15 +374,16 @@ export default function VideoUploadForm() {
                                                 />
                                                 <label 
                                                     htmlFor={field.name}
-                                                    className={`inline-flex items-center px-4 py-2 rounded-md cursor-pointer ${theme === "light" ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-blue-700 text-white hover:bg-blue-800"}`}
+                                                    className={`inline-flex items-center px-4 py-2 rounded-md cursor-pointer transition-colors ${
+                                                        (errors[field.name] && touched[field.name])
+                                                            ? "bg-red-500 text-white hover:bg-red-600" 
+                                                            : theme === "light" 
+                                                                ? "bg-blue-600 text-white hover:bg-blue-700" 
+                                                                : "bg-blue-700 text-white hover:bg-blue-800"
+                                                    }`}
                                                 >
-                                                    Choose File
+                                                    {formData[field.name] ? "Change File" : "Choose File"}
                                                 </label>
-                                                {formData[field.name] && (
-                                                    <p className={`mt-2 text-sm ${theme === "light" ? "text-green-600" : "text-green-400"}`}>
-                                                        File selected
-                                                    </p>
-                                                )}
                                             </div>
                                         </div>
                                     ) : field.type === "custom" ? (
@@ -364,19 +400,27 @@ export default function VideoUploadForm() {
                                             name={field.name}
                                             value={formData[field.name]}
                                             onChange={handleChange}
-                                            className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === "light" ? "bg-white border-zinc-300" : "bg-zinc-700 border-zinc-600"} ${errors[field.name] ? "border-red-500" : ""}`}
+                                            className={`mt-1 block w-full px-3 py-2 rounded-md shadow-sm focus:outline-none focus:ring-2 ${
+                                                errors[field.name] 
+                                                    ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500" 
+                                                    : theme === "light" 
+                                                        ? "border border-zinc-300 focus:border-blue-500 focus:ring-blue-500" 
+                                                        : "border border-zinc-600 focus:border-blue-500 focus:ring-blue-500"
+                                            } ${theme === "light" ? "bg-white" : "bg-zinc-700"}`}
                                             step={field.type === "number" ? "1" : undefined}
                                             autoComplete="off"
                                         />
                                     )}
-                                    {errors[field.name] && (
+                                    {errors[field.name] && field.type !== "file" && (
+                                        <p className="mt-1 text-sm text-red-500">{errors[field.name]}</p>
+                                    )}
+                                    {errors[field.name] && field.type === "file" && touched[field.name] && (
                                         <p className="mt-1 text-sm text-red-500">{errors[field.name]}</p>
                                     )}
                                 </div>
                             ))}
                         </div>
 
-                        {/* Navigation Buttons */}
                         <div className="mt-8 flex justify-between">
                             <motion.button
                                 type="button"
@@ -448,14 +492,12 @@ function EthiopianDatePicker({ name, value, onChange, error, theme }) {
         const currentEthiopianDate = getCurrentEthiopianDate();
         setEthiopianDate(currentEthiopianDate);
         setTime("00:00");
-        // Store the combined Ethiopian date and time
         onChange({ target: { name, value: `${currentEthiopianDate}T00:00` } });
     }, []);
 
     const handleDateChange = (e) => {
         const { value } = e.target;
         setEthiopianDate(value);
-        // Store the combined Ethiopian date and time
         onChange({ target: { name, value: `${value}T${time}` } });
     };
 
@@ -463,7 +505,6 @@ function EthiopianDatePicker({ name, value, onChange, error, theme }) {
         const { value } = e.target;
         setTime(value);
         if (ethiopianDate) {
-            // Store the combined Ethiopian date and time
             onChange({ target: { name, value: `${ethiopianDate}T${value}` } });
         }
     };
@@ -475,13 +516,25 @@ function EthiopianDatePicker({ name, value, onChange, error, theme }) {
                     type="date"
                     value={ethiopianDate}
                     onChange={handleDateChange}
-                    className={`mt-1 block w-1/2 px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === "light" ? "bg-white border-zinc-300" : "bg-zinc-700 border-zinc-600"} ${error ? "border-red-500" : ""}`}
+                    className={`mt-1 block w-1/2 px-3 py-2 rounded-md shadow-sm focus:outline-none focus:ring-2 ${
+                        error 
+                            ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500" 
+                            : theme === "light" 
+                                ? "border border-zinc-300 focus:border-blue-500 focus:ring-blue-500" 
+                                : "border border-zinc-600 focus:border-blue-500 focus:ring-blue-500"
+                    } ${theme === "light" ? "bg-white" : "bg-zinc-700"}`}
                 />
                 <input
                     type="time"
                     value={time}
                     onChange={handleTimeChange}
-                    className={`mt-1 block w-1/2 px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === "light" ? "bg-white border-zinc-300" : "bg-zinc-700 border-zinc-600"} ${error ? "border-red-500" : ""}`}
+                    className={`mt-1 block w-1/2 px-3 py-2 rounded-md shadow-sm focus:outline-none focus:ring-2 ${
+                        error 
+                            ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500" 
+                            : theme === "light" 
+                                ? "border border-zinc-300 focus:border-blue-500 focus:ring-blue-500" 
+                                : "border border-zinc-600 focus:border-blue-500 focus:ring-blue-500"
+                    } ${theme === "light" ? "bg-white" : "bg-zinc-700"}`}
                 />
             </div>
             {error && <p className="mt-1 text-sm text-red-500">{error}</p>}

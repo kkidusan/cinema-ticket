@@ -1,17 +1,16 @@
 "use client";
-import { useState, useEffect, use, useContext } from "react"; // Add useContext here
+import { useState, useEffect, useContext } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { db, collection, query, where, onSnapshot } from "../../../firebaseconfig";
 import { PuffLoader } from "react-spinners";
 import { FaArrowLeft } from "react-icons/fa";
-import { ThemeContext } from "../../../context/ThemeContext"; // Ensure ThemeContext is imported
+import { ThemeContext } from "../../../context/ThemeContext";
 
 export default function VideoDetail({ params }) {
   const router = useRouter();
-  const unwrappedParams = use(params);
-  const { id } = unwrappedParams;
-  const { theme } = useContext(ThemeContext); // Use ThemeContext
+  const { id } = params; // Directly destructure params
+  const { theme } = useContext(ThemeContext);
 
   const [video, setVideo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -57,7 +56,6 @@ export default function VideoDetail({ params }) {
     if (id && userRole === "owner") {
       const q = query(collection(db, "Movies"), where("movieID", "==", id));
 
-      // Realtime fetch using onSnapshot
       const unsubscribe = onSnapshot(q, (querySnapshot) => {
         if (!querySnapshot.empty) {
           const movieData = querySnapshot.docs[0].data();
@@ -70,7 +68,6 @@ export default function VideoDetail({ params }) {
         setLoading(false);
       });
 
-      // Cleanup subscription on unmount
       return () => unsubscribe();
     }
   }, [id, userRole]);
@@ -113,30 +110,29 @@ export default function VideoDetail({ params }) {
     );
   }
 
-  // Calculate ticket statistics
   const totalTickets = soldTickets + availableSite;
   const soldPercentage = totalTickets > 0 ? (soldTickets / totalTickets) * 100 : 0;
   const availablePercentage = totalTickets > 0 ? (availableSite / totalTickets) * 100 : 0;
 
   return (
     <div className={`min-h-screen ${theme === "light" ? "bg-zinc-100" : "bg-gray-900"}`}>
-      {/* Navigation Header */}
-      <div className={`${theme === "light" ? "bg-zinc-100 border-b border-zinc-200" : "bg-gray-800 border-b border-gray-700"}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <motion.button
-            onClick={() => router.back()}
-            className={`flex items-center ${theme === "light" ? "text-zinc-600 hover:text-zinc-800" : "text-gray-300 hover:text-gray-100"} transition-colors`}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <FaArrowLeft className="mr-2 h-5 w-5" />
-            <span className="text-lg font-medium">Back to Dashboard</span>
-          </motion.button>
+      {/* Fixed Navigation Header with zinc-100 gradient */}
+      <header className={`sticky top-0 z-50 ${theme === "light" ? "bg-gradient-to-br from-zinc-100 to-zinc-200" : "bg-gradient-to-br from-gray-800 to-gray-900"} border-b ${theme === "light" ? "border-zinc-200" : "border-gray-700"} shadow-sm`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => router.back()}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg ${theme === "light" ? "text-purple-700 hover:bg-purple-100" : "text-purple-300 hover:bg-purple-800"} transition-colors`}
+            >
+              <FaArrowLeft className="h-5 w-5" />
+              <span className="text-lg font-medium">Back</span>
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -152,13 +148,10 @@ export default function VideoDetail({ params }) {
             <h1 className={`text-4xl font-bold ${theme === "light" ? "text-zinc-800" : "text-white"} mb-4`}>
               {video.title}
             </h1>
-            <p className={`text-lg ${theme === "light" ? "text-zinc-600" : "text-gray-300"} max-w-3xl mx-auto`}>
-              {video.description}
-            </p>
           </motion.div>
 
           {/* Movie Details Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Left Column - Poster */}
             <motion.div
               className="flex justify-center"
@@ -166,12 +159,16 @@ export default function VideoDetail({ params }) {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.4, duration: 0.5 }}
             >
-              <div className={`w-full max-w-md rounded-2xl overflow-hidden shadow-lg ${theme === "light" ? "bg-white" : "bg-gray-800"} p-4 hover:shadow-xl transition-shadow`}>
-                <div className="aspect-video bg-zinc-100 rounded-lg overflow-hidden mx-auto">
+              <motion.div
+                className={`w-full h-full ${theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"} rounded-2xl p-4 shadow-xl hover:shadow-2xl transition-shadow`}
+                whileHover={{ scale: 1.01 }}
+                transition={{ type: "spring", stiffness: 300 }}
+              >
+                <div className="aspect-video w-full h-full rounded-lg overflow-hidden">
                   <motion.img
                     src={video.poster}
                     alt={video.title}
-                    className="w-full h-full object-contain scale-90"
+                    className="w-full h-full object-cover"
                     initial={{ scale: 0.9 }}
                     animate={{ scale: 1 }}
                     transition={{ delay: 0.6, duration: 0.5 }}
@@ -181,98 +178,105 @@ export default function VideoDetail({ params }) {
                     }}
                   />
                 </div>
-              </div>
+              </motion.div>
             </motion.div>
 
             {/* Right Column - Details */}
-            <motion.div
-              className="grid grid-cols-1 sm:grid-cols-2 gap-4"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.6, staggerChildren: 0.1 }}
-            >
-              {[
-                { label: "Category", value: video.category },
-                { label: "Duration", value: `${video.duration} minutes` },
-                { label: "Cinema Name", value: video.cinemaName },
-                { label: "Location", value: video.cinemaLocation },
-                { label: "Available On", value: video.availableSite },
-                { label: "Ticket Price", value: `$${video.ticketPrice}` },
-              ].map((item, index) => (
-                <motion.div
-                  key={index}
-                  className={`${theme === "light" ? "bg-white" : "bg-gray-800"} p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow`}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.7 + index * 0.1, duration: 0.4 }}
+            <div className="space-y-8">
+              <motion.div
+                className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6, staggerChildren: 0.1 }}
+              >
+                {[
+                  { label: "Category", value: video.category },
+                  { label: "Duration", value: `${video.duration} minutes` },
+                  { label: "Cinema Name", value: video.cinemaName },
+                  { label: "Location", value: video.cinemaLocation },
+                  { label: "Available On", value: video.availableSite },
+                  { label: "Ticket Price", value: `$${video.ticketPrice}` },
+                  { label: "Description", value: video.description },
+                ].map((item, index) => (
+                  <motion.div
+                    key={index}
+                    className={`${theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"} p-6 rounded-xl shadow-xl hover:shadow-2xl transition-shadow`}
+                    whileHover={{ scale: 1.02 }}
+                    transition={{ type: "spring", stiffness: 300 }}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.7 + index * 0.1, duration: 0.4 }}
+                  >
+                    <h3 className={`text-sm font-semibold ${theme === "light" ? "text-zinc-500" : "text-gray-400"} mb-1`}>
+                      {item.label}
+                    </h3>
+                    <p className={`text-lg font-medium ${theme === "light" ? "text-zinc-800" : "text-white"}`}>
+                      {item.value}
+                    </p>
+                  </motion.div>
+                ))}
+              </motion.div>
+
+              {/* Ticket Statistics */}
+              <motion.div
+                className={`${theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"} p-8 rounded-xl shadow-xl hover:shadow-2xl transition-shadow`}
+                whileHover={{ scale: 1.01 }}
+                transition={{ type: "spring", stiffness: 300 }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.8, duration: 0.4 }}
+              >
+                <h2 className={`text-2xl font-bold ${theme === "light" ? "text-zinc-800" : "text-white"} mb-6`}>
+                  Ticket Statistics
+                </h2>
+                <div className="space-y-6">
+                  <div>
+                    <p className={`text-lg font-medium ${theme === "light" ? "text-zinc-700" : "text-gray-300"} mb-2`}>
+                      Sold Tickets: <span className="font-bold">{soldTickets}</span>
+                    </p>
+                    <div className="w-full bg-zinc-200 rounded-full h-3">
+                      <motion.div
+                        className="bg-green-500 h-3 rounded-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${soldPercentage}%` }}
+                        transition={{ delay: 0.9, duration: 0.6 }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <p className={`text-lg font-medium ${theme === "light" ? "text-zinc-700" : "text-gray-300"} mb-2`}>
+                      Available Tickets: <span className="font-bold">{availableSite}</span>
+                    </p>
+                    <div className="w-full bg-zinc-200 rounded-full h-3">
+                      <motion.div
+                        className="bg-blue-500 h-3 rounded-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${availablePercentage}%` }}
+                        transition={{ delay: 1, duration: 0.6 }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Action Buttons */}
+              <motion.div
+                className="flex flex-col sm:flex-row gap-4"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.1, duration: 0.4 }}
+              >
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={`w-full sm:w-auto px-8 py-3 ${theme === "light" ? "bg-blue-600 text-white" : "bg-blue-700 text-white"} rounded-lg hover:bg-blue-700 transition-colors`}
+                  onClick={() => router.push(`/updateMovie/${id}`)}
                 >
-                  <h3 className={`text-sm font-semibold ${theme === "light" ? "text-zinc-500" : "text-gray-400"} mb-1`}>
-                    {item.label}
-                  </h3>
-                  <p className={`text-lg font-medium ${theme === "light" ? "text-zinc-800" : "text-white"}`}>
-                    {item.value}
-                  </p>
-                </motion.div>
-              ))}
-            </motion.div>
-          </div>
-
-          {/* Ticket Statistics */}
-          <motion.div
-            className={`mt-8 ${theme === "light" ? "bg-white" : "bg-gray-800"} p-8 rounded-xl shadow-sm hover:shadow-md transition-shadow`}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8, duration: 0.4 }}
-          >
-            <h2 className={`text-2xl font-bold ${theme === "light" ? "text-zinc-800" : "text-white"} mb-6`}>
-              Ticket Statistics
-            </h2>
-            <div className="space-y-6">
-              <div>
-                <p className={`text-lg font-medium ${theme === "light" ? "text-zinc-700" : "text-gray-300"} mb-2`}>
-                  Sold Tickets: <span className="font-bold">{soldTickets}</span>
-                </p>
-                <div className="w-full bg-zinc-200 rounded-full h-3">
-                  <motion.div
-                    className="bg-green-500 h-3 rounded-full"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${soldPercentage}%` }}
-                    transition={{ delay: 0.9, duration: 0.6 }}
-                  />
-                </div>
-              </div>
-              <div>
-                <p className={`text-lg font-medium ${theme === "light" ? "text-zinc-700" : "text-gray-300"} mb-2`}>
-                  Available Tickets: <span className="font-bold">{availableSite}</span>
-                </p>
-                <div className="w-full bg-zinc-200 rounded-full h-3">
-                  <motion.div
-                    className="bg-blue-500 h-3 rounded-full"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${availablePercentage}%` }}
-                    transition={{ delay: 1, duration: 0.6 }}
-                  />
-                </div>
-              </div>
+                  Edit Movie Details
+                </motion.button>
+              </motion.div>
             </div>
-          </motion.div>
-
-          {/* Action Buttons */}
-          <motion.div
-            className="mt-8 flex flex-col sm:flex-row gap-4"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.1, duration: 0.4 }}
-          >
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto px-8 py-3 ${theme === "light" ? "bg-blue-600 text-white" : "bg-blue-700 text-white"} rounded-lg hover:bg-blue-700 transition-colors`}
-              onClick={() => router.push(`/updateMovie/${id}`)}
-            >
-              Edit Movie Details
-            </motion.button>
-          </motion.div>
+          </div>
         </motion.div>
       </main>
     </div>

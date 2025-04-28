@@ -3,6 +3,10 @@ import jwt from "jsonwebtoken";
 import { auth, signInWithEmailAndPassword, db } from "../../firebaseconfig";
 import { collection, query, where, getDocs } from "firebase/firestore";
 
+// Define JWT secrets
+const JWT_SECRET_OWNER = "4f56a9c80b8e9d8e2f24eab3e94a3458a569fb8094538724bb9b7efc8d944c3a7";
+const JWT_SECRET_ADMIN = "a7b3e9f2c1d8a4b6e5f7c9d3a2b8e4f6c7d9a1b3e5f2c8a4b6d7e9f1c3a5b7d8";
+
 export async function POST(request) {
   const { email, password } = await request.json();
 
@@ -16,44 +20,49 @@ export async function POST(request) {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    // Check if the user exists in the "owner" collection
+    // Check if the user exists in the "owner" or "admin" collection
     const ownerRef = collection(db, "owner");
     const ownerQuery = query(ownerRef, where("email", "==", user.email));
     const ownerSnapshot = await getDocs(ownerQuery);
 
-    // Check if the user exists in the "admin" collection
     const adminRef = collection(db, "admin");
     const adminQuery = query(adminRef, where("email", "==", user.email));
     const adminSnapshot = await getDocs(adminQuery);
 
     let role = null;
+    let token = null;
 
-    // Determine the user's role
+    // Determine the user's role and generate role-specific JWT
     if (!ownerSnapshot.empty) {
       role = "owner";
+      token = jwt.sign(
+        { userId: user.uid, email: user.email, role },
+        JWT_SECRET_OWNER,
+        { expiresIn: "1h" }
+      );
     } else if (!adminSnapshot.empty) {
       role = "admin";
+      token = jwt.sign(
+        { userId: user.uid, email: user.email, role },
+        JWT_SECRET_ADMIN,
+        { expiresIn: "1h" }
+      );
     } else {
       return NextResponse.json({ error: "User not found in Firestore." }, { status: 403 });
     }
 
-    // Generate JWT
-    const token = jwt.sign({ userId: user.uid, email: user.email, role }, process.env.JWT_SECRET, {
-      expiresIn: "1h",
-    });
-
-    // Set JWT in a cookie
+    // Set JWT in a role-specific cookie without affecting other role's cookie
     const response = NextResponse.json({ message: "Login successful", role, email: user.email });
-    response.cookies.set("token", token, {
+    response.cookies.set(`${role}_token`, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       maxAge: 3600, // 1 hour
       path: "/",
+      sameSite: "strict",
     });
 
     return response;
   } catch (error) {
-    // Handle specific Firebase errors
     console.error("Firebase Error:", error);
 
     let errorMessage = "Login failed. Please check your credentials.";

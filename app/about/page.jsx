@@ -1,224 +1,495 @@
-// "use client";
-// import { useState, useEffect, useRef } from "react";
-// import { useRouter } from "next/navigation";
-// import { auth, db, collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp } from "../../firebaseconfig"; // Ensure correct path
-// import { ArrowLeft, Send, Paperclip } from "lucide-react";
-// import { PacmanLoader } from "react-spinners"; // For an attractive loading spinner
+'use client';
+import { useState, useEffect, useContext } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import axios from 'axios';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../firebaseconfig';
+import { ThemeContext } from '../../context/ThemeContext';
+import { PuffLoader } from 'react-spinners';
+import { DollarSign, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import { FaArrowLeft } from 'react-icons/fa';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
-// export default function Messages() {
-//   const [messages, setMessages] = useState([]);
-//   const [newMessage, setNewMessage] = useState("");
-//   const [file, setFile] = useState(null); // For file upload
-//   const [isLoading, setIsLoading] = useState(true); // Loading state
-//   const [userEmail, setUserEmail] = useState(null); // Store user email
-//   const [userRole, setUserRole] = useState(null); // Store user role
-//   const [isAuthenticated, setIsAuthenticated] = useState(false); // Authentication state
-//   const messagesEndRef = useRef(null);
-//   const router = useRouter();
+const bankCodes = [
+  { code: '001', name: 'Commercial Bank of Ethiopia (CBE)' },
+  { code: '002', name: 'Dashen Bank' },
+  { code: '003', name: 'Awash Bank' },
+];
 
-//   useEffect(() => {
-//     const fetchUser = async () => {
-//       try {
-//         const response = await fetch("/api/validate", {
-//           method: "GET",
-//           credentials: "include",
-//         });
+export default function FinancePage() {
+  const { theme = 'light' } = useContext(ThemeContext) || {};
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const initialTab = searchParams.get('tab') || 'withdraw';
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const [loading, setLoading] = useState(true); // Start as true for auth check
+  const [transactions, setTransactions] = useState([]);
+  const [formData, setFormData] = useState({
+    amount: '',
+    currency: 'ETB',
+    account_number: '',
+    account_name: '',
+    bank_code: '001',
+    reference: `txn-${Date.now()}`,
+    isMobileMoney: false,
+  });
+  const [userEmail, setUserEmail] = useState('');
+  const [userRole, setUserRole] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const isTestMode = process.env.NEXT_PUBLIC_CHAPA_TEST_MODE === 'true';
 
-//         if (!response.ok) throw new Error("Unauthorized");
+  // Fetch user email, role, and validate authentication
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const response = await fetch('/api/validate', {
+          method: 'GET',
+          credentials: 'include',
+        });
+        if (!response.ok) throw new Error('Unauthorized');
+        const data = await response.json();
+        if (data.email && data.role === 'owner') {
+          setUserEmail(data.email);
+          setUserRole(data.role);
+          setIsAuthenticated(true);
+        } else {
+          throw new Error('Invalid user');
+        }
+      } catch (error) {
+        console.error('Authentication error:', error);
+        toast.error('Authentication failed. Please log in.');
+        router.replace('/login');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUser();
+  }, [router]);
 
-//         const data = await response.json();
-//         if (data.email && data.role) {
-//           setUserEmail(data.email);
-//           setUserRole(data.role);
-//           setIsAuthenticated(true);
-//           if (data.role !== "owner") {
-//             router.replace("/login");
-//             return;
-//           }
-//         } else {
-//           throw new Error("No email or role found");
-//         }
-//       } catch (error) {
-//         console.error("Authentication error:", error);
-//         router.replace("/login");
-//       } finally {
-//         setIsLoading(false); // Corrected here
-//       }
-//     };
+  // Update activeTab when query parameter changes
+  useEffect(() => {
+    const tab = searchParams.get('tab') || 'withdraw';
+    if (['withdraw', 'deposit', 'transaction'].includes(tab)) {
+      setActiveTab(tab);
+    } else {
+      setActiveTab('withdraw');
+      router.replace('/dashboard/finance?tab=withdraw');
+    }
+  }, [searchParams, router]);
 
-//     fetchUser();
-//   }, [router]);
+  // Fetch transactions
+  const fetchTransactions = async () => {
+    if (!isAuthenticated || !userEmail) return;
+    setLoading(true);
+    try {
+      const q = query(collection(db, 'transactions'), where('userEmail', '==', userEmail));
+      const querySnapshot = await getDocs(q);
+      const txns = querySnapshot.docs.map((doc) => doc.data());
+      setTransactions(txns);
+    } catch (err) {
+      toast.error('Failed to fetch transactions');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-//   // Fetch messages from Firestore
-//   useEffect(() => {
-//     if (!userEmail) return;
+  // Load transactions when tab is transaction
+  useEffect(() => {
+    if (activeTab === 'transaction' && isAuthenticated && userEmail) {
+      fetchTransactions();
+    }
+  }, [activeTab, isAuthenticated, userEmail]);
 
-//     const q = query(
-//       collection(db, "messages"),
-//       where("ownerEmail", "==", userEmail),
-//       orderBy("timestamp", "asc")
-//     );
+  // Handle form input changes
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
-//     const unsubscribe = onSnapshot(q, (querySnapshot) => {
-//       const messagesData = querySnapshot.docs.map((doc) => ({
-//         id: doc.id,
-//         ...doc.data(),
-//       }));
-//       setMessages(messagesData);
-//       scrollToBottom(); // Scroll to the bottom when new messages are fetched
-//     });
+  // Toggle mobile money
+  const handleMobileMoneyToggle = () => {
+    setFormData((prev) => ({
+      ...prev,
+      isMobileMoney: !prev.isMobileMoney,
+      account_number: '',
+    }));
+  };
 
-//     return () => unsubscribe(); // Cleanup the listener
-//   }, [userEmail]);
+  // Handle form submission
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!isAuthenticated) {
+      toast.error('Please log in to proceed.');
+      return;
+    }
+    setLoading(true);
 
-//   const scrollToBottom = () => {
-//     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-//   };
+    try {
+      const payload = {
+        amount: Number(formData.amount),
+        currency: formData.currency,
+        account_number: formData.account_number,
+        account_name: formData.account_name,
+        reference: formData.reference,
+        userEmail, // Include user email in payload for tracking
+        ...(formData.isMobileMoney ? {} : { bank_code: formData.bank_code }),
+      };
 
-//   const sendMessage = async () => {
-//     if (newMessage.trim() === "" && !file) return;
+      const endpoint = activeTab === 'withdraw' ? '/api/payout' : '/api/deposit';
+      const response = await axios.post(endpoint, payload, {
+        headers: {
+          Authorization: `Bearer ${process.env.NEXT_PUBLIC_API_SECRET}`,
+          'x-user-id': userEmail, // Use email instead of hardcoded ID
+        },
+      });
 
-//     const newMessageObj = {
-//       ownerEmail: userEmail,
-//       text: newMessage,
-//       sender: "owner",
-//       from: auth.currentUser?.displayName || userEmail,
-//       show: true,
-//       timestamp: new Date(),
-//       status: "sending", // Set initial status as "sending"
-//     };
+      if (response.data.success) {
+        toast.success(`${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} initiated successfully!`);
+        setFormData({
+          amount: '',
+          currency: 'ETB',
+          account_number: '',
+          account_name: '',
+          bank_code: '001',
+          reference: `txn-${Date.now()}`,
+          isMobileMoney: false,
+        });
+      } else {
+        toast.error(response.data.message || `${activeTab} failed`);
+      }
+    } catch (err) {
+      toast.error(
+        isTestMode
+          ? `Test mode: Simulated ${activeTab}`
+          : axios.isAxiosError(err)
+          ? err.response?.data?.error || err.message
+          : 'Request failed'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
-//     setMessages((prevMessages) => [...prevMessages, newMessageObj]); // Add new message to the state
-//     setNewMessage(""); // Clear the input field
-//     setFile(null); // Reset file input
-//     scrollToBottom(); // Scroll to the bottom of the messages
+  // Update URL when tab changes
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    router.push(`/dashboard/finance?tab=${tab}`);
+  };
 
-//     try {
-//       // Send the message to Firestore
-//       const docRef = await addDoc(collection(db, "messages"), {
-//         ownerEmail: userEmail,
-//         text: newMessage,
-//         sender: "owner",
-//         from: auth.currentUser?.displayName || userEmail,
-//         show: false,
-//         timestamp: serverTimestamp(),
-//         status: "sending", // Set status as "sending"
-//       });
+  // Tab content
+  const TabContent = () => {
+    if (activeTab === 'transaction') {
+      return (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ duration: 0.3 }}
+          className="mt-6"
+        >
+          <h3 className={`text-2xl font-bold mb-4 ${theme === 'light' ? 'text-zinc-800' : 'text-zinc-100'}`}>
+            Transaction History
+          </h3>
+          {loading ? (
+            <div className="flex justify-center">
+              <PuffLoader color="#3b82f6" size={60} />
+            </div>
+          ) : transactions.length === 0 ? (
+            <p className={`text-center ${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'}`}>
+              No transactions found.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {transactions.map((txn, index) => (
+                <motion.div
+                  key={index}
+                  className={`p-4 rounded-lg shadow-sm ${
+                    theme === 'light' ? 'bg-gradient-to-br from-blue-100 to-purple-100' : 'bg-gradient-to-br from-gray-700 to-gray-800'
+                  }`}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1, duration: 0.4 }}
+                >
+                  <p className={`${theme === 'light' ? 'text-zinc-700' : 'text-zinc-200'}`}>
+                    <span className="font-semibold">Type:</span> {txn.type}
+                  </p>
+                  <p className={`${theme === 'light' ? 'text-zinc-700' : 'text-zinc-200'}`}>
+                    <span className="font-semibold">Amount:</span> {txn.amount} {txn.currency}
+                  </p>
+                  <p className={`${theme === 'light' ? 'text-zinc-700' : 'text-zinc-200'}`}>
+                    <span className="font-semibold">Date:</span> {new Date(txn.date).toLocaleString()}
+                  </p>
+                  <p className={`${theme === 'light' ? 'text-zinc-700' : 'text-zinc-200'}`}>
+                    <span className="font-semibold">Reference:</span> {txn.reference}
+                  </p>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+      );
+    }
 
-//       // Update the message status to "delivered" after sending it
-//       setMessages((prevMessages) =>
-//         prevMessages.map((msg) =>
-//           msg.text === newMessageObj.text && msg.status === "sending"
-//             ? { ...msg, id: docRef.id, status: "delivered" }
-//             : msg
-//         )
-//       );
-//     } catch (error) {
-//       console.error("Error sending message:", error);
-//       // Revert the message status to "failed" if there's an error
-//       setMessages((prevMessages) =>
-//         prevMessages.map((msg) =>
-//           msg.text === newMessageObj.text && msg.status === "sending"
-//             ? { ...msg, status: "failed" }
-//             : msg
-//         )
-//       );
-//     }
-//   };
+    return (
+      <motion.form
+        onSubmit={handleSubmit}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -20 }}
+        transition={{ duration: 0.3 }}
+        className="mt-6 space-y-4"
+      >
+        <div>
+          <label className={`block text-sm font-medium mb-1 ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>
+            Amount
+          </label>
+          <input
+            type="number"
+            name="amount"
+            value={formData.amount}
+            onChange={handleChange}
+            className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              theme === 'light' ? 'bg-white border-zinc-200 text-zinc-800' : 'bg-gray-800 border-zinc-700 text-zinc-100'
+            }`}
+            required
+            min="10"
+            aria-label="Amount"
+          />
+        </div>
+        <div>
+          <label className={`block text-sm font-medium mb-1 ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>
+            Currency
+          </label>
+          <select
+            name="currency"
+            value={formData.currency}
+            onChange={handleChange}
+            className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              theme === 'light' ? 'bg-white border-zinc-200 text-zinc-800' : 'bg-gray-800 border-zinc-700 text-zinc-100'
+            }`}
+            aria-label="Currency"
+          >
+            <option value="ETB">ETB</option>
+            <option value="USD">USD</option>
+          </select>
+        </div>
+        <div>
+          <label className="flex items-center">
+            <input
+              type="checkbox"
+              checked={formData.isMobileMoney}
+              onChange={handleMobileMoneyToggle}
+              className="mr-2"
+              aria-label="Use Mobile Money (Telebirr)"
+            />
+            <span className={`text-sm ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>
+              Mobile Money (Telebirr) {userEmail}
+            </span>
+          </label>
+        </div>
+        <div>
+          <label className={`block text-sm font-medium mb-1 ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>
+            {formData.isMobileMoney ? 'Phone Number' : 'Account Number'}
+          </label>
+          <input
+            type="text"
+            name="account_number"
+            value={formData.account_number}
+            onChange={handleChange}
+            className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              theme === 'light' ? 'bg-white border-zinc-200 text-zinc-800' : 'bg-gray-800 border-zinc-700 text-zinc-100'
+            }`}
+            required
+            placeholder={formData.isMobileMoney ? '2519XXXXXXXX' : 'Account number'}
+            aria-label={formData.isMobileMoney ? 'Phone number' : 'Account number'}
+          />
+        </div>
+        <div>
+          <label className={`block text-sm font-medium mb-1 ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>
+            Account Name
+          </label>
+          <input
+            type="text"
+            name="account_name"
+            value={formData.account_name}
+            onChange={handleChange}
+            className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              theme === 'light' ? 'bg-white border-zinc-200 text-zinc-800' : 'bg-gray-800 border-zinc-700 text-zinc-100'
+            }`}
+            required
+            aria-label="Account name"
+          />
+        </div>
+        {!formData.isMobileMoney && (
+          <div>
+            <label className={`block text-sm font-medium mb-1 ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>
+              Bank
+            </label>
+            <select
+              name="bank_code"
+              value={formData.bank_code}
+              onChange={handleChange}
+              className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                theme === 'light' ? 'bg-white border-zinc-200 text-zinc-800' : 'bg-gray-800 border-zinc-700 text-zinc-100'
+              }`}
+              aria-label="Bank"
+            >
+              {bankCodes.map((bank) => (
+                <option key={bank.code} value={bank.code}>
+                  {bank.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        <div>
+          <label className={`block text-sm font-medium mb-1 ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>
+            Reference
+          </label>
+          <input
+            type="text"
+            name="reference"
+            value={formData.reference}
+            onChange={handleChange}
+            className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              theme === 'light' ? 'bg-white border-zinc-200 text-zinc-800' : 'bg-gray-800 border-zinc-700 text-zinc-100'
+            }`}
+            required
+            aria-label="Reference"
+          />
+        </div>
+        <motion.button
+          type="submit"
+          disabled={loading || !isAuthenticated}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          className={`w-full p-3 rounded-lg font-medium ${
+            loading || !isAuthenticated
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700'
+          }`}
+        >
+          {loading ? 'Processing...' : activeTab === 'withdraw' ? 'Withdraw' : 'Deposit'}
+        </motion.button>
+      </motion.form>
+    );
+  };
 
-//   // Handle file change
-//   const handleFileChange = (e) => {
-//     const selectedFile = e.target.files[0];
-//     if (selectedFile) {
-//       setFile(selectedFile);
-//     }
-//   };
+  if (loading) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'}`}>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <PuffLoader color="#3b82f6" size={100} />
+        </motion.div>
+      </div>
+    );
+  }
 
-//   // Show loading spinner while validating user
-//   if (isLoading) {
-//     return (
-//       <div className="flex items-center justify-center h-screen bg-gradient-to-r from-indigo-100 via-purple-200 to-pink-100 dark:bg-gray-900">
-//         <PacmanLoader color="#6D28D9" size={30} /> {/* Attractive loading spinner */}
-//       </div>
-//     );
-//   }
+  if (!isAuthenticated) {
+    return null; // Router will redirect to /login
+  }
 
-//   return (
-//     <div className="flex flex-col h-screen bg-gradient-to-r from-indigo-100 via-purple-200 to-pink-100 dark:bg-gray-900 dark:text-white">
-//       {/* Header */}
-//       <div className="flex items-center justify-between p-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md">
-//         <button onClick={() => router.push("/dashboard")} className="text-white">
-//           <ArrowLeft size={24} />
-//         </button>
-//         <h2 className="text-xl font-semibold">Messages</h2>
-//       </div>
+  return (
+    <div className={`min-h-screen ${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'}`}>
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme={theme === 'light' ? 'light' : 'dark'}
+      />
 
-//       {/* Chat Messages Grid */}
-//       <div className="flex-grow p-4 overflow-y-auto space-y-4">
-//         <div className="grid gap-4">
-//           {messages.length > 0 ? (
-//             messages.map((msg) => (
-//               <div
-//                 key={msg.id}
-//                 className={`grid ${msg.sender === "owner" ? "justify-self-end" : "justify-self-start"}`}
-//               >
-//                 <div
-//                   className={`max-w-lg p-4 rounded-lg ${msg.sender === "owner" ? "bg-gradient-to-r from-blue-400 to-blue-600 text-white" : "bg-gray-300 text-black"} shadow-lg`}
-//                 >
-//                   {/* Message Text */}
-//                   <p className="text-lg">{msg.text}</p>
+      {/* Navigation Header */}
+      <div
+        className={`sticky top-0 z-50 ${
+          theme === 'light' ? 'bg-gradient-to-br from-zinc-100 to-zinc-200' : 'bg-gradient-to-br from-gray-800 to-gray-900'
+        } border-b ${theme === 'light' ? 'border-zinc-200' : 'border-zinc-700'}`}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center justify-between">
+            <motion.button
+              onClick={() => router.back()}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+                theme === 'light' ? 'text-purple-700 hover:bg-purple-100' : 'text-purple-300 hover:bg-purple-800'
+              } transition-colors`}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              aria-label="Go back"
+            >
+              <FaArrowLeft className="h-5 w-5" />
+              <span className="text-lg font-medium">Back</span>
+            </motion.button>
+          </div>
+        </div>
+      </div>
 
-//                   {/* Message Status */}
-//                   {msg.sender === "owner" && (
-//                     <p className="text-xs mt-1 text-right">
-//                       {msg.status === "sending"
-//                         ? "Sending..."
-//                         : msg.status === "delivered"
-//                         ? "Delivered"
-//                         : "Failed"}
-//                     </p>
-//                   )}
-//                 </div>
-//               </div>
-//             ))
-//           ) : (
-//             <p className="text-center text-gray-500">No messages yet.</p>
-//           )}
-//         </div>
-//         <div ref={messagesEndRef} />
-//       </div>
-
-//       {/* Input Field */}
-//       <div className="p-4 bg-gradient-to-r from-blue-100 via-blue-200 to-blue-300 dark:bg-gray-800 flex items-center shadow-md space-x-3 rounded-lg">
-//         {/* File Upload */}
-//         <label htmlFor="file-upload" className="cursor-pointer">
-//           <Paperclip size={20} className="text-gray-500 hover:text-gray-700 dark:text-gray-300" />
-//           <input
-//             id="file-upload"
-//             type="file"
-//             className="hidden"
-//             onChange={handleFileChange}
-//           />
-//         </label>
-
-//         {/* Text Input */}
-//         <input
-//           type="text"
-//           value={newMessage}
-//           onChange={(e) => setNewMessage(e.target.value)}
-//           placeholder="Type a message..."
-//           className="flex-grow p-3 border rounded-xl dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-//         />
-
-//         {/* Send Button */}
-//         <button
-//           onClick={sendMessage}
-//           className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-2 rounded-xl flex items-center space-x-2"
-//         >
-//           <Send size={20} />
-//           <span>Send</span>
-//         </button>
-//       </div>
-//     </div>
-//   );
-// }
+      {/* Main Content */}
+      <div className="flex items-center justify-center p-4 pt-24">
+        <motion.div
+          className={`w-full max-w-2xl rounded-2xl shadow-lg overflow-hidden ${
+            theme === 'light' ? 'bg-gradient-to-br from-blue-50 to-purple-50' : 'bg-gradient-to-br from-gray-800 to-gray-900'
+          }`}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+        >
+          <div className="p-6">
+            <h2 className={`text-3xl font-bold mb-6 text-center ${theme === 'light' ? 'text-zinc-800' : 'text-zinc-100'}`}>
+              Financial Management
+            </h2>
+            {isTestMode && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className={`mb-4 p-3 rounded-lg ${
+                  theme === 'light' ? 'bg-yellow-100 text-yellow-800' : 'bg-yellow-900 text-yellow-200'
+                }`}
+              >
+                <strong>Test Mode Active</strong>
+              </motion.div>
+            )}
+            <div className="flex flex-wrap justify-center gap-4 mb-6">
+              {[
+                { id: 'withdraw', label: 'Withdraw', icon: <ArrowDownCircle size={18} /> },
+                { id: 'deposit', label: 'Deposit', icon: <ArrowUpCircle size={18} /> },
+                { id: 'transaction', label: 'Transactions', icon: <DollarSign size={18} /> },
+              ].map((tab) => (
+                <motion.button
+                  key={tab.id}
+                  onClick={() => handleTabChange(tab.id)}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={`flex items-center gap-2 px-6 py-3 rounded-lg border-2 font-medium transition-all ${
+                    activeTab === tab.id
+                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white border-transparent'
+                      : theme === 'light'
+                      ? 'border-blue-500 text-blue-500 hover:bg-blue-50'
+                      : 'border-blue-400 text-blue-400 hover:bg-blue-900'
+                  }`}
+                  aria-label={`Switch to ${tab.label} tab`}
+                >
+                  {tab.icon}
+                  <span>{tab.label}</span>
+                </motion.button>
+              ))}
+            </div>
+            <AnimatePresence mode="wait">
+              <TabContent key={activeTab} />
+            </AnimatePresence>
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
+}

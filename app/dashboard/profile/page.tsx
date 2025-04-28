@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/navigation";
-import { getAuth, reauthenticateWithCredential, EmailAuthProvider, updatePassword } from "firebase/auth";
 import { db } from "../../firebaseconfig";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { User, Lock, LogOut, Eye, EyeOff, X } from "lucide-react";
@@ -12,23 +11,34 @@ import { FaArrowLeft } from "react-icons/fa";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
+// TypeScript interfaces
+interface UserData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneNumber: string;
+  location: string;
+}
+
+interface ChangePasswordResponse {
+  message?: string;
+  error?: string;
+}
+
 export default function Profile() {
-  const [userEmail, setUserEmail] = useState(null);
-  const [userRole, setUserRole] = useState(null);
-  const [ownerData, setOwnerData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [errors, setErrors] = useState([]);
-  const [success, setSuccess] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [ownerData, setOwnerData] = useState<UserData | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [currentPassword, setCurrentPassword] = useState<string>("");
+  const [newPassword, setNewPassword] = useState<string>("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState<boolean>(false);
+  const [showNewPassword, setShowNewPassword] = useState<boolean>(false);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [success, setSuccess] = useState<string>("");
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const router = useRouter();
   const { theme } = useContext(ThemeContext);
-
-  // Initialize Firebase Auth
-  const auth = getAuth();
 
   // Fetch user email, role, and validate authentication
   useEffect(() => {
@@ -74,7 +84,7 @@ export default function Profile() {
           const querySnapshot = await getDocs(q);
 
           if (!querySnapshot.empty) {
-            const ownerDoc = querySnapshot.docs[0].data();
+            const ownerDoc = querySnapshot.docs[0].data() as UserData;
             setOwnerData(ownerDoc);
           } else {
             console.log("No owner found with email:", userEmail);
@@ -91,18 +101,19 @@ export default function Profile() {
   }, [userEmail, userRole]);
 
   // Validate password function
-  const validatePassword = (password) => {
-    const errorMessages = [];
+  const validatePassword = (password: string): string[] => {
+    const errorMessages: string[] = [];
     if (password.length < 8) errorMessages.push("Password must be at least 8 characters long");
     if (!/[A-Z]/.test(password)) errorMessages.push("Password must contain at least one uppercase letter");
     if (!/[a-z]/.test(password)) errorMessages.push("Password must contain at least one lowercase letter");
     if (!/[0-9]/.test(password)) errorMessages.push("Password must contain at least one number");
-    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) errorMessages.push("Password must contain at least one special character");
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password))
+      errorMessages.push("Password must contain at least one special character");
     return errorMessages;
   };
 
-  // Handle password change
-  const handlePasswordChange = async (e) => {
+  // Handle password change using /api/change-password
+  const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors([]);
     setSuccess("");
@@ -114,30 +125,40 @@ export default function Profile() {
       return;
     }
 
-    const user = auth.currentUser;
-    if (!user) {
-      toast.error("User is not authenticated. Please log in again.");
-      router.push("/login");
-      return;
-    }
-
     try {
-      const credential = EmailAuthProvider.credential(user.email, currentPassword);
-      await reauthenticateWithCredential(user, credential);
-      await updatePassword(user, newPassword);
-      toast.success("Password updated successfully!");
-      setCurrentPassword("");
-      setNewPassword("");
-      setIsModalOpen(false); // Close the modal after successful password change
+      const response = await fetch("/api/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email: userEmail, currentPassword, newPassword }),
+      });
+
+      const data: ChangePasswordResponse = await response.json();
+
+      if (response.ok) {
+        setSuccess(data.message || "Password updated successfully!");
+        toast.success(data.message || "Password updated successfully!");
+        setCurrentPassword("");
+        setNewPassword("");
+        setIsModalOpen(false); // Close the modal after successful password change
+      } else {
+        setErrors([data.error || "Failed to update password"]);
+        toast.error(data.error || "Failed to update password");
+      }
     } catch (error) {
       console.error("Error updating password:", error);
-      toast.error(error.message);
+      const errorMessage = "An error occurred. Please try again.";
+      setErrors([errorMessage]);
+      toast.error(errorMessage);
     }
   };
 
   const handleLogout = async () => {
     try {
-      await auth.signOut();
+      await fetch("/api/logout", {
+        method: "POST",
+        credentials: "include",
+      });
       toast.success("Logged out successfully!");
       router.push("/login");
     } catch (error) {
@@ -184,14 +205,20 @@ export default function Profile() {
         pauseOnHover
         theme={theme === "light" ? "light" : "dark"}
       />
-      
+
       {/* Navigation Header with zinc-100 gradient */}
-      <div className={`sticky top-0 z-50 ${theme === "light" ? "bg-gradient-to-br from-zinc-100 to-zinc-200" : "bg-gradient-to-br from-gray-800 to-gray-900"} border-b ${theme === "light" ? "border-zinc-200" : "border-zinc-700"}`}>
+      <div
+        className={`sticky top-0 z-50 ${
+          theme === "light" ? "bg-gradient-to-br from-zinc-100 to-zinc-200" : "bg-gradient-to-br from-gray-800 to-gray-900"
+        } border-b ${theme === "light" ? "border-zinc-200" : "border-zinc-700"}`}
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <button
               onClick={() => router.back()}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg ${theme === "light" ? "text-purple-700 hover:bg-purple-100" : "text-purple-300 hover:bg-purple-800"} transition-colors`}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+                theme === "light" ? "text-purple-700 hover:bg-purple-100" : "text-purple-300 hover:bg-purple-800"
+              } transition-colors`}
             >
               <FaArrowLeft className="h-5 w-5" />
               <span className="text-lg font-medium">Back</span>
@@ -201,7 +228,7 @@ export default function Profile() {
       </div>
 
       {/* Main Content */}
-      <div className="flex items-center justify-center p-4 pt-24"> {/* Added pt-24 to account for fixed header */}
+      <div className="flex items-center justify-center p-4 pt-24">
         <motion.div
           className={`w-full max-w-md rounded-2xl shadow-lg overflow-hidden ${
             theme === "light"
@@ -429,7 +456,7 @@ export default function Profile() {
                       {showNewPassword ? (
                         <EyeOff className={`${theme === "light" ? "text-zinc-500" : "text-zinc-400"} w-5 mb-6 h-5`} />
                       ) : (
-                        <Eye className={`${theme === "light" ? "text-zinc-500" : "text-zinc-400"} w-5  mb-6 h-5`} />
+                        <Eye className={`${theme === "light" ? "text-zinc-500" : "text-zinc-400"} w-5 mb-6 h-5`} />
                       )}
                     </div>
                   </div>

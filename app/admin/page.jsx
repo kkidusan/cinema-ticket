@@ -65,7 +65,7 @@ const Cards = () => {
       title: "User Management",
       description: "View and manage all users in the system.",
       buttonText: "Manage Users",
-      path: "/admin/usermanagement",
+      path: "/admin/manageuser",
     },
   ];
 

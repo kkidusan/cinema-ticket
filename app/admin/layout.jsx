@@ -2,10 +2,10 @@
 import { useState, useEffect, useContext } from "react";
 import Navbar1 from "../componet/Nav";
 import Sidebar from "../componet/Sidebar";
-import { auth, db } from "../firebaseconfig";
+import { db } from "../firebaseconfig";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { useRouter } from "next/navigation";
-import { WaveLoader } from "react-loaders-kit";
+import { PuffLoader } from "react-spinners"; // Use PuffLoader for consistency
 import { ThemeContext } from "../context/ThemeContext";
 
 const AdminLayout = ({ children }) => {
@@ -13,11 +13,13 @@ const AdminLayout = ({ children }) => {
   const [notificationCount, setNotificationCount] = useState(0);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isPending, setIsPending] = useState(null); // null indicates not yet checked
+  const [userEmail, setUserEmail] = useState(null); // Store authenticated user's email
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const { theme } = useContext(ThemeContext); // Access the theme from ThemeContext
+  const { theme } = useContext(ThemeContext);
 
-  // Fetch user authentication details
+  // Authenticate user and fetch their email
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -34,6 +36,7 @@ const AdminLayout = ({ children }) => {
             router.replace("/login");
             return;
           }
+          setUserEmail(data.email);
           setIsAuthenticated(true);
         } else {
           throw new Error("No email or role found");
@@ -49,67 +52,102 @@ const AdminLayout = ({ children }) => {
     fetchUser();
   }, [router]);
 
+  // Fetch pending status in real-time from Firestore admin collection
+  useEffect(() => {
+    if (!isAuthenticated || !userEmail) return;
+
+    const q = query(
+      collection(db, "admin"),
+      where("email", "==", userEmail)
+    );
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      if (!querySnapshot.empty) {
+        const userDoc = querySnapshot.docs[0];
+        const pendingStatus = userDoc.data().pending || false;
+        setIsPending(pendingStatus);
+      } else {
+        console.error("No admin document found for email:", userEmail);
+        setIsPending(false); // Default to false if no document found
+      }
+    }, (error) => {
+      console.error("Error fetching pending status:", error);
+      setIsPending(false); // Default to false on error
+    });
+
+    return () => unsubscribe();
+  }, [isAuthenticated, userEmail]);
+
   // Fetch message count from Firestore
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || isPending) return;
 
-    const fetchMessageCount = async () => {
-      try {
-        const q = query(
-          collection(db, "messages"),
-          where("sender", "==", "owner"),
-          where("show", "==", false)
-        );
+    const q = query(
+      collection(db, "messages"),
+      where("sender", "==", "owner"),
+      where("show", "==", false)
+    );
 
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
-          setMessageCount(querySnapshot.size);
-        });
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      setMessageCount(querySnapshot.size);
+    }, (error) => {
+      console.error("Error fetching message count:", error);
+    });
 
-        return () => unsubscribe();
-      } catch (error) {
-        console.error("Error fetching message count:", error);
-      }
-    };
-
-    fetchMessageCount();
-  }, [isAuthenticated]);
+    return () => unsubscribe();
+  }, [isAuthenticated, isPending]);
 
   // Fetch notification count from Firestore
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || isPending) return;
 
-    const fetchNotificationCount = async () => {
-      try {
-        const q = query(
-          collection(db, "owner"),
-          where("approved", "==", false)
-        );
+    const q = query(
+      collection(db, "owner"),
+      where("approved", "==", false)
+    );
 
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
-          setNotificationCount(querySnapshot.size);
-        });
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      setNotificationCount(querySnapshot.size);
+    }, (error) => {
+      console.error("Error fetching notification count:", error);
+    });
 
-        return () => unsubscribe();
-      } catch (error) {
-        console.error("Error fetching notification count:", error);
-      }
-    };
+    return () => unsubscribe();
+  }, [isAuthenticated, isPending]);
 
-    fetchNotificationCount();
-  }, [isAuthenticated]);
-
-  if (loading) {
+  // Display loading state
+  if (loading || isPending === null) {
     return (
       <div
         className={`flex items-center justify-center h-screen ${
           theme === "light" ? "bg-gray-100" : "bg-gray-900"
         }`}
       >
-        <WaveLoader loading={loading} size={100} color="#6D28D9" />
+        <PuffLoader color="#3B82F6" size={60} />
       </div>
     );
   }
 
+  // Display pending message if account is pending
+  if (isPending) {
+    return (
+      <div
+        className={`flex items-center justify-center h-screen ${
+          theme === "light" ? "bg-gray-100" : "bg-gray-900"
+        }`}
+      >
+        <div
+          className={`p-6 rounded-lg shadow-lg ${
+            theme === "light" ? "bg-white text-gray-900" : "bg-gray-800 text-white"
+          }`}
+        >
+          <h1 className="text-2xl font-bold">Your account is processing</h1>
+        </div>
+      </div>
+    );
+  }
+
+  // Display original content if not pending
   if (!isAuthenticated) {
     return null;
   }
@@ -123,7 +161,7 @@ const AdminLayout = ({ children }) => {
       <Sidebar
         isCollapsed={isCollapsed}
         setIsCollapsed={setIsCollapsed}
-        theme={theme} // Pass theme to Sidebar
+        theme={theme}
       />
       <div
         className="flex-1 flex flex-col transition-all duration-300"
@@ -136,13 +174,13 @@ const AdminLayout = ({ children }) => {
           <Navbar1
             messageCount={messageCount}
             notificationCount={notificationCount}
-            theme={theme} // Pass theme to Navbar1
+            theme={theme}
           />
         </div>
         <main
           className={`flex-1 p-6 overflow-y-auto mt-16 ${
-            theme === "light" ? "text-gray-900" : "text-gray-200"
-          }`}
+            theme === "light" ? "bg-white text-gray-900" : "bg-gray-800 text-gray-200"
+          } rounded-lg shadow-lg`}
         >
           {children}
         </main>

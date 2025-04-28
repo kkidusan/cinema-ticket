@@ -11,7 +11,8 @@ import {
     serverTimestamp, 
     doc, 
     updateDoc,
-    deleteDoc // ✅ Add deleteDoc here
+    deleteDoc,
+    limit // ✅ Add limit here
 } from "firebase/firestore";
 
 import { 
@@ -54,10 +55,11 @@ export {
     getDocs, 
     updateDoc, 
     doc, 
-    deleteDoc, // ✅ Export deleteDoc
+    deleteDoc, 
     updatePassword, 
     signInWithEmailAndPassword, 
     orderBy, 
     onSnapshot, 
-    serverTimestamp 
+    serverTimestamp,
+    limit // ✅ Export limit
 };

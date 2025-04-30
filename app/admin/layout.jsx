@@ -5,8 +5,9 @@ import Sidebar from "../componet/Sidebar";
 import { db } from "../firebaseconfig";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { useRouter } from "next/navigation";
-import { PuffLoader } from "react-spinners"; // Use PuffLoader for consistency
+import { PuffLoader } from "react-spinners";
 import { ThemeContext } from "../context/ThemeContext";
+import toast, { Toaster } from "react-hot-toast"; // Import react-hot-toast
 
 const AdminLayout = ({ children }) => {
   const [messageCount, setMessageCount] = useState(0);
@@ -28,21 +29,22 @@ const AdminLayout = ({ children }) => {
           credentials: "include",
         });
 
-        if (!response.ok) throw new Error("Unauthorized");
+        if (!response.ok) throw new Error("Unauthorized access. Please log in.");
 
         const data = await response.json();
         if (data.email && data.role) {
           if (data.role !== "admin") {
+            toast.error("Access denied. Admins only.");
             router.replace("/login");
             return;
           }
           setUserEmail(data.email);
           setIsAuthenticated(true);
         } else {
-          throw new Error("No email or role found");
+          throw new Error("User data incomplete. Please try again.");
         }
       } catch (error) {
-        console.error("Authentication error:", error);
+        toast.error(error.message || "Authentication failed. Redirecting to login...");
         router.replace("/login");
       } finally {
         setLoading(false);
@@ -61,19 +63,23 @@ const AdminLayout = ({ children }) => {
       where("email", "==", userEmail)
     );
 
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      if (!querySnapshot.empty) {
-        const userDoc = querySnapshot.docs[0];
-        const pendingStatus = userDoc.data().pending || false;
-        setIsPending(pendingStatus);
-      } else {
-        console.error("No admin document found for email:", userEmail);
-        setIsPending(false); // Default to false if no document found
+    const unsubscribe = onSnapshot(
+      q,
+      (querySnapshot) => {
+        if (!querySnapshot.empty) {
+          const userDoc = querySnapshot.docs[0];
+          const pendingStatus = userDoc.data().pending || false;
+          setIsPending(pendingStatus);
+        } else {
+          toast.error("No admin profile found for this user.");
+          setIsPending(false); // Default to false if no document found
+        }
+      },
+      (error) => {
+        toast.error("Failed to fetch account status. Please try again.");
+        setIsPending(false); // Default to false on error
       }
-    }, (error) => {
-      console.error("Error fetching pending status:", error);
-      setIsPending(false); // Default to false on error
-    });
+    );
 
     return () => unsubscribe();
   }, [isAuthenticated, userEmail]);
@@ -88,11 +94,15 @@ const AdminLayout = ({ children }) => {
       where("show", "==", false)
     );
 
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      setMessageCount(querySnapshot.size);
-    }, (error) => {
-      console.error("Error fetching message count:", error);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (querySnapshot) => {
+        setMessageCount(querySnapshot.size);
+      },
+      (error) => {
+        toast.error("Failed to fetch messages. Please try again.");
+      }
+    );
 
     return () => unsubscribe();
   }, [isAuthenticated, isPending]);
@@ -106,11 +116,15 @@ const AdminLayout = ({ children }) => {
       where("approved", "==", false)
     );
 
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      setNotificationCount(querySnapshot.size);
-    }, (error) => {
-      console.error("Error fetching notification count:", error);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (querySnapshot) => {
+        setNotificationCount(querySnapshot.size);
+      },
+      (error) => {
+        toast.error("Failed to fetch notifications. Please try again.");
+      }
+    );
 
     return () => unsubscribe();
   }, [isAuthenticated, isPending]);
@@ -158,6 +172,7 @@ const AdminLayout = ({ children }) => {
         theme === "light" ? "bg-gray-100" : "bg-gray-900"
       }`}
     >
+      <Toaster position="top-right" reverseOrder={false} /> {/* Add Toaster component */}
       <Sidebar
         isCollapsed={isCollapsed}
         setIsCollapsed={setIsCollapsed}

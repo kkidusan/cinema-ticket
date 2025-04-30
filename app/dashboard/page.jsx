@@ -1,4 +1,3 @@
-
 "use client";
 import { useState, useEffect, useContext, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -52,7 +51,7 @@ export default function Dashboard() {
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    return () => document.addEventListener("mousedown", handleClickOutside);
   }, []);
 
   // Prevent body scrolling and apply blur to main content when mobile menu is open
@@ -237,6 +236,7 @@ export default function Dashboard() {
     { label: "Withdraw", path: "/dashboard/finance?tab=withdraw" },
     { label: "Deposit", path: "/dashboard/finance?tab=deposit" },
     { label: "Transaction", path: "/dashboard/finance?tab=transaction" },
+    { label: "Design Cinema Seat Position", path: "/dashboard/designseat" },
   ];
 
   if (loading) {

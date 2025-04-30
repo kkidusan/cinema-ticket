@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useContext, useCallback } from "react";
+import { useEffect, useState, useContext, useCallback, useRef } from "react";
 import { db } from "../../firebaseconfig";
 import { collection, addDoc, Timestamp, query, where, getDocs } from "firebase/firestore";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toGregorian, toEthiopian } from "ethiopian-date";
 import { PuffLoader, ClipLoader } from "react-spinners";
 import { ThemeContext } from "../../context/ThemeContext";
@@ -16,7 +16,9 @@ import {
   ArrowUpOnSquareIcon,
   XCircleIcon,
   ChevronDownIcon,
+  TableCellsIcon,
 } from "@heroicons/react/24/outline";
+import { toast } from "react-toastify";
 
 // Predefined movie categories
 const movieCategories = [
@@ -180,6 +182,109 @@ function EthiopianDatePicker({ name, value, onChange, error, theme }) {
   );
 }
 
+// TimePicker Component for Duration (HH:MM:SS)
+function TimePicker({ name, value, onChange, error, theme }) {
+  const [hours, setHours] = useState("00");
+  const [minutes, setMinutes] = useState("00");
+  const [seconds, setSeconds] = useState("00");
+
+  useEffect(() => {
+    if (!value) {
+      const defaultDuration = "00:00:00";
+      setHours("00");
+      setMinutes("00");
+      setSeconds("00");
+      onChange({ target: { name, value: defaultDuration } });
+    } else {
+      const [h, m, s] = value.split(":");
+      setHours(h.padStart(2, "0"));
+      setMinutes(m.padStart(2, "0"));
+      setSeconds(s.padStart(2, "0"));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (value) {
+      const [h, m, s] = value.split(":");
+      setHours(h.padStart(2, "0"));
+      setMinutes(m.padStart(2, "0"));
+      setSeconds(s.padStart(2, "0"));
+    }
+  }, [value]);
+
+  const handleChange = (field, val) => {
+    let newValue = val.replace(/\D/g, "").slice(0, 2);
+    if (newValue === "") newValue = "00";
+
+    if (field === "hours" && Number(newValue) > 23) newValue = "23";
+    if ((field === "minutes" || field === "seconds") && Number(newValue) > 59)
+      newValue = "59";
+
+    if (field === "hours") setHours(newValue);
+    if (field === "minutes") setMinutes(newValue);
+    if (field === "seconds") setSeconds(newValue);
+
+    const newDuration = `${
+      field === "hours" ? newValue : hours
+    }:${field === "minutes" ? newValue : minutes}:${
+      field === "seconds" ? newValue : seconds
+    }`;
+    onChange({ target: { name, value: newDuration } });
+  };
+
+  return (
+    <div>
+      <div className="flex gap-2 items-center">
+        <input
+          type="text"
+          value={hours}
+          onChange={(e) => handleChange("hours", e.target.value)}
+          placeholder="HH"
+          maxLength={2}
+          className={`mt-1 block w-1/3 px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 text-center transition-all duration-200 ${
+            error
+              ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
+              : theme === "light"
+              ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
+              : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
+          } ${theme === "light" ? "bg-white" : "bg-gray-600"}`}
+        />
+        <span className="mt-3 text-xl font-medium text-gray-500">:</span>
+        <input
+          type="text"
+          value={minutes}
+          onChange={(e) => handleChange("minutes", e.target.value)}
+          placeholder="MM"
+          maxLength={2}
+          className={`mt-1 block w-1/3 px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 text-center transition-all duration-200 ${
+            error
+              ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
+              : theme === "light"
+              ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
+              : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
+          } ${theme === "light" ? "bg-white" : "bg-gray-600"}`}
+        />
+        <span className="mt-3 text-xl font-medium text-gray-500">:</span>
+        <input
+          type="text"
+          value={seconds}
+          onChange={(e) => handleChange("seconds", e.target.value)}
+          placeholder="SS"
+          maxLength={2}
+          className={`mt-1 block w-1/3 px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 text-center transition-all duration-200 ${
+            error
+              ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
+              : theme === "light"
+              ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
+              : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
+          } ${theme === "light" ? "bg-white" : "bg-gray-600"}`}
+        />
+      </div>
+      {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
+    </div>
+  );
+}
+
 // Function to format date in Ethiopian Calendar
 const formatEthiopianDate = (dateString) => {
   const [datePart, timePart] = dateString.split("T");
@@ -203,22 +308,23 @@ const formatEthiopianDate = (dateString) => {
 };
 
 export default function VideoUploadForm() {
-  const [formData, setFormData] = useState({
-    title: "",
-    category: "",
+  const initialFormData = {
+    title: "Default Movie Title",
+    category: "Drama",
     description: "",
-    duration: "",
-    mainCast: [],
-    cinemaName: "",
-    cinemaLocation: "",
+    duration: "02:00:00",
+    mainCast: [{ name: "Default Actor", image: "https://via.placeholder.com/150" }],
+    cinemaName: "Default Cinema",
+    cinemaLocation: "Default Location",
     availableSite: "",
     ticketPrice: "",
     screeningDate: "",
     poster: "",
     promotionVideo: "",
     movieID: "",
-  });
+  };
 
+  const [formData, setFormData] = useState(initialFormData);
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(true);
   const [videoUploading, setVideoUploading] = useState(false);
@@ -226,23 +332,124 @@ export default function VideoUploadForm() {
   const [castImageUploading, setCastImageUploading] = useState({});
   const [errors, setErrors] = useState({});
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [userEmail, setUserEmail] = useState("");
   const [userRole, setUserRole] = useState("");
   const [ownerDetails, setOwnerDetails] = useState({ firstName: "", lastName: "" });
   const { theme } = useContext(ThemeContext);
   const [currentStep, setCurrentStep] = useState(1);
-  const totalSteps = 4;
+  const [totalSeats, setTotalSeats] = useState(null);
+  const [seatArrangement, setSeatArrangement] = useState(null);
   const [touched, setTouched] = useState({
     poster: false,
     promotionVideo: false,
     mainCast: false,
   });
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
+  const ticketPriceRef = useRef(null);
+  const isFromVideoUploadDetail = searchParams.get("from") === "videoUploadDetail";
 
+  // Define all steps
+  const allSteps = [
+    {
+      title: "Basic Info",
+      stepNumber: 1,
+      fields: [
+        { name: "title", label: "Movie Title", type: "text" },
+        { name: "category", label: "Category", type: "select" },
+        { name: "duration", label: "Duration (HH:MM:SS)*", type: "custom-time" },
+      ],
+    },
+    {
+      title: "Cast & Venue",
+      stepNumber: 2,
+      fields: [
+        { name: "mainCast", label: "Main Cast", type: "custom-cast" },
+        { name: "cinemaName", label: "Cinema Name", type: "text" },
+        { name: "cinemaLocation", label: "Cinema Location", type: "text" },
+      ],
+    },
+    {
+      title: "Ticket Info",
+      stepNumber: 3,
+      fields: [
+        { name: "availableSite", label: `Available Site (Max: ${totalSeats || "N/A"})`, type: "number" },
+        { name: "ticketPrice", label: "Ticket Price (ETB)*", type: "number", ref: ticketPriceRef },
+        { name: "screeningDate", label: "Screening Date", type: "custom" },
+      ],
+    },
+    {
+      title: "Media",
+      stepNumber: 4,
+      fields: [
+        { name: "description", label: "Description", type: "textarea" },
+        {
+          name: "poster",
+          label: "Poster (Image Only)",
+          type: "file",
+          accept: "image/*",
+        },
+        {
+          name: "promotionVideo",
+          label: "Promotion Video (Video Only)",
+          type: "file",
+          accept: "video/*",
+        },
+      ],
+    },
+  ];
+
+  // Filter steps based on context
+  const steps = isFromVideoUploadDetail
+    ? allSteps.filter((step) => step.stepNumber >= 3).map((step, index) => ({
+        ...step,
+        displayStep: index + 1,
+      }))
+    : allSteps.map((step, index) => ({
+        ...step,
+        displayStep: index + 1,
+      }));
+  const totalSteps = steps.length;
+
+  // Handle navigation to step 3 for videoUploadDetail
+  useEffect(() => {
+    if (isFromVideoUploadDetail) {
+      setCurrentStep(3);
+      toast.success("Seat design completed! Proceed with ticket setup.", {
+        position: "top-right",
+        autoClose: 3000,
+        theme: theme === "light" ? "light" : "dark",
+      });
+      if (ticketPriceRef.current) {
+        ticketPriceRef.current.focus();
+      }
+    }
+  }, [isFromVideoUploadDetail, theme]);
+
+  // Restore form data from localStorage on mount
+  useEffect(() => {
+    const savedFormData = localStorage.getItem("videoUploadFormData");
+    if (savedFormData) {
+      try {
+        const parsedData = JSON.parse(savedFormData);
+        setFormData((prev) => ({
+          ...prev,
+          ...parsedData,
+          mainCast: Array.isArray(parsedData.mainCast) ? parsedData.mainCast : [],
+        }));
+      } catch (error) {
+        console.error("Error parsing saved form data:", error);
+        setFormData(initialFormData);
+      }
+    } else {
+      setFormData(initialFormData);
+    }
+  }, []);
+
+  // Fetch user, owner, and seat arrangement data
   useEffect(() => {
     const fetchUserAndOwner = async () => {
       try {
-        // Fetch user authentication details
         const response = await fetch("/api/validate", {
           method: "GET",
           credentials: "include",
@@ -261,7 +468,6 @@ export default function VideoUploadForm() {
             return;
           }
 
-          // Fetch owner details from Firestore
           const ownerQuery = query(
             collection(db, "owner"),
             where("email", "==", data.email)
@@ -275,6 +481,28 @@ export default function VideoUploadForm() {
             });
           } else {
             throw new Error("Owner details not found");
+          }
+
+          const arrangementsQuery = query(
+            collection(db, "seatArrangements"),
+            where("userEmail", "==", data.email)
+          );
+          const arrangementsSnapshot = await getDocs(arrangementsQuery);
+          if (!arrangementsSnapshot.empty) {
+            const arrangementsData = arrangementsSnapshot.docs[0].data();
+            setTotalSeats(arrangementsData.totalSeats || 0);
+            setSeatArrangement(arrangementsData.seats || null);
+            setFormData((prev) => ({
+              ...prev,
+              availableSite: arrangementsData.totalSeats.toString(),
+            }));
+            setErrors((prev) => ({ ...prev, availableSite: "" }));
+          } else {
+            setTotalSeats(0);
+            setErrors((prev) => ({
+              ...prev,
+              availableSite: "No seat arrangement found. Please design seats first.",
+            }));
           }
         } else {
           throw new Error("No email or role found");
@@ -295,7 +523,21 @@ export default function VideoUploadForm() {
     setFormData((prev) => ({ ...prev, [name]: value }));
     setErrors((prev) => ({ ...prev, [name]: "" }));
     if (name === "category") setIsCategoryOpen(false);
-  }, []);
+    if (name === "availableSite" && totalSeats !== null) {
+      const numValue = Number(value);
+      if (!Number.isInteger(numValue) || numValue <= 0) {
+        setErrors((prev) => ({
+          ...prev,
+          availableSite: "Available site must be a positive integer",
+        }));
+      } else if (numValue > totalSeats) {
+        setErrors((prev) => ({
+          ...prev,
+          availableSite: `Available site cannot exceed total seats (${totalSeats})`,
+        }));
+      }
+    }
+  }, [totalSeats]);
 
   const handleFileChange = useCallback(async (e) => {
     const file = e.target.files[0];
@@ -436,10 +678,10 @@ export default function VideoUploadForm() {
     return Array.from({ length: 8 }, () => characters.charAt(Math.floor(Math.random() * characters.length))).join("");
   }, []);
 
-  const validateStep = useCallback((step) => {
+  const validateStep = useCallback((stepNumber) => {
     const newErrors = {};
 
-    switch (step) {
+    switch (stepNumber) {
       case 1:
         if (!formData.title.trim()) newErrors.title = "Title is required";
         if (!formData.category.trim()) newErrors.category = "Category is required";
@@ -457,8 +699,7 @@ export default function VideoUploadForm() {
             (cast) => !cast.name.trim() || !cast.image
           )
         ) {
-          newErrors.mainCast =
-            "Each cast member must have a name and an image";
+          newErrors.mainCast = "Each cast member must have a name and an image";
         }
         if (!formData.cinemaName.trim())
           newErrors.cinemaName = "Cinema name is required";
@@ -472,6 +713,8 @@ export default function VideoUploadForm() {
           Number(formData.availableSite) <= 0
         ) {
           newErrors.availableSite = "Available site must be a positive integer";
+        } else if (totalSeats !== null && Number(formData.availableSite) > totalSeats) {
+          newErrors.availableSite = `Available site cannot exceed total seats (${totalSeats})`;
         }
         if (
           !formData.ticketPrice ||
@@ -483,17 +726,14 @@ export default function VideoUploadForm() {
         if (!formData.screeningDate) {
           newErrors.screeningDate = "Screening date is required";
         } else {
-          // Validate that screeningDate is at least one day in the future
           const [datePart] = formData.screeningDate.split("T");
           const [year, month, day] = datePart.split("-").map(Number);
           const [gregYear, gregMonth, gregDay] = toGregorian(year, month, day);
           const screeningDate = new Date(gregYear, gregMonth - 1, gregDay);
-          
-          // Get current date + 1 day
           const today = new Date();
           const minDate = new Date(today);
           minDate.setDate(today.getDate() + 1);
-          minDate.setHours(0, 0, 0, 0); // Reset time for date-only comparison
+          minDate.setHours(0, 0, 0, 0);
 
           if (screeningDate < minDate) {
             newErrors.screeningDate = "Screening date must be at least one day in the future";
@@ -512,9 +752,9 @@ export default function VideoUploadForm() {
         break;
     }
 
-    setErrors(newErrors);
+    setErrors((prev) => ({ ...prev, ...newErrors }));
     return Object.keys(newErrors).length === 0;
-  }, [formData, touched]);
+  }, [formData, touched, totalSeats]);
 
   const handleNext = useCallback(() => {
     if (currentStep === 4) {
@@ -531,8 +771,10 @@ export default function VideoUploadForm() {
   }, [currentStep, validateStep]);
 
   const handleBack = useCallback(() => {
-    setCurrentStep((prev) => prev - 1);
-  }, []);
+    if (!isFromVideoUploadDetail || currentStep > 3) {
+      setCurrentStep((prev) => prev - 1);
+    }
+  }, [currentStep, isFromVideoUploadDetail]);
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
@@ -544,13 +786,23 @@ export default function VideoUploadForm() {
       mainCast: true,
     });
 
-    if (!validateStep(currentStep)) {
+    // Validate all steps, including hidden ones
+    const isStep1Valid = validateStep(1);
+    const isStep2Valid = validateStep(2);
+    const isStep3Valid = validateStep(3);
+    const isStep4Valid = validateStep(4);
+
+    if (!isStep1Valid || !isStep2Valid || !isStep3Valid || !isStep4Valid) {
       setLoading(false);
+      toast.error("Please complete all required fields.", {
+        position: "top-right",
+        autoClose: 3000,
+        theme: theme === "light" ? "light" : "dark",
+      });
       return;
     }
 
     try {
-      // Format the screening date to Ethiopian Calendar
       const formattedScreeningDate = formData.screeningDate
         ? formatEthiopianDate(formData.screeningDate)
         : "";
@@ -568,7 +820,7 @@ export default function VideoUploadForm() {
         cinemaLocation: formData.cinemaLocation,
         availableSite: Number(formData.availableSite),
         ticketPrice: Number(formData.ticketPrice),
-        screeningDate: formattedScreeningDate, // Store formatted Ethiopian date
+        screeningDate: formattedScreeningDate,
         uploadingDate: Timestamp.now(),
         poster: formData.poster,
         promotionVideo: formData.promotionVideo,
@@ -577,15 +829,32 @@ export default function VideoUploadForm() {
         isEthiopianDate: true,
       });
 
-      alert("Movie uploaded successfully!");
+      // Clear saved form data from localStorage
+      localStorage.removeItem("videoUploadFormData");
+
+      toast.success("Movie uploaded successfully!", {
+        position: "top-right",
+        autoClose: 3000,
+        theme: theme === "light" ? "light" : "dark",
+      });
       router.push("/dashboard");
     } catch (error) {
       console.error("Error uploading movie:", error);
-      alert("Failed to upload movie.");
+      toast.error("Failed to upload movie. Please try again.", {
+        position: "top-right",
+        autoClose: 3000,
+        theme: theme === "light" ? "light" : "dark",
+      });
     } finally {
       setLoading(false);
     }
-  }, [formData, userEmail, ownerDetails, currentStep, validateStep, router]);
+  }, [formData, userEmail, ownerDetails, validateStep, router, theme]);
+
+  const handleDesignSeats = useCallback(() => {
+    // Save form data to localStorage
+    localStorage.setItem("videoUploadFormData", JSON.stringify(formData));
+    router.push("/dashboard/designseat?from=videoUploadDetail");
+  }, [formData, router]);
 
   if (authLoading) {
     return (
@@ -600,51 +869,6 @@ export default function VideoUploadForm() {
       </div>
     );
   }
-
-  const steps = [
-    {
-      title: "Basic Info",
-      fields: [
-        { name: "title", label: "Movie Title", type: "text" },
-        { name: "category", label: "Category", type: "select" },
-        { name: "duration", label: "Duration (HH:MM:SS)", type: "time" },
-      ],
-    },
-    {
-      title: "Cast & Venue",
-      fields: [
-        { name: "mainCast", label: "Main Cast", type: "custom-cast" },
-        { name: "cinemaName", label: "Cinema Name", type: "text" },
-        { name: "cinemaLocation", label: "Cinema Location", type: "text" },
-      ],
-    },
-    {
-      title: "Ticket Info",
-      fields: [
-        { name: "availableSite", label: "Available Site", type: "number" },
-        { name: "ticketPrice", label: "Ticket Price (ETB)", type: "number" },
-        { name: "screeningDate", label: "Screening Date", type: "custom" },
-      ],
-    },
-    {
-      title: "Media",
-      fields: [
-        { name: "description", label: "Description", type: "textarea" },
-        {
-          name: "poster",
-          label: "Poster (Image Only)",
-          type: "file",
-          accept: "image/*",
-        },
-        {
-          name: "promotionVideo",
-          label: "Promotion Video (Video Only)",
-          type: "file",
-          accept: "video/*",
-        },
-      ],
-    },
-  ];
 
   return (
     <div
@@ -661,10 +885,10 @@ export default function VideoUploadForm() {
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5, type: "spring" }}
         className={`w-full max-w-4xl ${
-          theme === 'light' ? 'bg-gradient-to-br from-blue-50 to-purple-50' : 'bg-gradient-to-br from-gray-800 to-gray-900'
+          theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"
         } p-6 sm:p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-shadow`}
         whileHover={{ scale: 1.02 }}
-        transition={{ type: 'spring', stiffness: 300 }}
+        transition={{ type: "spring", stiffness: 300 }}
       >
         <div
           className={`${
@@ -693,24 +917,24 @@ export default function VideoUploadForm() {
                 <div key={index} className="flex items-center gap-2">
                   <div
                     className={`flex items-center justify-center w-8 h-8 rounded-full ${
-                      currentStep > index + 1
+                      step.displayStep < (currentStep - (isFromVideoUploadDetail ? 2 : 0))
                         ? "bg-green-500"
-                        : currentStep === index + 1
+                        : step.displayStep === (currentStep - (isFromVideoUploadDetail ? 2 : 0))
                         ? "bg-indigo-600"
                         : theme === "light"
                         ? "bg-indigo-200"
                         : "bg-indigo-700"
                     } text-white transition-colors`}
                   >
-                    {currentStep > index + 1 ? (
+                    {step.displayStep < (currentStep - (isFromVideoUploadDetail ? 2 : 0)) ? (
                       <CheckIcon className="h-4 w-4" />
                     ) : (
-                      index + 1
+                      step.displayStep
                     )}
                   </div>
                   <span
                     className={`hidden md:inline ${
-                      currentStep === index + 1 ? "font-semibold" : ""
+                      step.displayStep === (currentStep - (isFromVideoUploadDetail ? 2 : 0)) ? "font-semibold" : ""
                     } ${
                       theme === "light" ? "text-indigo-700" : "text-indigo-300"
                     }`}
@@ -723,458 +947,513 @@ export default function VideoUploadForm() {
           </div>
         </div>
 
-        <div className="mb-6">
-          <h2
-            className={`text-3xl font-bold ${
-              theme === "light" ? "text-indigo-900" : "text-white"
-            }`}
-          >
-            {steps[currentStep - 1].title}
-          </h2>
-          <p
-            className={`mt-1 ${
-              theme === "light" ? "text-indigo-600" : "text-indigo-400"
-            }`}
-          >
-            Step {currentStep} of {totalSteps}
-          </p>
-        </div>
+        <motion.div
+          key={currentStep}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div className="mb-6">
+            <h2
+              className={`text-3xl font-bold ${
+                theme === "light" ? "text-indigo-900" : "text-white"
+              }`}
+            >
+              {steps.find((s) => s.stepNumber === currentStep)?.title}
+            </h2>
+            <p
+              className={`mt-1 ${
+                theme === "light" ? "text-indigo-600" : "text-indigo-400"
+              }`}
+            >
+              Step {isFromVideoUploadDetail ? currentStep - 2 : currentStep} of {totalSteps}
+            </p>
+          </div>
 
-        <form onSubmit={handleSubmit} autoComplete="off">
-          <div className="space-y-6">
-            {steps[currentStep - 1].fields.map((field, index) => (
-              <div key={index}>
-                <label
-                  className={`block text-sm font-medium mb-2 ${
-                    theme === "light" ? "text-indigo-700" : "text-indigo-300"
-                  }`}
+          <form onSubmit={handleSubmit} autoComplete="off">
+            <div className="space-y-6">
+              {totalSeats === 0 && currentStep === 3 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className={`mb-6 p-6 rounded-xl ${
+                    theme === "light"
+                      ? "bg-gradient-to-r from-red-50 to-pink-50"
+                      : "bg-gradient-to-r from-red-900 to-pink-900"
+                  } border ${
+                    theme === "light" ? "border-red-200" : "border-red-700"
+                  } shadow-lg hover:shadow-xl transition-shadow cursor-pointer`}
+                  onClick={handleDesignSeats}
                 >
-                  {field.label}
-                  <span className="text-red-500">*</span>
-                </label>
-                {field.type === "textarea" ? (
-                  <textarea
-                    name={field.name}
-                    value={formData[field.name]}
-                    onChange={handleChange}
-                    className={`mt-1 block w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
-                      errors[field.name]
-                        ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
-                        : theme === "light"
-                        ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
-                        : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
-                    } ${theme === "light" ? "bg-white" : "bg-gray-700"} transition-all duration-200`}
-                    rows={4}
-                    autoComplete="off"
-                  />
-                ) : field.type === "file" ? (
-                  <div
-                    className={`mt-1 flex flex-col items-center justify-center w-full px-4 py-8 border-2 border-dashed rounded-lg transition-colors ${
-                      errors[field.name] && touched[field.name]
-                        ? "border-red-500 bg-red-50/50"
-                        : theme === "light"
-                        ? "border-indigo-200 bg-indigo-50 hover:border-indigo-300"
-                        : "border-indigo-700 bg-gray-700 hover:border-indigo-600"
-                    }`}
-                  >
-                    <div className="text-center">
-                      {field.name === "promotionVideo" && videoUploading ? (
-                        <div className="flex flex-col items-center gap-2">
-                          <ClipLoader color="#6366f1" size={40} />
-                          <p
-                            className={`text-sm font-medium ${
-                              theme === "light" ? "text-indigo-600" : "text-indigo-400"
-                            }`}
-                          >
-                            Uploading video...
-                          </p>
-                        </div>
-                      ) : field.name === "poster" && imageUploading ? (
-                        <div className="flex flex-col items-center gap-2">
-                          <ClipLoader color="#6366f1" size={40} />
-                          <p
-                            className={`text-sm font-medium ${
-                              theme === "light" ? "text-indigo-600" : "text-indigo-400"
-                            }`}
-                          >
-                            Uploading poster...
-                          </p>
-                        </div>
-                      ) : (
-                        <>
-                          <p
-                            className={`mb-3 ${
-                              errors[field.name] && touched[field.name]
-                                ? "text-red-500 font-medium"
-                                : theme === "light"
-                                ? "text-indigo-600"
-                                : "text-indigo-400"
-                            }`}
-                          >
-                            {formData[field.name]
-                              ? "File selected"
-                              : errors[field.name] && touched[field.name]
-                              ? `Please upload ${
-                                  field.accept.includes("image")
-                                    ? "an image"
-                                    : "a video"
-                                }`
-                              : `Click to upload ${
-                                  field.accept.includes("image")
-                                    ? "an image"
-                                    : "a video"
-                                }`}
-                          </p>
-                          <input
-                            type="file"
-                            name={field.name}
-                            accept={field.accept}
-                            onChange={
-                              field.name === "poster"
-                                ? handleFileChange
-                                : handleVideoUpload
-                            }
-                            className="hidden"
-                            id={field.name}
-                            disabled={
-                              (field.name === "promotionVideo" && videoUploading) ||
-                              (field.name === "poster" && imageUploading)
-                            }
-                          />
-                          <label
-                            htmlFor={field.name}
-                            className={`inline-flex items-center px-5 py-2 rounded-lg cursor-pointer transition-colors ${
-                              errors[field.name] && touched[field.name]
-                                ? "bg-gradient-to-r from-red-500 to-pink-500 text-white hover:from-red-600 hover:to-pink-600"
-                                : theme === "light"
-                                ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                                : "bg-indigo-700 text-white hover:bg-indigo-800"
-                            } ${
-                              (field.name === "promotionVideo" && videoUploading) ||
-                              (field.name === "poster" && imageUploading)
-                                ? "opacity-50 cursor-not-allowed"
-                                : ""
-                            }`}
-                          >
-                            {formData[field.name] ? "Change File" : "Choose File"}
-                          </label>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ) : field.type === "custom" ? (
-                  <EthiopianDatePicker
-                    name={field.name}
-                    value={formData[field.name]}
-                    onChange={handleChange}
-                    error={errors[field.name]}
-                    theme={theme}
-                  />
-                ) : field.type === "custom-cast" ? (
-                  <div className="space-y-4">
-                    <AnimatePresence>
-                      {formData.mainCast.map((cast, idx) => (
-                        <motion.div
-                          key={idx}
-                          initial={{ opacity: 0, y: -20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: 20 }}
-                          className={`flex items-center gap-4 p-4 rounded-xl ${
-                            theme === "light" ? "bg-indigo-50" : "bg-gray-700"
-                          } shadow-md hover:shadow-lg transition-all duration-200`}
-                        >
-                          {cast.image && (
-                            <motion.div
-                              initial={{ opacity: 0, scale: 0.8 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              className="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden border-2 border-indigo-200"
-                            >
-                              <img
-                                src={cast.image}
-                                alt="Cast preview"
-                                className="w-full h-full object-cover"
-                              />
-                            </motion.div>
-                          )}
-                          <div className="flex-1">
-                            <input
-                              type="text"
-                              value={cast.name}
-                              onChange={(e) =>
-                                handleCastChange(idx, "name", e.target.value)
-                              }
-                              placeholder="Cast member name"
-                              className={`w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
-                                errors.mainCast && !cast.name.trim()
-                                  ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
-                                  : theme === "light"
-                                  ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
-                                  : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
-                              } ${
-                                theme === "light" ? "bg-white" : "bg-gray-600"
-                              } transition-all duration-200`}
-                            />
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Tooltip text="Upload Cast Image" theme={theme}>
-                              <div className="relative">
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={(e) =>
-                                    handleCastImage(idx, e.target.files[0])
-                                  }
-                                  className="hidden"
-                                  id={`cast-image-${idx}`}
-                                  disabled={castImageUploading[idx]}
-                                />
-                                <motion.label
-                                  htmlFor={`cast-image-${idx}`}
-                                  whileHover={{ scale: 1.1 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  className={`cursor-pointer ${
-                                    castImageUploading[idx]
-                                      ? "opacity-50 cursor-not-allowed"
-                                      :
-                                    ""
-                                  }`}
-                                  aria-label="Upload cast image"
-                                >
-                                  {castImageUploading[idx] ? (
-                                    <ClipLoader color="#6366f1" size={20} />
-                                  ) : (
-                                    <ArrowUpOnSquareIcon
-                                      className="h-10 w-10 p-3 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white shadow-md hover:shadow-lg transition-all duration-200"
-                                    />
-                                  )}
-                                </motion.label>
-                              </div>
-                            </Tooltip>
-                            <Tooltip text="Remove Cast Member" theme={theme}>
-                              <motion.button
-                                type="button"
-                                onClick={() => removeCastMember(idx)}
-                                className="p-3 rounded-full bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-md hover:shadow-lg transition-all duration-200"
-                                whileHover={{ scale: 1.1 }}
-                                whileTap={{ scale: 0.9 }}
-                                aria-label="Remove cast member"
-                              >
-                                <XCircleIcon className="h-5 w-5" />
-                              </motion.button>
-                            </Tooltip>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </AnimatePresence>
-                    <motion.button
-                      type="button"
-                      onClick={addCastMember}
-                      className={`flex items-center gap-2 px-5 py-3 rounded-lg ${
-                        theme === "light"
-                          ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700"
-                          : "bg-gradient-to-r from-indigo-700 to-purple-700 text-white hover:from-indigo-800 hover:to-purple-800"
-                      } transition-all shadow-md`}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      <PlusIcon className="h-5 w-5" />
-                      Add Cast Member
-                    </motion.button>
-                  </div>
-                ) : field.type === "select" ? (
-                  <div className="relative">
-                    <motion.button
-                      type="button"
-                      onClick={() => setIsCategoryOpen(!isCategoryOpen)}
-                      className={`flex items-center justify-between w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
-                        errors[field.name]
-                          ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
-                          : theme === "light"
-                          ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
-                          : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
-                      } ${theme === "light" ? "bg-white" : "bg-gray-600"} transition-all duration-200`}
-                      whileHover={{ scale: 1.02 }}
-                    >
-                      <span
-                        className={`${
-                          formData[field.name] ? "" : "text-gray-500"
+                  <div className="flex items-center gap-4">
+                    <TableCellsIcon
+                      className={`h-8 w-8 ${
+                        theme === "light" ? "text-red-600" : "text-red-300"
+                      }`}
+                    />
+                    <div>
+                      <p
+                        className={`text-base font-semibold ${
+                          theme === "light" ? "text-red-700" : "text-red-300"
                         }`}
                       >
-                        {formData[field.name] || "Select a category"}
-                      </span>
-                      <ChevronDownIcon
-                        className={`h-5 w-5 ${
-                          theme === "light"
-                            ? "text-indigo-500"
-                            : "text-indigo-400"
+                        No seat arrangement found
+                      </p>
+                      <p
+                        className={`text-sm ${
+                          theme === "light" ? "text-red-600" : "text-red-400"
                         }`}
-                      />
+                      >
+                        Click here to design seats to proceed with ticket setup.
+                      </p>
+                    </div>
+                    <motion.button
+                      type="button"
+                      className={`ml-auto px-4 py-2 rounded-lg ${
+                        theme === "light"
+                          ? "bg-red-600 text-white hover:bg-red-700"
+                          : "bg-red-700 text-white hover:bg-red-800"
+                      } flex items-center gap-2 transition-colors shadow-md`}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleDesignSeats}
+                    >
+                      <TableCellsIcon className="h-5 w-5" />
+                      Design Seats
                     </motion.button>
-                    <AnimatePresence>
-                      {isCategoryOpen && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          className={`absolute z-20 w-full mt-2 rounded-lg shadow-xl ${
-                            theme === "light" ? "bg-white" : "bg-gray-700"
-                          } max-h-60 overflow-y-auto`}
-                        >
-                          {movieCategories.map((category) => (
+                  </div>
+                </motion.div>
+              )}
+              {steps
+                .find((s) => s.stepNumber === currentStep)
+                ?.fields.map((field, index) => (
+                  <div key={index}>
+                    <label
+                      className={`block text-sm font-medium mb-2 ${
+                        theme === "light" ? "text-indigo-700" : "text-indigo-300"
+                      }`}
+                    >
+                      {field.label}
+                      <span className="text-red-500">*</span>
+                    </label>
+                    {field.type === "textarea" ? (
+                      <textarea
+                        name={field.name}
+                        value={formData[field.name]}
+                        onChange={handleChange}
+                        className={`mt-1 block w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
+                          errors[field.name]
+                            ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
+                            : theme === "light"
+                            ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
+                            : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
+                        } ${theme === "light" ? "bg-white" : "bg-gray-700"} transition-all duration-200`}
+                        rows={4}
+                        autoComplete="off"
+                      />
+                    ) : field.type === "file" ? (
+                      <div
+                        className={`mt-1 flex flex-col items-center justify-center w-full px-4 py-8 border-2 border-dashed rounded-lg transition-colors ${
+                          errors[field.name] && touched[field.name]
+                            ? "border-red-500 bg-red-50/50"
+                            : theme === "light"
+                            ? "border-indigo-200 bg-indigo-50 hover:border-indigo-300"
+                            : "border-indigo-700 bg-gray-700 hover:border-indigo-600"
+                        }`}
+                      >
+                        <div className="text-center">
+                          {field.name === "promotionVideo" && videoUploading ? (
+                            <div className="flex flex-col items-center gap-2">
+                              <ClipLoader color="#6366f1" size={40} />
+                              <p
+                                className={`text-sm font-medium ${
+                                  theme === "light" ? "text-indigo-600" : "text-indigo-400"
+                                }`}
+                              >
+                                Uploading video...
+                              </p>
+                            </div>
+                          ) : field.name === "poster" && imageUploading ? (
+                            <div className="flex flex-col items-center gap-2">
+                              <ClipLoader color="#6366f1" size={40} />
+                              <p
+                                className={`text-sm font-medium ${
+                                  theme === "light" ? "text-indigo-600" : "text-indigo-400"
+                                }`}
+                              >
+                                Uploading poster...
+                              </p>
+                            </div>
+                          ) : (
+                            <>
+                              <p
+                                className={`mb-3 ${
+                                  errors[field.name] && touched[field.name]
+                                    ? "text-red-500 font-medium"
+                                    : theme === "light"
+                                    ? "text-indigo-600"
+                                    : "text-indigo-400"
+                                }`}
+                              >
+                                {formData[field.name]
+                                  ? "File selected"
+                                  : errors[field.name] && touched[field.name]
+                                  ? `Please upload ${
+                                      field.accept.includes("image")
+                                        ? "an image"
+                                        : "a video"
+                                    }`
+                                  : `Click to upload ${
+                                      field.accept.includes("image")
+                                        ? "an image"
+                                        : "a video"
+                                    }`}
+                              </p>
+                              <input
+                                type="file"
+                                name={field.name}
+                                accept={field.accept}
+                                onChange={
+                                  field.name === "poster"
+                                    ? handleFileChange
+                                    : handleVideoUpload
+                                }
+                                className="hidden"
+                                id={field.name}
+                                disabled={
+                                  (field.name === "promotionVideo" && videoUploading) ||
+                                  (field.name === "poster" && imageUploading)
+                                }
+                              />
+                              <label
+                                htmlFor={field.name}
+                                className={`inline-flex items-center px-5 py-2 rounded-lg cursor-pointer transition-colors ${
+                                  errors[field.name] && touched[field.name]
+                                    ? "bg-gradient-to-r from-red-500 to-pink-500 text-white hover:from-red-600 hover:to-pink-600"
+                                    : theme === "light"
+                                    ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                                    : "bg-indigo-700 text-white hover:bg-indigo-800"
+                                } ${
+                                  (field.name === "promotionVideo" && videoUploading) ||
+                                  (field.name === "poster" && imageUploading)
+                                    ? "opacity-50 cursor-not-allowed"
+                                    : ""
+                                }`}
+                              >
+                                {formData[field.name] ? "Change File" : "Choose File"}
+                              </label>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ) : field.type === "custom" ? (
+                      <EthiopianDatePicker
+                        name={field.name}
+                        value={formData[field.name]}
+                        onChange={handleChange}
+                        error={errors[field.name]}
+                        theme={theme}
+                      />
+                    ) : field.type === "custom-time" ? (
+                      <TimePicker
+                        name={field.name}
+                        value={formData[field.name]}
+                        onChange={handleChange}
+                        error={errors[field.name]}
+                        theme={theme}
+                      />
+                    ) : field.type === "custom-cast" ? (
+                      <div className="space-y-4">
+                        <AnimatePresence>
+                          {formData.mainCast.map((cast, idx) => (
                             <motion.div
-                              key={category}
-                              whileHover={{ scale: 1.02 }}
-                              className={`px-4 py-3 cursor-pointer transition-colors ${
-                                formData[field.name] === category
-                                  ? theme === "light"
-                                    ? "bg-indigo-100 text-indigo-900"
-                                    : "bg-indigo-600 text-white"
-                                  : theme === "light"
-                                  ? "hover:bg-indigo-50"
-                                  : "hover:bg-indigo-700"
-                              }`}
-                              onClick={() =>
-                                handleChange({
-                                  target: { name: field.name, value: category },
-                                })
-                              }
+                              key={idx}
+                              initial={{ opacity: 0, y: -20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: 20 }}
+                              className={`flex items-center gap-4 p-4 rounded-xl ${
+                                theme === "light" ? "bg-indigo-50" : "bg-gray-700"
+                              } shadow-md hover:shadow-lg transition-all duration-200`}
                             >
-                              {category}
+                              {cast.image && (
+                                <motion.div
+                                  initial={{ opacity: 0, scale: 0.8 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  className="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden border-2 border-indigo-200"
+                                >
+                                  <img
+                                    src={cast.image}
+                                    alt="Cast preview"
+                                    className="w-full h-full object-cover"
+                                  />
+                                </motion.div>
+                              )}
+                              <div className="flex-1">
+                                <input
+                                  type="text"
+                                  value={cast.name}
+                                  onChange={(e) =>
+                                    handleCastChange(idx, "name", e.target.value)
+                                  }
+                                  placeholder="Cast member name"
+                                  className={`w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
+                                    errors.mainCast && !cast.name.trim()
+                                      ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
+                                      : theme === "light"
+                                      ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
+                                      : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
+                                  } ${
+                                    theme === "light" ? "bg-white" : "bg-gray-600"
+                                  } transition-all duration-200`}
+                                />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Tooltip text="Upload Cast Image" theme={theme}>
+                                  <div className="relative">
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={(e) =>
+                                        handleCastImage(idx, e.target.files[0])
+                                      }
+                                      className="hidden"
+                                      id={`cast-image-${idx}`}
+                                      disabled={castImageUploading[idx]}
+                                    />
+                                    <motion.label
+                                      htmlFor={`cast-image-${idx}`}
+                                      whileHover={{ scale: 1.1 }}
+                                      whileTap={{ scale: 0.9 }}
+                                      className={`cursor-pointer ${
+                                        castImageUploading[idx]
+                                          ? "opacity-50 cursor-not-allowed"
+                                          : ""
+                                      }`}
+                                      aria-label="Upload cast image"
+                                    >
+                                      {castImageUploading[idx] ? (
+                                        <ClipLoader color="#6366f1" size={20} />
+                                      ) : (
+                                        <ArrowUpOnSquareIcon
+                                          className="h-10 w-10 p-3 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white shadow-md hover:shadow-lg transition-all duration-200"
+                                        />
+                                      )}
+                                    </motion.label>
+                                  </div>
+                                </Tooltip>
+                                <Tooltip text="Remove Cast Member" theme={theme}>
+                                  <motion.button
+                                    type="button"
+                                    onClick={() => removeCastMember(idx)}
+                                    className="p-3 rounded-full bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-md hover:shadow-lg transition-all duration-200"
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    aria-label="Remove cast member"
+                                  >
+                                    <XCircleIcon className="h-5 w-5" />
+                                  </motion.button>
+                                </Tooltip>
+                              </div>
                             </motion.div>
                           ))}
-                        </motion.div>
+                        </AnimatePresence>
+                        <motion.button
+                          type="button"
+                          onClick={addCastMember}
+                          className={`flex items-center gap-2 px-5 py-3 rounded-lg ${
+                            theme === "light"
+                              ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700"
+                              : "bg-gradient-to-r from-indigo-700 to-purple-700 text-white hover:from-indigo-800 hover:to-purple-800"
+                          } transition-all shadow-md`}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          <PlusIcon className="h-5 w-5" />
+                          Add Cast Member
+                        </motion.button>
+                      </div>
+                    ) : field.type === "select" ? (
+                      <div className="relative">
+                        <motion.button
+                          type="button"
+                          onClick={() => setIsCategoryOpen(!isCategoryOpen)}
+                          className={`flex items-center justify-between w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
+                            errors[field.name]
+                              ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
+                              : theme === "light"
+                              ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
+                              : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
+                          } ${theme === "light" ? "bg-white" : "bg-gray-600"} transition-all duration-200`}
+                          whileHover={{ scale: 1.02 }}
+                        >
+                          <span
+                            className={`${
+                              formData[field.name] ? "" : "text-gray-500"
+                            }`}
+                          >
+                            {formData[field.name] || "Select a category"}
+                          </span>
+                          <ChevronDownIcon
+                            className={`h-5 w-5 ${
+                              theme === "light"
+                                ? "text-indigo-500"
+                                : "text-indigo-400"
+                            }`}
+                          />
+                        </motion.button>
+                        <AnimatePresence>
+                          {isCategoryOpen && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -10 }}
+                              className={`absolute z-20 w-full mt-2 rounded-lg shadow-xl ${
+                                theme === "light" ? "bg-white" : "bg-gray-700"
+                              } max-h-60 overflow-y-auto`}
+                            >
+                              {movieCategories.map((category) => (
+                                <motion.div
+                                  key={category}
+                                  whileHover={{ scale: 1.02 }}
+                                  className={`px-4 py-3 cursor-pointer transition-colors ${
+                                    formData[field.name] === category
+                                      ? theme === "light"
+                                        ? "bg-indigo-100 text-indigo-900"
+                                        : "bg-indigo-600 text-white"
+                                      : theme === "light"
+                                      ? "hover:bg-indigo-50"
+                                      : "hover:bg-indigo-700"
+                                  }`}
+                                  onClick={() =>
+                                    handleChange({
+                                      target: { name: field.name, value: category },
+                                    })
+                                  }
+                                >
+                                  {category}
+                                </motion.div>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    ) : (
+                      <input
+                        type={field.type}
+                        name={field.name}
+                        value={formData[field.name]}
+                        onChange={handleChange}
+                        ref={field.ref}
+                        className={`mt-1 block w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
+                          errors[field.name]
+                            ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
+                            : theme === "light"
+                            ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
+                            : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
+                        } ${theme === "light" ? "bg-white" : "bg-gray-600"} transition-all duration-200`}
+                        step={field.type === "number" ? "1" : undefined}
+                        autoComplete="off"
+                      />
+                    )}
+                    {errors[field.name] &&
+                      field.type !== "file" &&
+                      field.type !== "custom-cast" &&
+                      field.type !== "select" && (
+                        <p className="mt-2 text-sm text-red-500">
+                          {errors[field.name]}
+                        </p>
                       )}
-                    </AnimatePresence>
+                    {errors[field.name] && field.type === "file" && touched[field.name] && (
+                      <p className="mt-2 text-sm text-red-500">
+                        {errors[field.name]}
+                      </p>
+                    )}
+                    {errors.mainCast &&
+                      field.type === "custom-cast" &&
+                      touched.mainCast && (
+                        <p className="mt-2 text-sm text-red-500">
+                          {errors.mainCast}
+                        </p>
+                      )}
+                    {errors[field.name] && field.type === "select" && (
+                      <p className="mt-2 text-sm text-red-500">
+                        {errors[field.name]}
+                      </p>
+                    )}
                   </div>
-                ) : field.name === "duration" ? (
-                  <input
-                    type="time"
-                    name={field.name}
-                    value={formData[field.name]}
-                    onChange={handleChange}
-                    step="1"
-                    className={`mt-1 block w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
-                      errors[field.name]
-                        ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
-                        : theme === "light"
-                        ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
-                        : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
-                    } ${theme === "light" ? "bg-white" : "bg-gray-600"} transition-all duration-200`}
-                    autoComplete="off"
-                  />
-                ) : (
-                  <input
-                    type={field.type}
-                    name={field.name}
-                    value={formData[field.name]}
-                    onChange={handleChange}
-                    className={`mt-1 block w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
-                      errors[field.name]
-                        ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
-                        : theme === "light"
-                        ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
-                        : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
-                    } ${theme === "light" ? "bg-white" : "bg-gray-600"} transition-all duration-200`}
-                    step={field.type === "number" ? "1" : undefined}
-                    autoComplete="off"
-                  />
-                )}
-                {errors[field.name] &&
-                  field.type !== "file" &&
-                  field.type !== "custom-cast" &&
-                  field.type !== "select" && (
-                    <p className="mt-2 text-sm text-red-500">
-                      {errors[field.name]}
-                    </p>
-                  )}
-                {errors[field.name] && field.type === "file" && touched[field.name] && (
-                  <p className="mt-2 text-sm text-red-500">
-                    {errors[field.name]}
-                  </p>
-                )}
-                {errors.mainCast &&
-                  field.type === "custom-cast" &&
-                  touched.mainCast && (
-                    <p className="mt-2 text-sm text-red-500">
-                      {errors.mainCast}
-                    </p>
-                  )}
-                {errors[field.name] && field.type === "select" && (
-                  <p className="mt-2 text-sm text-red-500">
-                    {errors[field.name]}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
+                ))}
+            </div>
 
-          <div className="mt-8 flex justify-between">
-            <motion.button
-              type="button"
-              onClick={handleBack}
-              disabled={currentStep === 1}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg ${
-                theme === "light"
-                  ? "text-indigo-700 hover:bg-indigo-100"
-                  : "text-indigo-300 hover:bg-indigo-800"
-              } transition-colors disabled:opacity-50`}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <ArrowLeftIcon className="h-5 w-5" />
-              Previous
-            </motion.button>
-
-            {currentStep < totalSteps ? (
+            <div className="mt-8 flex justify-between">
               <motion.button
                 type="button"
-                onClick={handleNext}
-                className={`flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all`}
+                onClick={handleBack}
+                disabled={currentStep === 3}
+                className={`flex items-center gap-2 px-6 py-3 rounded-lg ${
+                  theme === "light"
+                    ? "text-indigo-700 hover:bg-indigo-100"
+                    : "text-indigo-300 hover:bg-indigo-800"
+                } transition-colors disabled:opacity-50`}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                Next
-                <ArrowRightIcon className="h-5 w-5" />
+                <ArrowLeftIcon className="h-5 w-5" />
+                Previous
               </motion.button>
-            ) : (
-              <motion.button
-                type="submit"
-                disabled={loading || videoUploading || imageUploading || Object.values(castImageUploading).some((v) => v)}
-                className={`flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-indigo-500 text-white font-medium rounded-lg hover:from-green-600 hover:to-indigo-600 transition-all disabled:opacity-70`}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                {loading ? (
-                  <>
-                    <svg
-                      className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    Uploading...
-                  </>
-                ) : (
-                  "Submit Movie"
-                )}
-              </motion.button>
-            )}
-          </div>
-        </form>
+
+              {currentStep < 4 ? (
+                <motion.button
+                  type="button"
+                  onClick={handleNext}
+                  className={`flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all`}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  Next
+                  <ArrowRightIcon className="h-5 w-5" />
+                </motion.button>
+              ) : (
+                <motion.button
+                  type="submit"
+                  disabled={loading || videoUploading || imageUploading || Object.values(castImageUploading).some((v) => v)}
+                  className={`flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-indigo-500 text-white font-medium rounded-lg hover:from-green-600 hover:to-indigo-600 transition-all disabled:opacity-70`}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  {loading ? (
+                    <>
+                      <svg
+                        className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      Uploading...
+                    </>
+                  ) : (
+                    "Submit Movie"
+                  )}
+                </motion.button>
+              )}
+            </div>
+          </form>
+        </motion.div>
       </motion.div>
     </div>
   );

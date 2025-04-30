@@ -19,5 +19,5 @@ export function middleware(req) {
 
 // Apply middleware only to these routes
 export const config = {
-  matcher: ["/dashbord",]
+  matcher: ["/dashboard",]
 };

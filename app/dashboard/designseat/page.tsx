@@ -1,6 +1,6 @@
 "use client";
-import React from "react";
-import { useState, useEffect, useContext, useRef, useCallback, useMemo } from "react";
+
+import React, { useState, useEffect, useContext, useRef, useCallback, useMemo } from "react";
 import { db } from "../../firebaseconfig";
 import { collection, addDoc, getDocs, query, where, updateDoc, doc, Timestamp } from "firebase/firestore";
 import { Loader2, Armchair, Save, Download, Projector, RotateCw, RotateCcw } from "lucide-react";
@@ -383,14 +383,23 @@ export default function CinemaSeatArrangement() {
       }
 
       const from = searchParams.get("from");
+      // Preserve form data in localStorage before redirecting
       if (from === "videoUploadDetail") {
-        router.push("/dashboard/videoUploadDetail");
+        const savedFormData = localStorage.getItem("videoUploadFormData");
+        if (savedFormData) {
+          localStorage.setItem("videoUploadFormData", savedFormData);
+        }
+        router.push("/dashboard/videoUploadDetail?from=designseat");
       } else {
         router.push("/dashboard");
       }
     } catch (error: any) {
       console.error("Error saving arrangement:", error.message);
-      toast.error("Failed to save arrangement. Please try again.");
+      toast.error("Failed to save arrangement. Please try again.", {
+        position: "top-right",
+        autoClose: 3000,
+        theme: theme === "light" ? "light" : "dark",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -426,7 +435,7 @@ export default function CinemaSeatArrangement() {
     }
   };
 
-  // New Functionality: Reset custom layout
+  // Reset custom layout
   const resetLayout = () => {
     const { seats, rows, cols } = generateSeats(totalSeats, "custom");
     setSeats(seats);
@@ -440,7 +449,7 @@ export default function CinemaSeatArrangement() {
     });
   };
 
-  // New Functionality: Load arrangement
+  // Load arrangement
   const loadArrangement = (arrangement: Arrangement) => {
     setTotalSeats(arrangement.totalSeats);
     setLayoutType(arrangement.layoutType);
@@ -453,6 +462,21 @@ export default function CinemaSeatArrangement() {
       autoClose: 3000,
       theme: theme === "light" ? "light" : "dark",
     });
+  };
+
+  // Handle back navigation
+  const handleBack = () => {
+    const from = searchParams.get("from");
+    if (from === "videoUploadDetail") {
+      // Preserve form data in localStorage
+      const savedFormData = localStorage.getItem("videoUploadFormData");
+      if (savedFormData) {
+        localStorage.setItem("videoUploadFormData", savedFormData);
+      }
+      router.push("/dashboard/videoUploadDetail?from=designseat");
+    } else {
+      router.push("/dashboard");
+    }
   };
 
   // Loading state
@@ -743,7 +767,6 @@ export default function CinemaSeatArrangement() {
                   </>
                 )}
               </motion.button>
-              {/* New: Reset Layout Button */}
               <motion.button
                 onClick={resetLayout}
                 className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg shadow-md transition-colors ${
@@ -768,7 +791,6 @@ export default function CinemaSeatArrangement() {
           )}
         </div>
 
-        {/* New: Saved Arrangement Section */}
         {savedArrangement && (
           <motion.div
             className={`mt-6 p-6 rounded-lg ${
@@ -834,7 +856,7 @@ export default function CinemaSeatArrangement() {
         )}
 
         <motion.button
-          onClick={() => router.push("/dashboard")}
+          onClick={handleBack}
           className={`mt-6 flex items-center gap-2 px-4 py-3 rounded-lg shadow-md transition-colors ${
             theme === "light"
               ? "bg-gradient-to-r from-gray-600 to-gray-700 text-white hover:from-gray-700 hover:to-gray-800"

@@ -193,7 +193,7 @@ export default function Dashboard() {
   };
 
   const handleMovieClick = (movieID) => {
-    router.push(`/dashboard/videodetail/${movieID}`);
+    router.push(`/dashboard/videodetial/${movieID}`);
   };
 
   const handleShowMore = () => {

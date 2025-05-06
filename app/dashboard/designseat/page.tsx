@@ -3,11 +3,13 @@
 import React, { useState, useEffect, useContext, useRef, useCallback, useMemo } from "react";
 import { db } from "../../firebaseconfig";
 import { collection, addDoc, getDocs, query, where, updateDoc, doc, Timestamp } from "firebase/firestore";
-import { Loader2, Armchair, Save, Download, Projector, RotateCw, RotateCcw } from "lucide-react";
+import { PuffLoader } from "react-spinners";
+import { Armchair, Save, Download, RotateCcw } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { ThemeContext } from "../../context/ThemeContext";
-import { toast } from "react-toastify";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 // Types
 interface Seat {
@@ -17,12 +19,7 @@ interface Seat {
   col: number;
   x?: number;
   y?: number;
-}
-
-interface Stage {
-  x: number;
-  y: number;
-  rotation: number;
+  reserved: boolean;
 }
 
 interface Arrangement {
@@ -30,9 +27,10 @@ interface Arrangement {
   totalSeats: number;
   layoutType: "rows" | "grid" | "custom";
   seats: Seat[];
-  stage?: Stage;
   createdAt: string | Timestamp;
   userEmail: string;
+  rows?: number;
+  cols?: number;
 }
 
 interface Errors {
@@ -44,15 +42,17 @@ export default function CinemaSeatArrangement() {
   const [totalSeats, setTotalSeats] = useState<number>(0);
   const [layoutType, setLayoutType] = useState<"rows" | "grid" | "custom">("custom");
   const [seats, setSeats] = useState<Seat[]>([]);
-  const [stage, setStage] = useState<Stage>({ x: 0, y: -80, rotation: 0 });
   const [rows, setRows] = useState<number>(0);
   const [cols, setCols] = useState<number>(0);
+  const [inputRows, setInputRows] = useState<number>(0);
+  const [inputCols, setInputCols] = useState<number>(0);
   const [errors, setErrors] = useState<Errors>({});
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [savedArrangement, setSavedArrangement] = useState<Arrangement | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState<boolean>(true);
   const [userEmail, setUserEmail] = useState<string>("");
+  const [userRole, setUserRole] = useState<string>("");
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -70,52 +70,85 @@ export default function CinemaSeatArrangement() {
           credentials: "include",
         });
         if (!response.ok) {
-          throw new Error(`HTTP error ${response.status}: Failed to validate owner authentication`);
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage = errorData.error || "Unauthorized access. Please log in.";
+          toast.error(errorMessage, {
+            position: "bottom-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+          });
+          throw new Error(errorMessage);
         }
         const data = await response.json();
         if (data.email && data.role === "owner") {
           setIsAuthenticated(true);
           setUserEmail(data.email);
+          setUserRole(data.role);
         } else {
+          toast.error("User is not an owner.", {
+            position: "bottom-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+          });
           throw new Error("User is not an owner or email is missing");
         }
-      } catch (error: any) {
-        console.error("Authentication error:", error.message);
-        toast.error("Authentication failed. Please log in again.");
-        router.replace("/login");
+      } catch (error) {
+        setTimeout(() => {
+          router.replace("/login");
+        }, 3500); // Delay redirect to show toast
       } finally {
         setIsLoadingAuth(false);
       }
     };
     fetchUser();
-  }, [router]);
+  }, [router, theme]);
 
   // Fetch arrangements
   const fetchArrangements = useCallback(async () => {
     if (!userEmail) {
-      console.warn("fetchArrangements: userEmail is empty, skipping query");
+      toast.warn("No user email available to fetch arrangements.", {
+        position: "bottom-right",
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === "light" ? "light" : "dark",
+      });
       return;
     }
     try {
       const q = query(collection(db, "seatArrangements"), where("userEmail", "==", userEmail));
       const querySnapshot = await getDocs(q);
       if (querySnapshot.empty) {
-        console.log(`No arrangement found for userEmail: ${userEmail}`);
         setSavedArrangement(null);
       } else {
         const arrangement = {
           id: querySnapshot.docs[0].id,
           ...querySnapshot.docs[0].data(),
         } as Arrangement;
-        console.log(`Fetched arrangement for ${userEmail}:`, arrangement);
         setSavedArrangement(arrangement);
       }
     } catch (error: any) {
-      console.error("Error fetching arrangement:", error.message);
-      toast.error("Failed to load saved arrangement. Please try again.");
-      setSavedArrangement(null);
+      toast.error("Failed to load saved arrangement.", {
+        position: "bottom-right",
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === "light" ? "light" : "dark",
+      });
     }
-  }, [userEmail]);
+  }, [userEmail, theme]);
 
   useEffect(() => {
     if (isAuthenticated && userEmail) {
@@ -125,28 +158,33 @@ export default function CinemaSeatArrangement() {
 
   // Generate seats
   const generateSeats = useMemo(() => {
-    return (totalSeats: number, layoutType: "rows" | "grid" | "custom") => {
+    return (totalSeats: number, layoutType: "rows" | "grid" | "custom", rows: number, cols: number) => {
       if (totalSeats <= 0) return { seats: [], rows: 0, cols: 0 };
 
-      let newRows = 0;
-      let newCols = 0;
+      let newRows = rows;
+      let newCols = cols;
       const newSeats: Seat[] = [];
       let seatNumber = 1;
 
-      if (layoutType === "rows") {
-        newRows = Math.ceil(totalSeats / 10);
-        newCols = Math.min(totalSeats, 10);
-        for (let i = 0; i < newRows; i++) {
-          for (let j = 0; j < (i === newRows - 1 ? totalSeats % 10 || 10 : 10); j++) {
-            newSeats.push({ id: `${i}-${j}`, number: seatNumber++, row: i, col: j });
-          }
+      if (layoutType === "rows" || layoutType === "grid") {
+        if (rows <= 0 || cols <= 0) {
+          newCols = Math.ceil(Math.sqrt(totalSeats));
+          newRows = Math.ceil(totalSeats / newCols);
+        } else {
+          newRows = rows;
+          newCols = cols;
         }
-      } else if (layoutType === "grid") {
-        newCols = Math.ceil(Math.sqrt(totalSeats));
-        newRows = Math.ceil(totalSeats / newCols);
+        const maxSeats = newRows * newCols;
+        if (totalSeats > maxSeats) {
+          setErrors((prev) => ({
+            ...prev,
+            totalSeats: `Total seats cannot exceed ${maxSeats} for ${rows} rows and ${cols} columns.`,
+          }));
+          return { seats: [], rows: newRows, cols: newCols };
+        }
         for (let i = 0; i < newRows; i++) {
           for (let j = 0; j < newCols && newSeats.length < totalSeats; j++) {
-            newSeats.push({ id: `${i}-${j}`, number: seatNumber++, row: i, col: j });
+            newSeats.push({ id: `${i}-${j}`, number: seatNumber++, row: i, col: j, reserved: false });
           }
         }
       } else if (layoutType === "custom") {
@@ -161,6 +199,7 @@ export default function CinemaSeatArrangement() {
               col: j,
               x: j * 80,
               y: i * 80 + 80,
+              reserved: false,
             });
           }
         }
@@ -171,12 +210,11 @@ export default function CinemaSeatArrangement() {
   }, []);
 
   useEffect(() => {
-    const { seats, rows, cols } = generateSeats(totalSeats, layoutType);
+    const { seats, rows, cols } = generateSeats(totalSeats, layoutType, inputRows, inputCols);
     setSeats(seats);
     setRows(rows);
     setCols(cols);
-    setStage(layoutType === "custom" ? { x: 0, y: -80, rotation: 0 } : { x: 0, y: 0, rotation: 0 });
-  }, [totalSeats, layoutType, generateSeats]);
+  }, [totalSeats, layoutType, inputRows, inputCols, generateSeats]);
 
   // Validate form
   const validateForm = () => {
@@ -184,33 +222,16 @@ export default function CinemaSeatArrangement() {
     if (totalSeats <= 0) newErrors.totalSeats = "Total seats must be greater than 0.";
     if (totalSeats > 500) newErrors.totalSeats = "Total seats cannot exceed 500.";
     if (!layoutType) newErrors.layoutType = "Please select a layout type.";
+    if ((layoutType === "rows" || layoutType === "grid") && inputRows <= 0)
+      newErrors.rows = "Rows must be greater than 0.";
+    if ((layoutType === "rows" || layoutType === "grid") && inputCols <= 0)
+      newErrors.cols = "Columns must be greater than 0.";
     if (!userEmail) newErrors.general = "User email not available.";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // Collision detection
-  const isCollidingWithSeats = (stageX: number, stageY: number, stageRotation: number) => {
-    const stageWidth = stageRotation === 90 ? 80 : 200;
-    const stageHeight = stageRotation === 90 ? 200 : 80;
-    const seatSize = 60;
-
-    for (const seat of seats) {
-      const seatX = seat.x || 0;
-      const seatY = seat.y || 0;
-
-      if (
-        stageX < seatX + seatSize &&
-        stageX + stageWidth > seatX &&
-        stageY < seatY + seatSize &&
-        stageY + stageHeight > seatY
-      ) {
-        return true;
-      }
-    }
-    return false;
-  };
-
+  // Collision detection for seats
   const isCollidingWithOtherSeats = (seatId: string, newX: number, newY: number) => {
     const seatSize = 60;
     for (const otherSeat of seats) {
@@ -227,6 +248,15 @@ export default function CinemaSeatArrangement() {
       }
     }
     return false;
+  };
+
+  // Handle seat reservation
+  const handleSeatClick = (seatId: string) => {
+    setSeats((prevSeats) =>
+      prevSeats.map((seat) =>
+        seat.id === seatId ? { ...seat, reserved: !seat.reserved } : seat
+      )
+    );
   };
 
   // Drag-and-drop handlers
@@ -248,59 +278,24 @@ export default function CinemaSeatArrangement() {
       newX = Math.max(0, Math.min(newX, containerRect.width - 60));
       newY = Math.max(0, Math.min(newY, containerRef.current.scrollHeight - 60));
 
-      if (draggingId === "stage") {
-        newX -= 70;
-        newY -= 10;
-        newX = Math.max(0, Math.min(newX, containerRect.width - (stage.rotation === 90 ? 80 : 200)));
-        newY = Math.max(-80, Math.min(newY, containerRef.current.scrollHeight - (stage.rotation === 90 ? 200 : 80)));
-        if (!isCollidingWithSeats(newX, newY, stage.rotation)) {
-          setStage((prev) => ({ ...prev, x: newX, y: newY }));
-        }
-      } else {
-        const stageX = stage.x;
-        const stageY = stage.y;
-        const stageWidth = stage.rotation === 90 ? 80 : 200;
-        const stageHeight = stage.rotation === 90 ? 200 : 80;
-        const seatSize = 60;
-        if (
-          !(
-            newX < stageX + stageWidth &&
-            newX + seatSize > stageX &&
-            newY < stageY + stageHeight &&
-            newY + seatSize > stageY
-          ) &&
-          !isCollidingWithOtherSeats(draggingId, newX, newY)
-        ) {
-          setSeats((prevSeats) =>
-            prevSeats.map((seat) =>
-              seat.id === draggingId ? { ...seat, x: newX, y: newY } : seat
-            )
-          );
-        }
+      if (!isCollidingWithOtherSeats(draggingId, newX, newY)) {
+        setSeats((prevSeats) =>
+          prevSeats.map((seat) =>
+            seat.id === draggingId ? { ...seat, x: newX, y: newY } : seat
+          )
+        );
       }
     },
-    [draggingId, layoutType, stage, seats]
+    [draggingId, layoutType, seats]
   );
 
   const handleMouseUp = () => {
     setDraggingId(null);
   };
 
-  // Rotate stage
-  const rotateStage = () => {
-    setStage((prev) => ({
-      ...prev,
-      rotation: prev.rotation === 0 ? 90 : 0,
-    }));
-  };
-
   // Keyboard navigation
   const handleKeyDown = (id: string, e: React.KeyboardEvent) => {
     if (layoutType !== "custom" || !containerRef.current) return;
-    if (id === "stage" && e.key === "r") {
-      rotateStage();
-      return;
-    }
     const gridSize = 80;
     setSeats((prevSeats) =>
       prevSeats.map((seat) => {
@@ -314,17 +309,7 @@ export default function CinemaSeatArrangement() {
         const containerRect = containerRef.current!.getBoundingClientRect();
         newX = Math.max(0, Math.min(newX, containerRect.width - 60));
         newY = Math.max(0, Math.min(newY, containerRef.current.scrollHeight - 60));
-        const stageWidth = stage.rotation === 90 ? 80 : 200;
-        const stageHeight = stage.rotation === 90 ? 200 : 80;
-        if (
-          !isCollidingWithOtherSeats(id, newX, newY) &&
-          !(
-            newX < stage.x + stageWidth &&
-            newX + 60 > stage.x &&
-            newY < stage.y + stageHeight &&
-            newY + 60 > stage.y
-          )
-        ) {
+        if (!isCollidingWithOtherSeats(id, newX, newY)) {
           return { ...seat, x: newX, y: newY };
         }
         return seat;
@@ -354,7 +339,8 @@ export default function CinemaSeatArrangement() {
         seats,
         createdAt: Timestamp.now(),
         userEmail,
-        ...(layoutType === "custom" ? { stage } : {}),
+        rows: inputRows,
+        cols: inputCols,
       };
 
       const q = query(collection(db, "seatArrangements"), where("userEmail", "==", userEmail));
@@ -368,22 +354,29 @@ export default function CinemaSeatArrangement() {
         await updateDoc(docRef, arrangement);
         setSavedArrangement({ id: docId, ...arrangement });
         toast.success("Arrangement updated successfully!", {
-          position: "top-right",
+          position: "bottom-right",
           autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
           theme: theme === "light" ? "light" : "dark",
         });
       } else {
         const docRef = await addDoc(collection(db, "seatArrangements"), arrangement);
         setSavedArrangement({ id: docRef.id, ...arrangement });
         toast.success("Arrangement saved successfully!", {
-          position: "top-right",
+          position: "bottom-right",
           autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
           theme: theme === "light" ? "light" : "dark",
         });
       }
 
       const from = searchParams.get("from");
-      // Preserve form data in localStorage before redirecting
       if (from === "videoUploadDetail") {
         const savedFormData = localStorage.getItem("videoUploadFormData");
         if (savedFormData) {
@@ -394,10 +387,13 @@ export default function CinemaSeatArrangement() {
         router.push("/dashboard");
       }
     } catch (error: any) {
-      console.error("Error saving arrangement:", error.message);
-      toast.error("Failed to save arrangement. Please try again.", {
-        position: "top-right",
+      toast.error("Failed to save arrangement.", {
+        position: "bottom-right",
         autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
         theme: theme === "light" ? "light" : "dark",
       });
     } finally {
@@ -407,7 +403,7 @@ export default function CinemaSeatArrangement() {
 
   // Export to JSON
   const exportToJson = () => {
-    const data = { totalSeats, layoutType, seats, stage };
+    const data = { totalSeats, layoutType, seats, rows: inputRows, cols: inputCols };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -427,24 +423,49 @@ export default function CinemaSeatArrangement() {
         setErrors((prev) => ({ ...prev, totalSeats: "Please enter a valid number." }));
       } else {
         setTotalSeats(numValue);
-        setErrors((prev) => ({ ...prev, totalSeats: "" }));
+        setErrors((prev) => ({ ...prev, totalSeats: undefined }));
       }
     } else if (name === "layoutType") {
       setLayoutType(value as "rows" | "grid" | "custom");
-      setErrors((prev) => ({ ...prev, layoutType: "" }));
+      setErrors((prev) => ({ ...prev, layoutType: undefined }));
+      if (value === "custom") {
+        setInputRows(0);
+        setInputCols(0);
+      }
+    } else if (name === "rows") {
+      const numValue = parseInt(value);
+      if (isNaN(numValue)) {
+        setInputRows(0);
+        setErrors((prev) => ({ ...prev, rows: "Please enter a valid number." }));
+      } else {
+        setInputRows(numValue);
+        setErrors((prev) => ({ ...prev, rows: undefined }));
+      }
+    } else if (name === "cols") {
+      const numValue = parseInt(value);
+      if (isNaN(numValue)) {
+        setInputCols(0);
+        setErrors((prev) => ({ ...prev, cols: "Please enter a valid number." }));
+      } else {
+        setInputCols(numValue);
+        setErrors((prev) => ({ ...prev, cols: undefined }));
+      }
     }
   };
 
   // Reset custom layout
   const resetLayout = () => {
-    const { seats, rows, cols } = generateSeats(totalSeats, "custom");
+    const { seats, rows, cols } = generateSeats(totalSeats, "custom", inputRows, inputCols);
     setSeats(seats);
     setRows(rows);
     setCols(cols);
-    setStage({ x: 0, y: -80, rotation: 0 });
     toast.info("Layout reset to default.", {
-      position: "top-right",
+      position: "bottom-right",
       autoClose: 3000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
       theme: theme === "light" ? "light" : "dark",
     });
   };
@@ -454,12 +475,17 @@ export default function CinemaSeatArrangement() {
     setTotalSeats(arrangement.totalSeats);
     setLayoutType(arrangement.layoutType);
     setSeats(arrangement.seats);
-    setStage(arrangement.stage || { x: 0, y: -80, rotation: 0 });
+    setInputRows(arrangement.rows || 0);
+    setInputCols(arrangement.cols || 0);
     setRows(Math.max(...arrangement.seats.map((s) => s.row)) + 1 || 0);
     setCols(Math.max(...arrangement.seats.map((s) => s.col)) + 1 || 0);
     toast.success("Arrangement loaded successfully!", {
-      position: "top-right",
+      position: "bottom-right",
       autoClose: 3000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
       theme: theme === "light" ? "light" : "dark",
     });
   };
@@ -468,7 +494,6 @@ export default function CinemaSeatArrangement() {
   const handleBack = () => {
     const from = searchParams.get("from");
     if (from === "videoUploadDetail") {
-      // Preserve form data in localStorage
       const savedFormData = localStorage.getItem("videoUploadFormData");
       if (savedFormData) {
         localStorage.setItem("videoUploadFormData", savedFormData);
@@ -480,22 +505,39 @@ export default function CinemaSeatArrangement() {
   };
 
   // Loading state
-  if (isLoadingAuth) {
+  if (isLoadingAuth || !isAuthenticated || userRole !== "owner") {
     return (
-      <div
-        className={`min-h-screen flex items-center justify-center ${
-          theme === "light"
-            ? "bg-gradient-to-br from-indigo-50 to-purple-50"
-            : "bg-gradient-to-br from-gray-900 to-indigo-900"
-        }`}
-      >
-        <Loader2 className="h-12 w-12 animate-spin text-indigo-600" />
+      <div className={`min-h-screen flex items-center justify-center ${theme === "light" ? "bg-zinc-100" : "bg-zinc-900"}`}>
+        <motion.div
+          className="flex flex-col items-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <PuffLoader color={theme === "light" ? "#3b82f6" : "#FFFFFF"} size={100} />
+          <motion.p
+            className={`mt-4 text-2xl font-bold ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5, duration: 0.5 }}
+          >
+            Loading seat arrangement...
+          </motion.p>
+        </motion.div>
+        <ToastContainer
+          position="bottom-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme={theme === "light" ? "light" : "dark"}
+        />
       </div>
     );
-  }
-
-  if (!isAuthenticated) {
-    return null;
   }
 
   return (
@@ -506,6 +548,18 @@ export default function CinemaSeatArrangement() {
           : "bg-gradient-to-br from-gray-900 to-indigo-900"
       } flex items-center justify-center`}
     >
+      <ToastContainer
+        position="bottom-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme={theme === "light" ? "light" : "dark"}
+      />
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -576,7 +630,60 @@ export default function CinemaSeatArrangement() {
             {errors.layoutType && <p className="mt-2 text-sm text-red-500">{errors.layoutType}</p>}
           </div>
 
-          <div className="flex items-end gap-4">
+          {(layoutType === "rows" || layoutType === "grid") && (
+            <>
+              <div>
+                <label
+                  className={`block text-sm font-medium mb-2 ${
+                    theme === "light" ? "text-indigo-700" : "text-indigo-300"
+                  }`}
+                >
+                  Rows
+                </label>
+                <input
+                  type="number"
+                  name="rows"
+                  value={inputRows}
+                  onChange={handleInputChange}
+                  min="0"
+                  className={`w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 transition-all duration-200 ${
+                    errors.rows
+                      ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
+                      : theme === "light"
+                      ? "border border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 bg-white"
+                      : "border border-gray-600 focus:border-indigo-500 focus:ring-indigo-500 bg-gray-700"
+                  }`}
+                />
+                {errors.rows && <p className="mt-2 text-sm text-red-500">{errors.rows}</p>}
+              </div>
+              <div>
+                <label
+                  className={`block text-sm font-medium mb-2 ${
+                    theme === "light" ? "text-indigo-700" : "text-indigo-300"
+                  }`}
+                >
+                  Columns
+                </label>
+                <input
+                  type="number"
+                  name="cols"
+                  value={inputCols}
+                  onChange={handleInputChange}
+                  min="0"
+                  className={`w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 transition-all duration-200 ${
+                    errors.cols
+                      ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
+                      : theme === "light"
+                      ? "border border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 bg-white"
+                      : "border border-gray-600 focus:border-indigo-500 focus:ring-indigo-500 bg-gray-700"
+                  }`}
+                />
+                {errors.cols && <p className="mt-2 text-sm text-red-500">{errors.cols}</p>}
+              </div>
+            </>
+          )}
+
+          <div className="flex items-end gap-4 md:col-span-3">
             <motion.button
               onClick={saveArrangement}
               disabled={isLoading}
@@ -592,7 +699,7 @@ export default function CinemaSeatArrangement() {
             >
               {isLoading ? (
                 <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <PuffLoader className="h-5 w-5 animate-spin" size={20} color="#FFFFFF" />
                   Saving...
                 </>
               ) : (
@@ -619,20 +726,16 @@ export default function CinemaSeatArrangement() {
           </div>
         </div>
 
-        {errors.general && (
-          <p className="mb-4 text-sm text-red-500">{errors.general}</p>
-        )}
+        {errors.general && <p className="mb-4 text-sm text-red-500">{errors.general}</p>}
 
         <div className="flex flex-col md:flex-row gap-6">
           <div
             ref={containerRef}
             className={`relative flex-1 border-2 rounded-lg overflow-auto ${
-              theme === "light"
-                ? "bg-gray-50 border-gray-300"
-                : "bg-gray-700 border-gray-600"
+              theme === "light" ? "bg-gray-50 border-gray-300" : "bg-gray-700 border-gray-600"
             }`}
             style={{
-              minHeight: layoutType === "custom" ? `${rows * 80 + 240}px` : `${rows * 80 + 160}px`,
+              minHeight: `${rows * 80 + 160}px`,
               background:
                 layoutType === "custom"
                   ? theme === "light"
@@ -642,51 +745,21 @@ export default function CinemaSeatArrangement() {
             }}
           >
             {layoutType === "custom" ? (
-              <motion.div
-                className={`absolute flex items-center justify-center bg-gradient-to-r ${
-                  theme === "light"
-                    ? "from-indigo-500 to-purple-500"
-                    : "from-indigo-700 to-purple-700"
-                } text-white font-semibold rounded-lg shadow-md cursor-move`}
-                style={{
-                  width: stage.rotation === 90 ? 80 : 200,
-                  height: stage.rotation === 90 ? 200 : 80,
-                  transform: `translate(${stage.x}px, ${stage.y}px) rotate(${stage.rotation}deg)`,
-                }}
-                onMouseDown={(e) => handleMouseDown("stage", e)}
-                onKeyDown={(e) => handleKeyDown("stage", e)}
-                tabIndex={0}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Projector className="h-6 w-6 mr-2" />
-                Stage
-              </motion.div>
-            ) : (
-              <motion.div
-                className={`w-full h-20 mb-4 rounded-lg flex items-center justify-center text-sm font-medium ${
-                  theme === "light" ? "bg-gradient-to-r from-gray-800 to-gray-900 text-white" : "bg-gradient-to-r from-gray-900 to-black text-gray-200"
-                } shadow-lg`}
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4 }}
-              >
-                <Projector className="w-6 h-6 mr-2" />
-                Cinema Stage / Screen
-              </motion.div>
-            )}
-
-            {layoutType === "custom" ? (
               seats.map((seat) => (
                 <motion.div
                   key={seat.id}
                   className={`absolute flex items-center justify-center w-[60px] h-[60px] rounded-lg shadow-md cursor-move ${
-                    theme === "light"
+                    seat.reserved
+                      ? theme === "light"
+                        ? "bg-gradient-to-r from-red-400 to-red-500 text-white"
+                        : "bg-gradient-to-r from-red-600 to-red-700 text-white"
+                      : theme === "light"
                       ? "bg-gradient-to-r from-blue-400 to-blue-500 text-white"
                       : "bg-gradient-to-r from-blue-600 to-blue-700 text-white"
                   }`}
                   style={{ left: seat.x, top: seat.y }}
                   onMouseDown={(e) => handleMouseDown(seat.id, e)}
+                  onClick={() => handleSeatClick(seat.id)}
                   onKeyDown={(e) => handleKeyDown(seat.id, e)}
                   tabIndex={0}
                   whileHover={{ scale: 1.05 }}
@@ -713,20 +786,23 @@ export default function CinemaSeatArrangement() {
                         transition={{ duration: 0.3 }}
                       >
                         {seat && (
-                          <>
-                            <motion.div
-                              className={`w-[60px] h-[60px] rounded-lg flex items-center justify-center ${
-                                theme === "light"
+                          <motion.div
+                            className={`w-[60px] h-[60px] rounded-lg flex items-center justify-center ${
+                              seat.reserved
+                                ? theme === "light"
+                                  ? "bg-gradient-to-r from-red-400 to-red-500 text-white"
+                                  : "bg-gradient-to-r from-red-600 to-red-700 text-white"
+                                : theme === "light"
                                   ? "bg-gradient-to-r from-blue-400 to-blue-500 text-white"
                                   : "bg-gradient-to-r from-blue-600 to-blue-700 text-white"
-                              } shadow-md`}
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                            >
-                              <Armchair className="h-5 w-5 mr-1" />
-                              {seat.number}
-                            </motion.div>
-                          </>
+                            } shadow-md`}
+                            onClick={() => handleSeatClick(seat.id)}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            <Armchair className="h-5 w-5 mr-1" />
+                            {seat.number}
+                          </motion.div>
                         )}
                       </motion.div>
                     );
@@ -743,30 +819,8 @@ export default function CinemaSeatArrangement() {
                   theme === "light" ? "text-indigo-900" : "text-white"
                 }`}
               >
-                Stage Controls
+                Seat Controls
               </h2>
-              <motion.button
-                onClick={rotateStage}
-                className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg shadow-md transition-colors ${
-                  theme === "light"
-                    ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700"
-                    : "bg-gradient-to-r from-indigo-700 to-purple-700 text-white hover:from-indigo-800 hover:to-purple-800"
-                }`}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                {stage.rotation === 0 ? (
-                  <>
-                    <RotateCw className="h-5 w-5" />
-                    Rotate Right
-                  </>
-                ) : (
-                  <>
-                    <RotateCcw className="h-5 w-5" />
-                    Rotate Left
-                  </>
-                )}
-              </motion.button>
               <motion.button
                 onClick={resetLayout}
                 className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg shadow-md transition-colors ${
@@ -785,7 +839,7 @@ export default function CinemaSeatArrangement() {
                   theme === "light" ? "text-indigo-600" : "text-indigo-400"
                 }`}
               >
-                Click and drag seats or stage to reposition. Use arrow keys to move seats, or press 'R' to rotate the stage.
+                Click and drag seats to reposition. Use arrow keys to move seats.
               </p>
             </div>
           )}
@@ -820,6 +874,15 @@ export default function CinemaSeatArrangement() {
                 >
                   {savedArrangement.totalSeats} Seats ({savedArrangement.layoutType})
                 </p>
+                {savedArrangement.rows && savedArrangement.cols && (
+                  <p
+                    className={`text-sm ${
+                      theme === "light" ? "text-indigo-600" : "text-indigo-400"
+                    }`}
+                  >
+                    Layout: {savedArrangement.rows} Rows x {savedArrangement.cols} Columns
+                  </p>
+                )}
                 <p
                   className={`text-sm ${
                     theme === "light" ? "text-indigo-600" : "text-indigo-400"

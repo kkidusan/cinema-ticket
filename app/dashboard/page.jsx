@@ -9,6 +9,8 @@ import Footer from "../componet/Footer";
 import { PuffLoader } from "react-spinners";
 import ThemeToggle from "../componet/ThemeToggle";
 import { ThemeContext } from "../context/ThemeContext";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 export default function Dashboard() {
   const [userEmail, setUserEmail] = useState("");
@@ -51,7 +53,7 @@ export default function Dashboard() {
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   // Prevent body scrolling and apply blur to main content when mobile menu is open
@@ -83,12 +85,22 @@ export default function Dashboard() {
       try {
         const response = await fetch("/api/validate?role=owner", {
           method: "GET",
-          credentials: "include", // Ensure cookies (owner_token) are sent
+          credentials: "include",
         });
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || "Failed to validate owner authentication");
+          const errorMessage = errorData.error || "Unauthorized access. Please log in.";
+          toast.error(errorMessage, {
+            position: "top-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+          });
+          throw new Error(errorMessage);
         }
 
         const data = await response.json();
@@ -97,17 +109,29 @@ export default function Dashboard() {
           setUserRole(data.role);
           setIsAuthenticated(true);
         } else {
-          throw new Error("User is not an owner or email is missing in response");
+          const errorMessage = "User is not an owner or email is missing.";
+          toast.error(errorMessage, {
+            position: "top-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+          });
+          throw new Error(errorMessage);
         }
       } catch (error) {
-        console.error("Owner authentication error:", error.message);
-        router.replace("/login");
+        // Suppress console.error and rely on toast
+        setTimeout(() => {
+          router.replace("/login");
+        }, 3500); // Delay redirect to show toast
       } finally {
         setLoading(false);
       }
     };
     fetchUser();
-  }, [router]);
+  }, [router, theme]);
 
   // Fetch user data, movies, and messages
   useEffect(() => {
@@ -121,7 +145,11 @@ export default function Dashboard() {
           setUserData(querySnapshot.docs[0].data());
         }
       } catch (error) {
-        console.error("Error fetching user data:", error);
+        toast.error("Failed to fetch user data.", {
+          position: "top-right",
+          autoClose: 3000,
+          theme: theme === "light" ? "light" : "dark",
+        });
       }
     };
 
@@ -131,7 +159,11 @@ export default function Dashboard() {
         const querySnapshot = await getDocs(q);
         setUserMovies(querySnapshot.docs.map((doc) => doc.data()));
       } catch (error) {
-        console.error("Error fetching movies:", error);
+        toast.error("Failed to fetch movies.", {
+          position: "top-right",
+          autoClose: 3000,
+          theme: theme === "light" ? "light" : "dark",
+        });
       }
     };
 
@@ -148,7 +180,11 @@ export default function Dashboard() {
           setMessages(querySnapshot.docs.map((doc) => doc.data()));
         });
       } catch (error) {
-        console.error("Error fetching messages:", error);
+        toast.error("Failed to fetch messages.", {
+          position: "top-right",
+          autoClose: 3000,
+          theme: theme === "light" ? "light" : "dark",
+        });
       }
     };
 
@@ -156,7 +192,7 @@ export default function Dashboard() {
     fetchMovies();
     const unsubscribeMessages = fetchMessages();
     return () => unsubscribeMessages && unsubscribeMessages();
-  }, [isAuthenticated, userEmail, userRole]);
+  }, [isAuthenticated, userEmail, userRole, theme]);
 
   // Real-time listener for user approval status
   useEffect(() => {
@@ -188,7 +224,11 @@ export default function Dashboard() {
       }
       router.push("/dashboard/messages");
     } catch (error) {
-      console.error("Error updating messages:", error);
+      toast.error("Failed to update messages.", {
+        position: "top-right",
+        autoClose: 3000,
+        theme: theme === "light" ? "light" : "dark",
+      });
     }
   };
 
@@ -208,15 +248,24 @@ export default function Dashboard() {
     try {
       const response = await fetch("/api/logout", {
         method: "POST",
-        credentials: "include", // Ensure cookies are sent
+        credentials: "include",
       });
       if (response.ok) {
+        toast.success("Logged out successfully.", {
+          position: "top-right",
+          autoClose: 2000,
+          theme: theme === "light" ? "light" : "dark",
+        });
         router.replace("/");
       } else {
         throw new Error("Logout failed");
       }
     } catch (error) {
-      console.error("Logout error:", error);
+      toast.error("Failed to log out.", {
+        position: "top-right",
+        autoClose: 3000,
+        theme: theme === "light" ? "light" : "dark",
+      });
     }
   };
 
@@ -225,7 +274,7 @@ export default function Dashboard() {
     averageRating: userMovies.length
       ? (userMovies.reduce((sum, m) => sum + (m.rating || 0), 0) / userMovies.length).toFixed(1)
       : 0,
-    mostPopularGenre: "Action", // Placeholder; could be computed dynamically
+    mostPopularGenre: "Action",
     totalViews: userMovies.reduce((sum, m) => sum + (m.views || 0), 0),
     totalLikes: userMovies.reduce((sum, m) => sum + (m.likes || 0), 0),
     totalComments: userMovies.reduce((sum, m) => sum + (m.comments || 0), 0),
@@ -253,7 +302,18 @@ export default function Dashboard() {
 
   return (
     <div className={`min-h-screen flex flex-col ${theme === "light" ? "bg-zinc-50" : "bg-gray-900"}`}>
-      {/* Navigation Header */}
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme={theme === "light" ? "light" : "dark"}
+      />
       <nav
         className={`fixed w-full ${
           theme === "light" ? "bg-gradient-to-r from-white to-gray-50" : "bg-gradient-to-r from-gray-800 to-gray-900"
@@ -268,7 +328,6 @@ export default function Dashboard() {
           >
             {userData ? `${userData.firstName} ${userData.lastName}` : "Loading..."}
           </motion.div>
-          {/* Desktop Navigation */}
           <div className="hidden sm:flex items-center space-x-4">
             <motion.div className="relative group" whileHover={{ scale: 1.1 }} transition={{ type: "spring", stiffness: 400 }}>
               <button
@@ -368,7 +427,6 @@ export default function Dashboard() {
               </AnimatePresence>
             </motion.div>
           </div>
-          {/* Mobile Navigation Toggle */}
           <motion.div
             className="sm:hidden"
             whileHover={{ scale: 1.1 }}
@@ -407,7 +465,6 @@ export default function Dashboard() {
             </button>
           </motion.div>
         </div>
-        {/* Mobile Menu */}
         <AnimatePresence>
           {isMobileMenuOpen && (
             <motion.div
@@ -484,8 +541,6 @@ export default function Dashboard() {
           )}
         </AnimatePresence>
       </nav>
-
-      {/* Dashboard Content */}
       <div ref={mainContentRef}>
         {isApproved === false ? (
           <div className={`min-h-screen flex items-center justify-center ${theme === "light" ? "bg-zinc-50" : "bg-gray-900"}`}>

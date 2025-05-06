@@ -10,6 +10,7 @@ import { DollarSign, ArrowDownCircle, ArrowUpCircle, Eye, EyeOff } from 'lucide-
 import { FaArrowLeft } from 'react-icons/fa';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { motion } from 'framer-motion';
 
 const bankCodes = [
   { code: '001', name: 'Commercial Bank of Ethiopia (CBE)' },
@@ -55,27 +56,47 @@ export default function FinancePage() {
           method: 'GET',
           credentials: 'include',
         });
-        if (!response.ok) throw new Error('Unauthorized');
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage = errorData.error || 'Unauthorized access. Please log in.';
+          toast.error(errorMessage, {
+            position: 'bottom-right',
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === 'light' ? 'light' : 'dark',
+          });
+          throw new Error(errorMessage);
+        }
         const data = await response.json();
         if (data.email && data.role === 'owner') {
           setUserEmail(data.email);
           setUserRole(data.role);
           setIsAuthenticated(true);
         } else {
+          toast.error('User is not an owner.', {
+            position: 'bottom-right',
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === 'light' ? 'light' : 'dark',
+          });
           throw new Error('Invalid user');
         }
       } catch (error) {
-        console.error('Authentication error:', error);
-        toast.error('Authentication failed. Please log in.', {
-          position: 'top-right',
-        });
-        router.replace('/login');
+        setTimeout(() => {
+          router.replace('/login');
+        }, 3500); // Delay redirect to show toast
       } finally {
         setLoading(false);
       }
     };
     fetchUser();
-  }, [router]);
+  }, [router, theme]);
 
   // Handle tab navigation
   useEffect(() => {
@@ -103,9 +124,14 @@ export default function FinancePage() {
       });
       setTotalBalance(total);
     } catch (err) {
-      console.error('Error fetching total balance:', err);
       toast.error('Failed to fetch balance.', {
-        position: 'top-right',
+        position: 'bottom-right',
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === 'light' ? 'light' : 'dark',
       });
     }
   };
@@ -124,16 +150,21 @@ export default function FinancePage() {
         setLoading(false);
       },
       (err) => {
-        console.error('Error fetching transactions:', err);
         toast.error('Failed to fetch transactions.', {
-          position: 'top-right',
+          position: 'bottom-right',
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: theme === 'light' ? 'light' : 'dark',
         });
         setLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, [isAuthenticated, userEmail, activeTab]);
+  }, [isAuthenticated, userEmail, activeTab, theme]);
 
   // Fetch balance when authenticated
   useEffect(() => {
@@ -155,14 +186,25 @@ export default function FinancePage() {
         return true;
       } else {
         toast.error('Balance record not found.', {
-          position: 'top-right',
+          position: 'bottom-right',
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: theme === 'light' ? 'light' : 'dark',
         });
         return false;
       }
     } catch (err) {
-      console.error('Error updating balance:', err);
       toast.error('Failed to update balance.', {
-        position: 'top-right',
+        position: 'bottom-right',
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === 'light' ? 'light' : 'dark',
       });
       return false;
     }
@@ -186,19 +228,37 @@ export default function FinancePage() {
     const amount = Number(formData.amount);
     if (!amount || amount <= 0) {
       toast.error('Please enter a valid amount greater than zero.', {
-        position: 'top-right',
+        position: 'bottom-right',
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === 'light' ? 'light' : 'dark',
       });
       return false;
     }
     if (activeTab === 'withdraw' && amount > totalBalance) {
       toast.error(`Amount cannot exceed your balance of ${totalBalance} ETB.`, {
-        position: 'top-right',
+        position: 'bottom-right',
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === 'light' ? 'light' : 'dark',
       });
       return false;
     }
     if (!formData.account_number.trim()) {
       toast.error('Please enter a valid account number or phone number.', {
-        position: 'top-right',
+        position: 'bottom-right',
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === 'light' ? 'light' : 'dark',
       });
       return false;
     }
@@ -207,27 +267,51 @@ export default function FinancePage() {
       const phoneRegex = /^\+251(9|7)\d{8}$/;
       if (!phoneRegex.test(formData.account_number)) {
         toast.error('Please enter a valid Ethiopian phone number (e.g., +2519XXXXXXXX or +2517XXXXXXXX).', {
-          position: 'top-right',
+          position: 'bottom-right',
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: theme === 'light' ? 'light' : 'dark',
         });
         return false;
       }
     } else {
       if (!formData.account_number.match(/^\d{10,20}$/)) {
         toast.error('Please enter a valid bank account number (10-20 digits).', {
-          position: 'top-right',
+          position: 'bottom-right',
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: theme === 'light' ? 'light' : 'dark',
         });
         return false;
       }
     }
     if (!formData.account_name.trim()) {
       toast.error('Please enter the account holder’s name.', {
-        position: 'top-right',
+        position: 'bottom-right',
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === 'light' ? 'light' : 'dark',
       });
       return false;
     }
     if (!formData.isMobileMoney && !formData.bank_code) {
       toast.error('Please select a bank.', {
-        position: 'top-right',
+        position: 'bottom-right',
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === 'light' ? 'light' : 'dark',
       });
       return false;
     }
@@ -290,16 +374,25 @@ export default function FinancePage() {
                 ).toLocaleString('en-US', { minimumFractionDigits: 2 })} ETB.`;
 
             toast.success(successMessage, {
-              position: 'top-right',
-              autoClose: 5000,
+              position: 'bottom-right',
+              autoClose: 3000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+              theme: theme === 'light' ? 'light' : 'dark',
             });
           } catch (firestoreError) {
-            console.error('Error registering transaction:', firestoreError);
             toast.warn(
               `Withdrawal of ${formData.amount} ETB successful, but failed to record in history. Contact support.`,
               {
-                position: 'top-right',
-                autoClose: 7000,
+                position: 'bottom-right',
+                autoClose: 3000,
+                hideProgressBar: false,
+                closeOnClick: true,
+                pauseOnHover: true,
+                draggable: true,
+                theme: theme === 'light' ? 'light' : 'dark',
               }
             );
           }
@@ -324,17 +417,26 @@ export default function FinancePage() {
               : `Deposit of ${formData.amount} ETB via bank transfer initiated successfully!`;
 
             toast.success(successMessage, {
-              position: 'top-right',
-              autoClose: 5000,
+              position: 'bottom-right',
+              autoClose: 3000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+              theme: theme === 'light' ? 'light' : 'dark',
             });
             await fetchTotalBalance();
           } catch (firestoreError) {
-            console.error('Error registering deposit transaction:', firestoreError);
             toast.warn(
               `Deposit of ${formData.amount} ETB initiated, but failed to record in history. Contact support.`,
               {
-                position: 'top-right',
-                autoClose: 7000,
+                position: 'bottom-right',
+                autoClose: 3000,
+                hideProgressBar: false,
+                closeOnClick: true,
+                pauseOnHover: true,
+                draggable: true,
+                theme: theme === 'light' ? 'light' : 'dark',
               }
             );
           }
@@ -350,7 +452,13 @@ export default function FinancePage() {
         });
       } else {
         toast.error(response.data.message || `${activeTab} failed.`, {
-          position: 'top-right',
+          position: 'bottom-right',
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: theme === 'light' ? 'light' : 'dark',
         });
       }
     } catch (err) {
@@ -360,7 +468,13 @@ export default function FinancePage() {
         ? err.response?.data?.error || `Failed to process ${activeTab}.`
         : `Failed to process ${activeTab}.`;
       toast.error(errorMessage, {
-        position: 'top-right',
+        position: 'bottom-right',
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === 'light' ? 'light' : 'dark',
       });
     } finally {
       setLoading(false);
@@ -423,8 +537,8 @@ export default function FinancePage() {
                               ? 'bg-blue-50'
                               : 'bg-gray-700'
                             : theme === 'light'
-                            ? 'bg-white'
-                            : 'bg-gray-800'
+                              ? 'bg-white'
+                              : 'bg-gray-800'
                         } hover:${
                           theme === 'light' ? 'bg-blue-100' : 'bg-gray-600'
                         } transition-colors`}
@@ -568,15 +682,37 @@ export default function FinancePage() {
     );
   };
 
-  if (loading || !isAuthenticated) {
+  if (loading || !isAuthenticated || userRole !== 'owner') {
     return (
       <div className={`min-h-screen flex items-center justify-center ${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'}`}>
-        <div className="flex flex-col items-center">
-          <PuffLoader color="#3b82f6" size={100} />
-          <p className={`mt-4 text-2xl font-bold ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}>
-            Loading...
-          </p>
-        </div>
+        <motion.div
+          className="flex flex-col items-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <PuffLoader color={theme === 'light' ? '#3b82f6' : '#FFFFFF'} size={100} />
+          <motion.p
+            className={`mt-4 text-2xl font-bold ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5, duration: 0.5 }}
+          >
+            Loading finances...
+          </motion.p>
+        </motion.div>
+        <ToastContainer
+          position="bottom-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme={theme === 'light' ? 'light' : 'dark'}
+        />
       </div>
     );
   }
@@ -584,8 +720,8 @@ export default function FinancePage() {
   return (
     <div className={`min-h-screen ${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'}`}>
       <ToastContainer
-        position="top-right"
-        autoClose={5000}
+        position="bottom-right"
+        autoClose={3000}
         hideProgressBar={false}
         newestOnTop={false}
         closeOnClick

@@ -18,7 +18,8 @@ import {
   ChevronDownIcon,
   TableCellsIcon,
 } from "@heroicons/react/24/outline";
-import { toast } from "react-toastify";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import CryptoJS from "crypto-js";
 
 // Secret key for encryption (in production, store this securely, e.g., in environment variables)
@@ -62,6 +63,17 @@ const ethMonths = [
   "Pagume",
 ];
 
+// Interface for Seat (matching CinemaSeatArrangement)
+interface Seat {
+  id: string;
+  number: number;
+  row: number;
+  col: number;
+  x?: number;
+  y?: number;
+  reserved: boolean;
+}
+
 // Memoized initial form data
 const getInitialFormData = () => ({
   title: "",
@@ -77,6 +89,7 @@ const getInitialFormData = () => ({
   poster: "",
   promotionVideo: "",
   movieID: "",
+  seats: [] as Seat[],
 });
 
 // Tooltip Component
@@ -295,6 +308,7 @@ export default function VideoUploadForm() {
             ...prev,
             ...decryptedData,
             mainCast: Array.isArray(decryptedData.mainCast) ? decryptedData.mainCast : [],
+            seats: Array.isArray(decryptedData.seats) ? decryptedData.seats : [],
           };
           if (JSON.stringify(prev) !== JSON.stringify(newData)) {
             return newData;
@@ -305,12 +319,15 @@ export default function VideoUploadForm() {
           setCurrentStep((prev) => (prev !== 3 ? 3 : prev));
         }
       } else {
-        console.warn("Failed to decrypt form data, clearing localStorage");
         localStorage.removeItem("videoUploadFormData");
         setFormData(initialFormData);
         toast.error("Failed to restore form data. Starting fresh.", {
           position: "top-right",
           autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
           theme: theme === "light" ? "light" : "dark",
         });
       }
@@ -335,7 +352,20 @@ export default function VideoUploadForm() {
           credentials: "include",
         });
 
-        if (!response.ok) throw new Error("Unauthorized");
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage = errorData.error || "Unauthorized access. Please log in.";
+          toast.error(errorMessage, {
+            position: "top-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+          });
+          throw new Error(errorMessage);
+        }
 
         const data = await response.json();
         if (data.email && data.role) {
@@ -344,8 +374,16 @@ export default function VideoUploadForm() {
           setAuthLoading(false);
 
           if (data.role !== "owner") {
-            router.replace("/login");
-            return;
+            toast.error("User is not an owner.", {
+              position: "top-right",
+              autoClose: 3000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+              theme: theme === "light" ? "light" : "dark",
+            });
+            throw new Error("User is not an owner.");
           }
 
           const ownerQuery = query(
@@ -360,6 +398,15 @@ export default function VideoUploadForm() {
               lastName: ownerData.lastName || "",
             });
           } else {
+            toast.error("Owner details not found.", {
+              position: "top-right",
+              autoClose: 3000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+              theme: theme === "light" ? "light" : "dark",
+            });
             throw new Error("Owner details not found");
           }
 
@@ -372,12 +419,14 @@ export default function VideoUploadForm() {
             if (!snapshot.empty) {
               const arrangementsData = snapshot.docs[0].data();
               const totalSeatsValue = Number.isInteger(arrangementsData.totalSeats) ? arrangementsData.totalSeats : 0;
+              const seats = Array.isArray(arrangementsData.seats) ? arrangementsData.seats : [];
               setTotalSeats(totalSeatsValue);
-              setSeatArrangement(arrangementsData.seats || null);
+              setSeatArrangement(seats);
               setFormData((prev) => {
                 const newData = {
                   ...prev,
                   availableSite: totalSeatsValue.toString(),
+                  seats: seats,
                 };
                 if (JSON.stringify(prev) !== JSON.stringify(newData)) {
                   return newData;
@@ -391,26 +440,42 @@ export default function VideoUploadForm() {
             } else {
               setTotalSeats(0);
               setSeatArrangement(null);
+              setFormData((prev) => ({
+                ...prev,
+                seats: [],
+              }));
               setErrors((prev) => ({
                 ...prev,
                 availableSite: "No seat arrangement found. Please design seats first.",
               }));
             }
           }, (error) => {
-            console.error("Error in seat arrangements listener:", error);
-            setTotalSeats(0);
-            setSeatArrangement(null);
-            setErrors((prev) => ({
-              ...prev,
-              availableSite: "Failed to fetch seat arrangement. Please try again.",
-            }));
+            toast.error("Failed to fetch seat arrangement.", {
+              position: "top-right",
+              autoClose: 3000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+              theme: theme === "light" ? "light" : "dark",
+            });
           });
         } else {
+          toast.error("No email or role found.", {
+            position: "top-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+          });
           throw new Error("No email or role found");
         }
       } catch (error) {
-        console.error("Authentication or owner fetch error:", error);
-        router.replace("/login");
+        setTimeout(() => {
+          router.replace("/login");
+        }, 3500); // Delay redirect to show toast
       } finally {
         setLoading(false);
       }
@@ -423,7 +488,7 @@ export default function VideoUploadForm() {
         unsubscribeSeatArrangements();
       }
     };
-  }, [router]);
+  }, [router, theme]);
 
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
@@ -478,12 +543,19 @@ export default function VideoUploadForm() {
         throw new Error("Image upload failed");
       }
     } catch (error) {
-      console.error("Error uploading poster:", error);
-      setErrors((prev) => ({ ...prev, poster: "Failed to upload poster" }));
+      toast.error("Failed to upload poster.", {
+        position: "top-right",
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === "light" ? "light" : "dark",
+      });
     } finally {
       setImageUploading(false);
     }
-  }, []);
+  }, [theme]);
 
   const handleVideoUpload = useCallback(async (e) => {
     const file = e.target.files[0];
@@ -516,12 +588,19 @@ export default function VideoUploadForm() {
         throw new Error("Video upload failed");
       }
     } catch (error) {
-      console.error("Error uploading video:", error);
-      setErrors((prev) => ({ ...prev, promotionVideo: "Failed to upload video" }));
+      toast.error("Failed to upload video.", {
+        position: "top-right",
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === "light" ? "light" : "dark",
+      });
     } finally {
       setVideoUploading(false);
     }
-  }, []);
+  }, [theme]);
 
   const handleCastChange = useCallback((index, field, value) => {
     setFormData((prev) => {
@@ -558,12 +637,19 @@ export default function VideoUploadForm() {
         throw new Error("Cast image upload failed");
       }
     } catch (error) {
-      console.error("Error uploading cast image:", error);
-      setErrors((prev) => ({ ...prev, mainCast: "Failed to upload cast image" }));
+      toast.error("Failed to upload cast image.", {
+        position: "top-right",
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === "light" ? "light" : "dark",
+      });
     } finally {
       setCastImageUploading((prev) => ({ ...prev, [index]: false }));
     }
-  }, [handleCastChange]);
+  }, [handleCastChange, theme]);
 
   const addCastMember = useCallback(() => {
     setFormData((prev) => ({
@@ -646,6 +732,9 @@ export default function VideoUploadForm() {
             newErrors.screeningDate = "Screening date must be at least one day in the future";
           }
         }
+        if (!formData.seats || formData.seats.length === 0) {
+          newErrors.availableSite = "No seat arrangement found. Please design seats first.";
+        }
         break;
       case 4:
         if (!formData.description.trim())
@@ -719,25 +808,32 @@ export default function VideoUploadForm() {
         poster: formData.poster,
         promotionVideo: formData.promotionVideo,
         movieID: formData.movieID,
+        seats: formData.seats,
         createdAt: Timestamp.now(),
         isEthiopianDate: true,
       });
 
-      // Clear localStorage and reset form only on successful save
       localStorage.removeItem("videoUploadFormData");
       setFormData(initialFormData);
 
       toast.success("Movie uploaded successfully!", {
         position: "top-right",
         autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
         theme: theme === "light" ? "light" : "dark",
       });
       router.push("/dashboard");
     } catch (error) {
-      console.error("Error uploading movie:", error);
       toast.error("Failed to upload movie. Please try again.", {
         position: "top-right",
         autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
         theme: theme === "light" ? "light" : "dark",
       });
     } finally {
@@ -754,10 +850,13 @@ export default function VideoUploadForm() {
         throw new Error("Failed to encrypt form data");
       }
     } catch (error) {
-      console.error("Error encrypting form data to localStorage:", error);
       toast.error("Failed to save form data. Please try again.", {
         position: "top-right",
         autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
         theme: theme === "light" ? "light" : "dark",
       });
     }
@@ -833,6 +932,18 @@ export default function VideoUploadForm() {
         isCategoryOpen ? "backdrop-blur-sm" : ""
       }`}
     >
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme={theme === "light" ? "light" : "dark"}
+      />
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}

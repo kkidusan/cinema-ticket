@@ -3,11 +3,15 @@ import { useState, useEffect, useContext } from "react";
 import Navbar1 from "../componet/Nav";
 import Sidebar from "../componet/Sidebar";
 import { db } from "../firebaseconfig";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, setLogLevel } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { PuffLoader } from "react-spinners";
 import { ThemeContext } from "../context/ThemeContext";
-import toast, { Toaster } from "react-hot-toast"; // Import react-hot-toast
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+
+// Suppress Firestore connectivity warnings
+setLogLevel("error");
 
 const AdminLayout = ({ children }) => {
   const [messageCount, setMessageCount] = useState(0);
@@ -29,39 +33,66 @@ const AdminLayout = ({ children }) => {
           credentials: "include",
         });
 
-        if (!response.ok) throw new Error("Unauthorized access. Please log in.");
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage = errorData.error || "Unauthorized access. Please log in.";
+          toast.error(errorMessage, {
+            position: "top-center",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+          });
+          throw new Error(errorMessage);
+        }
 
         const data = await response.json();
         if (data.email && data.role) {
           if (data.role !== "admin") {
-            toast.error("Access denied. Admins only.");
-            router.replace("/login");
-            return;
+            toast.error("Access denied. Admins only.", {
+              position: "top-center",
+              autoClose: 3000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+              theme: theme === "light" ? "light" : "dark",
+            });
+            throw new Error("Access denied. Admins only.");
           }
           setUserEmail(data.email);
           setIsAuthenticated(true);
         } else {
+          toast.error("User data incomplete. Please try again.", {
+            position: "top-center",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+          });
           throw new Error("User data incomplete. Please try again.");
         }
       } catch (error) {
-        toast.error(error.message || "Authentication failed. Redirecting to login...");
-        router.replace("/login");
+        setTimeout(() => {
+          router.replace("/login");
+        }, 3500); // Delay redirect to show toast
       } finally {
         setLoading(false);
       }
     };
 
     fetchUser();
-  }, [router]);
+  }, [router, theme]);
 
   // Fetch pending status in real-time from Firestore admin collection
   useEffect(() => {
     if (!isAuthenticated || !userEmail) return;
 
-    const q = query(
-      collection(db, "admin"),
-      where("email", "==", userEmail)
-    );
+    const q = query(collection(db, "admin"), where("email", "==", userEmail));
 
     const unsubscribe = onSnapshot(
       q,
@@ -71,18 +102,38 @@ const AdminLayout = ({ children }) => {
           const pendingStatus = userDoc.data().pending || false;
           setIsPending(pendingStatus);
         } else {
-          toast.error("No admin profile found for this user.");
+          toast.error("No admin profile found for this user.", {
+            position: "top-center",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+          });
           setIsPending(false); // Default to false if no document found
         }
       },
       (error) => {
-        toast.error("Failed to fetch account status. Please try again.");
+        // Suppress Firestore connectivity errors
+        if (error.message.includes("Could not reach Cloud Firestore backend")) {
+          return; // Silently ignore connectivity errors
+        }
+        toast.error("Failed to fetch account status. Please try again.", {
+          position: "top-center",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: theme === "light" ? "light" : "dark",
+        });
         setIsPending(false); // Default to false on error
       }
     );
 
     return () => unsubscribe();
-  }, [isAuthenticated, userEmail]);
+  }, [isAuthenticated, userEmail, theme]);
 
   // Fetch message count from Firestore
   useEffect(() => {
@@ -100,21 +151,30 @@ const AdminLayout = ({ children }) => {
         setMessageCount(querySnapshot.size);
       },
       (error) => {
-        toast.error("Failed to fetch messages. Please try again.");
+        // Suppress Firestore connectivity errors
+        if (error.message.includes("Could not reach Cloud Firestore backend")) {
+          return; // Silently ignore connectivity errors
+        }
+        toast.error("Failed to fetch messages. Please try again.", {
+          position: "top-center",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: theme === "light" ? "light" : "dark",
+        });
       }
     );
 
     return () => unsubscribe();
-  }, [isAuthenticated, isPending]);
+  }, [isAuthenticated, isPending, theme]);
 
   // Fetch notification count from Firestore
   useEffect(() => {
     if (!isAuthenticated || isPending) return;
 
-    const q = query(
-      collection(db, "owner"),
-      where("approved", "==", false)
-    );
+    const q = query(collection(db, "owner"), where("approved", "==", false));
 
     const unsubscribe = onSnapshot(
       q,
@@ -122,12 +182,24 @@ const AdminLayout = ({ children }) => {
         setNotificationCount(querySnapshot.size);
       },
       (error) => {
-        toast.error("Failed to fetch notifications. Please try again.");
+        // Suppress Firestore connectivity errors
+        if (error.message.includes("Could not reach Cloud Firestore backend")) {
+          return; // Silently ignore connectivity errors
+        }
+        toast.error("Failed to fetch notifications. Please try again.", {
+          position: "top-center",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: theme === "light" ? "light" : "dark",
+        });
       }
     );
 
     return () => unsubscribe();
-  }, [isAuthenticated, isPending]);
+  }, [isAuthenticated, isPending, theme]);
 
   // Display loading state
   if (loading || isPending === null) {
@@ -138,6 +210,18 @@ const AdminLayout = ({ children }) => {
         }`}
       >
         <PuffLoader color="#3B82F6" size={60} />
+        <ToastContainer
+          position="top-center"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme={theme === "light" ? "light" : "dark"}
+        />
       </div>
     );
   }
@@ -157,6 +241,18 @@ const AdminLayout = ({ children }) => {
         >
           <h1 className="text-2xl font-bold">Your account is processing</h1>
         </div>
+        <ToastContainer
+          position="top-center"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme={theme === "light" ? "light" : "dark"}
+        />
       </div>
     );
   }
@@ -172,7 +268,18 @@ const AdminLayout = ({ children }) => {
         theme === "light" ? "bg-gray-100" : "bg-gray-900"
       }`}
     >
-      <Toaster position="top-right" reverseOrder={false} /> {/* Add Toaster component */}
+      <ToastContainer
+        position="top-center"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme={theme === "light" ? "light" : "dark"}
+      />
       <Sidebar
         isCollapsed={isCollapsed}
         setIsCollapsed={setIsCollapsed}

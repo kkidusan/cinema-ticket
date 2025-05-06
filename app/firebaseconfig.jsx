@@ -1,6 +1,9 @@
 import { initializeApp } from "firebase/app";
 import { 
     getFirestore, 
+    initializeFirestore, 
+    memoryLocalCache, 
+    setLogLevel, 
     collection, 
     query, 
     where, 
@@ -10,11 +13,10 @@ import {
     addDoc, 
     serverTimestamp, 
     doc, 
-    updateDoc,
-    deleteDoc,
-    limit // ✅ Add limit here
+    updateDoc, 
+    deleteDoc, 
+    limit 
 } from "firebase/firestore";
-
 import { 
     getAuth, 
     setPersistence, 
@@ -22,24 +24,33 @@ import {
     signInWithEmailAndPassword, 
     updatePassword 
 } from "firebase/auth";
+import { getStorage } from "firebase/storage";
 
-import { getStorage } from 'firebase/storage';
-
-// Firebase Configuration
+// Firebase config
 const firebaseConfig = {
-    apiKey: "AIzaSyAhW7-IqcrXlXGdjyZV8wrTljCFZCi2YxM",
-    authDomain: "cimema-ticket.firebaseapp.com",
-    projectId: "cimema-ticket",
-    storageBucket: "cimema-ticket.appspot.com",
-    messagingSenderId: "477107000918",
-    appId: "1:477107000918:web:a80697a2bb034bf508cdf7",
-    measurementId: "G-QVCCSFG6K7"
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+    measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+
+// Set Firestore log level to silent to suppress connectivity errors
+setLogLevel("silent"); // Changed from "warn" to "silent" to hide all Firestore logs
+
+// Initialize Firestore with memory cache and enable offline persistence
+const db = initializeFirestore(app, {
+    cache: memoryLocalCache(), // Use memory cache for offline support
+    experimentalForceOwningTab: true // Ensure Firestore works in a single tab to avoid conflicts
+});
+
+// Initialize Auth and Storage
 export const auth = getAuth(app);
-export const db = getFirestore(app);
 export const storage = getStorage(app);
 
 // Enable session persistence
@@ -47,11 +58,11 @@ setPersistence(auth, browserSessionPersistence);
 
 // Export necessary Firebase modules
 export { 
+    db,
     addDoc, 
     collection, 
     query, 
     where, 
-    storage, 
     getDocs, 
     updateDoc, 
     doc, 
@@ -61,5 +72,5 @@ export {
     orderBy, 
     onSnapshot, 
     serverTimestamp,
-    limit // ✅ Export limit
+    limit 
 };

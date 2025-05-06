@@ -1,15 +1,19 @@
 "use client";
-import { useState, useEffect, useContext } from "react";
+
+import React, { useState, useEffect, useContext } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { db, collection, query, where, onSnapshot } from "../../../firebaseconfig";
 import { PuffLoader } from "react-spinners";
 import { FaArrowLeft } from "react-icons/fa";
 import { ThemeContext } from "../../../context/ThemeContext";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
-export default function VideoDetail({ params }) {
+export default function VideoDetail(paramsPromise) {
+  const params = React.use(paramsPromise);
+  const { id } = params; // Destructure id after unwrapping params
   const router = useRouter();
-  const { id } = params; // Directly destructure params
   const { theme } = useContext(ThemeContext);
 
   const [video, setVideo] = useState(null);
@@ -27,7 +31,20 @@ export default function VideoDetail({ params }) {
           credentials: "include",
         });
 
-        if (!response.ok) throw new Error("Unauthorized");
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage = errorData.error || "Unauthorized access. Please log in.";
+          toast.error(errorMessage, {
+            position: "top-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+          });
+          throw new Error(errorMessage);
+        }
 
         const data = await response.json();
         if (data.email && data.role) {
@@ -35,22 +52,40 @@ export default function VideoDetail({ params }) {
           setUserRole(data.role);
 
           if (data.role !== "owner") {
-            router.replace("/login");
-            return;
+            toast.error("User is not an owner.", {
+              position: "top-right",
+              autoClose: 3000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+              theme: theme === "light" ? "light" : "dark",
+            });
+            throw new Error("User is not an owner.");
           }
         } else {
+          toast.error("No email or role found.", {
+            position: "top-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+          });
           throw new Error("No email or role found");
         }
       } catch (error) {
-        console.error("Authentication error:", error);
-        router.replace("/login");
+        setTimeout(() => {
+          router.replace("/login");
+        }, 3500); // Delay redirect to show toast
       } finally {
         setLoading(false);
       }
     };
 
     fetchUser();
-  }, [router]);
+  }, [router, theme]);
 
   useEffect(() => {
     if (id && userRole === "owner") {
@@ -63,14 +98,22 @@ export default function VideoDetail({ params }) {
           setSoldTickets(movieData.soldTickets || 0);
           setAvailableSite(movieData.availableSite || 0);
         } else {
-          console.error("No video found with the given ID!");
+          toast.error("No video found with the given ID!", {
+            position: "top-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+          });
         }
         setLoading(false);
       });
 
       return () => unsubscribe();
     }
-  }, [id, userRole]);
+  }, [id, userRole, theme]);
 
   if (loading) {
     return (
@@ -116,6 +159,18 @@ export default function VideoDetail({ params }) {
 
   return (
     <div className={`min-h-screen ${theme === "light" ? "bg-zinc-100" : "bg-gray-900"}`}>
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme={theme === "light" ? "light" : "dark"}
+      />
       {/* Fixed Navigation Header with zinc-100 gradient */}
       <header className={`sticky top-0 z-50 ${theme === "light" ? "bg-gradient-to-br from-zinc-100 to-zinc-200" : "bg-gradient-to-br from-gray-800 to-gray-900"} border-b ${theme === "light" ? "border-zinc-200" : "border-gray-700"} shadow-sm`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">

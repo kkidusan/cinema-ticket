@@ -1,4 +1,5 @@
 "use client";
+
 import { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/navigation";
 import { db } from "../../firebaseconfig";
@@ -49,7 +50,20 @@ export default function Profile() {
           credentials: "include",
         });
 
-        if (!response.ok) throw new Error("Unauthorized");
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage = errorData.error || "Unauthorized access. Please log in.";
+          toast.error(errorMessage, {
+            position: "top-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+          });
+          throw new Error(errorMessage);
+        }
 
         const data = await response.json();
         if (data.email && data.role) {
@@ -58,22 +72,40 @@ export default function Profile() {
 
           // Redirect if the user is not an owner
           if (data.role !== "owner") {
-            router.replace("/unauthorized");
-            return;
+            toast.error("User is not an owner.", {
+              position: "top-right",
+              autoClose: 3000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+              theme: theme === "light" ? "light" : "dark",
+            });
+            throw new Error("User is not an owner.");
           }
         } else {
+          toast.error("No email or role found.", {
+            position: "top-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+          });
           throw new Error("No email or role found");
         }
       } catch (error) {
-        console.error("Authentication error:", error);
-        router.replace("/login");
+        setTimeout(() => {
+          router.replace("/login");
+        }, 3500); // Delay redirect to show toast
       } finally {
         setLoading(false);
       }
     };
 
     fetchUser();
-  }, [router]);
+  }, [router, theme]);
 
   // Fetch owner data from Firestore when userEmail changes
   useEffect(() => {
@@ -87,10 +119,26 @@ export default function Profile() {
             const ownerDoc = querySnapshot.docs[0].data() as UserData;
             setOwnerData(ownerDoc);
           } else {
-            console.log("No owner found with email:", userEmail);
+            toast.error("No owner found with the provided email.", {
+              position: "top-right",
+              autoClose: 3000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+              theme: theme === "light" ? "light" : "dark",
+            });
           }
         } catch (error) {
-          console.error("Error fetching owner data:", error);
+          toast.error("Error fetching owner data. Please try again.", {
+            position: "top-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+          });
         } finally {
           setLoading(false);
         }
@@ -98,7 +146,7 @@ export default function Profile() {
 
       fetchOwnerData();
     }
-  }, [userEmail, userRole]);
+  }, [userEmail, userRole, theme]);
 
   // Validate password function
   const validatePassword = (password: string): string[] => {
@@ -146,13 +194,13 @@ export default function Profile() {
         toast.error(data.error || "Failed to update password");
       }
     } catch (error) {
-      console.error("Error updating password:", error);
       const errorMessage = "An error occurred. Please try again.";
       setErrors([errorMessage]);
       toast.error(errorMessage);
     }
   };
 
+  // Handle logout using /api/logout
   const handleLogout = async () => {
     try {
       await fetch("/api/logout", {
@@ -162,7 +210,6 @@ export default function Profile() {
       toast.success("Logged out successfully!");
       router.push("/login");
     } catch (error) {
-      console.error("Error logging out:", error);
       toast.error("Failed to log out. Please try again.");
     }
   };
@@ -195,7 +242,7 @@ export default function Profile() {
     <div className={`min-h-screen ${theme === "light" ? "bg-zinc-100" : "bg-zinc-900"}`}>
       <ToastContainer
         position="top-right"
-        autoClose={5000}
+        autoClose={3000}
         hideProgressBar={false}
         newestOnTop={false}
         closeOnClick

@@ -1,4 +1,5 @@
 "use client";
+
 import { useState, useEffect, useRef, useContext } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db, collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, deleteDoc, updateDoc } from "../../firebaseconfig";
@@ -7,6 +8,7 @@ import { PacmanLoader } from "react-spinners";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { ThemeContext } from "../../context/ThemeContext";
+import { motion } from "framer-motion";
 
 export default function Messages() {
   const [messages, setMessages] = useState([]);
@@ -43,21 +45,18 @@ export default function Messages() {
     const diffInDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
 
     if (diffInDays === 0) {
-      // Today - show time only
       return date.toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit',
         hour12: true
       });
     } else if (diffInDays === 1) {
-      // Yesterday
       return `Yesterday at ${date.toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit',
         hour12: true
       })}`;
     } else if (diffInDays < 7) {
-      // Within a week - show day name
       return date.toLocaleDateString('en-US', {
         weekday: 'short',
         hour: '2-digit',
@@ -65,7 +64,6 @@ export default function Messages() {
         hour12: true
       });
     } else {
-      // Older than a week - show full date
       return date.toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
@@ -86,7 +84,20 @@ export default function Messages() {
           credentials: "include",
         });
 
-        if (!response.ok) throw new Error("Unauthorized");
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage = errorData.error || "Unauthorized access. Please log in.";
+          toast.error(errorMessage, {
+            position: "bottom-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+          });
+          throw new Error(errorMessage);
+        }
 
         const data = await response.json();
         if (data.email && data.role) {
@@ -94,26 +105,44 @@ export default function Messages() {
           setUserRole(data.role);
           setIsAuthenticated(true);
           if (data.role !== "owner") {
-            router.replace("/login");
-            return;
+            toast.error("User is not an owner.", {
+              position: "bottom-right",
+              autoClose: 3000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+              theme: theme === "light" ? "light" : "dark",
+            });
+            throw new Error("User is not an owner.");
           }
         } else {
+          toast.error("No email or role found.", {
+            position: "bottom-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+          });
           throw new Error("No email or role found");
         }
       } catch (error) {
-        console.error("Authentication error:", error);
-        router.replace("/login");
+        setTimeout(() => {
+          router.replace("/login");
+        }, 3500); // Delay redirect to show toast
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchUser();
-  }, [router]);
+  }, [router, theme]);
 
   // Fetch messages from Firestore
   useEffect(() => {
-    if (!userEmail) return;
+    if (!userEmail || !isAuthenticated || userRole !== "owner") return;
 
     const q = query(
       collection(db, "messages"),
@@ -132,7 +161,7 @@ export default function Messages() {
     });
 
     return () => unsubscribe();
-  }, [userEmail]);
+  }, [userEmail, isAuthenticated, userRole]);
 
   // Scroll to the bottom of the chat
   const scrollToBottom = () => {
@@ -144,7 +173,15 @@ export default function Messages() {
     const selectedFile = e.target.files[0];
     if (selectedFile) {
       setFile(selectedFile);
-      toast.info("File selected: " + selectedFile.name);
+      toast.info("File selected: " + selectedFile.name, {
+        position: "bottom-right",
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === "light" ? "light" : "dark",
+      });
     }
   };
 
@@ -164,10 +201,25 @@ export default function Messages() {
         );
         setEditingMessageId(null);
         setNewMessage("");
-        toast.success("Message updated successfully!");
+        toast.success("Message updated successfully!", {
+          position: "bottom-right",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: theme === "light" ? "light" : "dark",
+        });
       } catch (error) {
-        console.error("Error updating message:", error);
-        toast.error("Failed to update message.");
+        toast.error("Failed to update message.", {
+          position: "bottom-right",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: theme === "light" ? "light" : "dark",
+        });
       }
     } else {
       const tempId = Date.now().toString();
@@ -215,7 +267,15 @@ export default function Messages() {
           )
         );
       } catch (error) {
-        console.error("Error sending message:", error);
+        toast.error("Failed to send message.", {
+          position: "bottom-right",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: theme === "light" ? "light" : "dark",
+        });
         setMessages((prevMessages) =>
           prevMessages.map((msg) =>
             msg.tempId === tempId
@@ -266,10 +326,25 @@ export default function Messages() {
           await deleteDoc(doc(db, "messages", selectedMessage.id));
           setMessages((prevMessages) => prevMessages.filter((msg) => msg.id !== selectedMessage.id));
           setShowActionCard(false);
-          toast.success("Message deleted successfully!");
+          toast.success("Message deleted successfully!", {
+            position: "bottom-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+          });
         } catch (error) {
-          console.error("Error deleting message:", error);
-          toast.error("Failed to delete message.");
+          toast.error("Failed to delete message.", {
+            position: "bottom-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+          });
         }
       }
     }
@@ -289,7 +364,15 @@ export default function Messages() {
   const handleCopyMessage = () => {
     if (selectedMessage) {
       navigator.clipboard.writeText(selectedMessage.text).then(() => {
-        toast.success("Message copied to clipboard!");
+        toast.success("Message copied to clipboard!", {
+          position: "bottom-right",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: theme === "light" ? "light" : "dark",
+        });
       });
       setShowActionCard(false);
     }
@@ -310,11 +393,26 @@ export default function Messages() {
         await updateDoc(doc(db, "messages", selectedMessage.id), {
           pinned: true,
         });
-        toast.success("Message pinned to the top!");
+        toast.success("Message pinned to the top!", {
+          position: "bottom-right",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: theme === "light" ? "light" : "dark",
+        });
         setShowActionCard(false);
       } catch (error) {
-        console.error("Error pinning message:", error);
-        toast.error("Failed to pin message.");
+        toast.error("Failed to pin message.", {
+          position: "bottom-right",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: theme === "light" ? "light" : "dark",
+        });
       }
     }
   };
@@ -331,16 +429,46 @@ export default function Messages() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showActionCard]);
 
-  if (isLoading) {
+  // Loading state similar to Profile page
+  if (isLoading || !isAuthenticated || userRole !== "owner") {
     return (
-      <div className={`flex items-center justify-center h-screen ${theme === "light" ? "bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50" : "bg-gradient-to-br from-gray-800 to-gray-900"}`}>
-        <PacmanLoader color={theme === "light" ? "#6D28D9" : "#FFFFFF"} size={30} />
+      <div className={`flex items-center justify-center min-h-screen ${theme === "light" ? "bg-zinc-100" : "bg-zinc-900"}`}>
+        <motion.div
+          className="flex flex-col items-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <PacmanLoader color={theme === "light" ? "#6D28D9" : "#FFFFFF"} size={30} />
+          <motion.p
+            className={`mt-4 text-2xl font-bold ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5, duration: 0.5 }}
+          >
+            Loading messages...
+          </motion.p>
+        </motion.div>
       </div>
     );
   }
 
   return (
     <div className={`flex flex-col h-screen ${theme === "light" ? "bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50" : "bg-gradient-to-br from-gray-800 to-gray-900"}`}>
+      {/* Toast Container */}
+      <ToastContainer
+        position="bottom-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme={theme === "light" ? "light" : "dark"}
+      />
+
       {/* Header */}
       <div className={`flex items-center justify-between p-4 ${theme === "light" ? "bg-white/80 backdrop-blur-sm" : "bg-gray-800/80 backdrop-blur-sm"} shadow-md ${theme === "light" ? "text-gray-800" : "text-white"}`}>
         <button onClick={() => router.push("/dashboard")} className={theme === "light" ? "text-gray-800" : "text-white"}>
@@ -516,20 +644,6 @@ export default function Messages() {
           </button>
         </div>
       </div>
-
-      {/* Toast Container */}
-      <ToastContainer
-        position="bottom-right"
-        autoClose={3000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme={theme === "light" ? "light" : "dark"}
-      />
     </div>
   );
 }

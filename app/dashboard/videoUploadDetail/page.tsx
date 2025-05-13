@@ -708,6 +708,12 @@ export default function VideoUploadForm() {
           newErrors.availableSite = "Available site must be a positive integer";
         } else if (totalSeats !== null && Number(formData.availableSite) > totalSeats) {
           newErrors.availableSite = `Available site cannot exceed total seats (${totalSeats})`;
+        } else if (seatArrangement && totalSeats !== null) {
+          const reservedSeatsCount = seatArrangement.filter(seat => seat.reserved).length;
+          const availableSeats = totalSeats - reservedSeatsCount;
+          if (Number(formData.availableSite) > availableSeats) {
+            newErrors.availableSite = `Available site cannot exceed available seats (${availableSeats}) after reserving ${reservedSeatsCount} seats`;
+          }
         }
         if (
           !formData.ticketPrice ||
@@ -750,7 +756,7 @@ export default function VideoUploadForm() {
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [formData, touched, totalSeats]);
+  }, [formData, touched, totalSeats, seatArrangement]);
 
   const handleNext = useCallback(() => {
     if (currentStep === 4) {
@@ -877,6 +883,10 @@ export default function VideoUploadForm() {
     );
   }
 
+  // Calculate available seats for the label
+  const reservedSeatsCount = seatArrangement ? seatArrangement.filter(seat => seat.reserved).length : 0;
+  const availableSeats = totalSeats !== null ? totalSeats - reservedSeatsCount : null;
+
   const steps = [
     {
       title: "Basic Info",
@@ -897,7 +907,7 @@ export default function VideoUploadForm() {
     {
       title: "Ticket Info",
       fields: [
-        { name: "availableSite", label: `Available Site (Max: ${totalSeats || "N/A"})`, type: "number" },
+        { name: "availableSite", label: `Available Site (Max: ${availableSeats !== null ? availableSeats : "N/A"})`, type: "number" },
         { name: "ticketPrice", label: "Ticket Price (ETB)", type: "number" },
         { name: "screeningDate", label: "Screening Date", type: "custom" },
       ],

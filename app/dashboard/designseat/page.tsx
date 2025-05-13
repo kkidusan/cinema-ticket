@@ -31,6 +31,7 @@ interface Arrangement {
   userEmail: string;
   rows?: number;
   cols?: number;
+  reservedSeatsCount?: number;
 }
 
 interface Errors {
@@ -103,7 +104,7 @@ export default function CinemaSeatArrangement() {
       } catch (error) {
         setTimeout(() => {
           router.replace("/login");
-        }, 3500); // Delay redirect to show toast
+        }, 3500);
       } finally {
         setIsLoadingAuth(false);
       }
@@ -130,14 +131,34 @@ export default function CinemaSeatArrangement() {
       const querySnapshot = await getDocs(q);
       if (querySnapshot.empty) {
         setSavedArrangement(null);
+        setSeats([]);
+        setTotalSeats(0);
+        setLayoutType("custom");
+        setInputRows(0);
+        setInputCols(0);
+        setRows(0);
+        setCols(0);
       } else {
         const arrangement = {
           id: querySnapshot.docs[0].id,
           ...querySnapshot.docs[0].data(),
         } as Arrangement;
+        // Ensure seats have reserved property
+        arrangement.seats = arrangement.seats.map(seat => ({
+          ...seat,
+          reserved: seat.reserved ?? false,
+        }));
+        // Verify reservedSeatsCount
+        const calculatedReservedCount = arrangement.seats.filter(seat => seat.reserved).length;
+        arrangement.reservedSeatsCount = arrangement.reservedSeatsCount ?? calculatedReservedCount;
+        console.log("Fetched arrangement:", arrangement);
+        console.log("Seats with reserved status:", arrangement.seats.map(s => ({ id: s.id, reserved: s.reserved })));
         setSavedArrangement(arrangement);
+        // Automatically load the fetched arrangement
+        loadArrangement(arrangement);
       }
     } catch (error: any) {
+      console.error("Error fetching arrangements:", error);
       toast.error("Failed to load saved arrangement.", {
         position: "bottom-right",
         autoClose: 3000,
@@ -250,13 +271,42 @@ export default function CinemaSeatArrangement() {
     return false;
   };
 
+  // Update reserved seats count in database
+  const updateReservedSeatsCount = async (updatedSeats: Seat[]) => {
+    if (!userEmail || !savedArrangement?.id) return;
+    
+    try {
+      const reservedCount = updatedSeats.filter(seat => seat.reserved).length;
+      const docRef = doc(db, "seatArrangements", savedArrangement.id);
+      await updateDoc(docRef, {
+        seats: updatedSeats,
+        reservedSeatsCount: reservedCount,
+      });
+      setSavedArrangement(prev => prev ? { ...prev, seats: updatedSeats, reservedSeatsCount: reservedCount } : null);
+    } catch (error: any) {
+      toast.error("Failed to update reserved seats.", {
+        position: "bottom-right",
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === "light" ? "light" : "dark",
+      });
+    }
+  };
+
   // Handle seat reservation
-  const handleSeatClick = (seatId: string) => {
-    setSeats((prevSeats) =>
-      prevSeats.map((seat) =>
-        seat.id === seatId ? { ...seat, reserved: !seat.reserved } : seat
-      )
+  const handleSeatClick = async (seatId: string) => {
+    const updatedSeats = seats.map(seat =>
+      seat.id === seatId ? { ...seat, reserved: !seat.reserved } : seat
     );
+    setSeats(updatedSeats);
+    
+    // Update database with new reserved status
+    if (savedArrangement) {
+      await updateReservedSeatsCount(updatedSeats);
+    }
   };
 
   // Drag-and-drop handlers
@@ -333,6 +383,7 @@ export default function CinemaSeatArrangement() {
     if (!validateForm()) return;
     setIsLoading(true);
     try {
+      const reservedCount = seats.filter(seat => seat.reserved).length;
       const arrangement: Arrangement = {
         totalSeats,
         layoutType,
@@ -341,6 +392,7 @@ export default function CinemaSeatArrangement() {
         userEmail,
         rows: inputRows,
         cols: inputCols,
+        reservedSeatsCount: reservedCount,
       };
 
       const q = query(collection(db, "seatArrangements"), where("userEmail", "==", userEmail));
@@ -403,7 +455,8 @@ export default function CinemaSeatArrangement() {
 
   // Export to JSON
   const exportToJson = () => {
-    const data = { totalSeats, layoutType, seats, rows: inputRows, cols: inputCols };
+    const reservedCount = seats.filter(seat => seat.reserved).length;
+    const data = { totalSeats, layoutType, seats, rows: inputRows, cols: inputCols, reservedSeatsCount: reservedCount };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -472,13 +525,19 @@ export default function CinemaSeatArrangement() {
 
   // Load arrangement
   const loadArrangement = (arrangement: Arrangement) => {
+    const normalizedSeats = arrangement.seats.map(seat => ({
+      ...seat,
+      reserved: seat.reserved ?? false,
+    }));
     setTotalSeats(arrangement.totalSeats);
     setLayoutType(arrangement.layoutType);
-    setSeats(arrangement.seats);
+    setSeats(normalizedSeats);
     setInputRows(arrangement.rows || 0);
     setInputCols(arrangement.cols || 0);
-    setRows(Math.max(...arrangement.seats.map((s) => s.row)) + 1 || 0);
-    setCols(Math.max(...arrangement.seats.map((s) => s.col)) + 1 || 0);
+    setRows(Math.max(...normalizedSeats.map((s) => s.row)) + 1 || 0);
+    setCols(Math.max(...normalizedSeats.map((s) => s.col)) + 1 || 0);
+    console.log("Loaded arrangement:", arrangement);
+    console.log("Loaded seats with reserved status:", normalizedSeats.map(s => ({ id: s.id, reserved: s.reserved })));
     toast.success("Arrangement loaded successfully!", {
       position: "bottom-right",
       autoClose: 3000,
@@ -873,6 +932,13 @@ export default function CinemaSeatArrangement() {
                   }`}
                 >
                   {savedArrangement.totalSeats} Seats ({savedArrangement.layoutType})
+                </p>
+                <p
+                  className={`text-sm ${
+                    theme === "light" ? "text-indigo-600" : "text-indigo-400"
+                  }`}
+                >
+                  Reserved Seats: {savedArrangement.reservedSeatsCount || 0}
                 </p>
                 {savedArrangement.rows && savedArrangement.cols && (
                   <p

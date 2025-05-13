@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useContext } from "react";
@@ -10,9 +11,9 @@ import { ThemeContext } from "../../../context/ThemeContext";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
-export default function VideoDetail(paramsPromise) {
-  const params = React.use(paramsPromise);
-  const { id } = params; // Destructure id after unwrapping params
+export default function VideoDetail({ params: paramsPromise }) {
+  const params = React.use(paramsPromise); // Unwrap params using React.use
+  const { id } = params; // Destructure id after unwrapping
   const router = useRouter();
   const { theme } = useContext(ThemeContext);
 

@@ -24,15 +24,14 @@ const Footer = () => {
         </div>
 
         <ul className="flex space-x-4 text-sm">
-          <li><a href="#" className="hover:text-gray-300">Home</a></li>
+          <li><a href="/" className="hover:text-gray-300">Home</a></li>
           <li><a href="#" className="hover:text-gray-300">About</a></li>
-          <li><a href="#" className="hover:text-gray-300">Projects</a></li>
           <li><a href="#" className="hover:text-gray-300">Contact</a></li>
         </ul>
       </div>
 
       <div className="text-center text-xs text-gray-400 mt-6">
-        &copy; {new Date().getFullYear()} My Portfolio. All rights reserved.
+        &copy; {new Date().getFullYear()} Ethio cimema ticketing. All rights reserved.
       </div>
     </footer>
   );

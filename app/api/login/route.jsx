@@ -4,8 +4,8 @@ import { auth, signInWithEmailAndPassword, db } from "../../firebaseconfig";
 import { collection, query, where, getDocs } from "firebase/firestore";
 
 // Define JWT secrets
-const JWT_SECRET_OWNER = "4f56a9c80b8e9d8e2f24eab3e94a3458a569fb8094538724bb9b7efc8d944c3a7";
-const JWT_SECRET_ADMIN = "a7b3e9f2c1d8a4b6e5f7c9d3a2b8e4f6c7d9a1b3e5f2c8a4b6d7e9f1c3a5b7d8";
+const JWT_SECRET_OWNER = process.env.JWT_SECRET_OWNER || "4f56a9c80b8e9d8e2f24eab3e94a3458a569fb8094538724bb9b7efc8d944c3a7";
+const JWT_SECRET_ADMIN = process.env.JWT_SECRET_ADMIN || "a7b3e9f2c1d8a4b6e5f7c9d3a2b8e4f6c7d9a1b3e5f2c8a4b6d7e9f1c3a5b7d8";
 
 export async function POST(request) {
   const { email, password } = await request.json();
@@ -51,12 +51,21 @@ export async function POST(request) {
       return NextResponse.json({ error: "User not found in Firestore." }, { status: 403 });
     }
 
-    // Set JWT in a role-specific cookie without affecting other role's cookie
+    // Set JWT in a role-specific cookie and clear the other role's cookie
     const response = NextResponse.json({ message: "Login successful", role, email: user.email });
     response.cookies.set(`${role}_token`, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       maxAge: 3600, // 1 hour
+      path: "/",
+      sameSite: "strict",
+    });
+
+    // Clear the opposite role's cookie to prevent concurrent role access
+    response.cookies.set(`${role === "owner" ? "admin" : "owner"}_token`, "", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      expires: new Date(0), // Immediate expiration
       path: "/",
       sameSite: "strict",
     });

@@ -15,7 +15,8 @@ import {
     doc, 
     updateDoc, 
     deleteDoc, 
-    limit 
+    limit,
+    writeBatch // Add writeBatch here
 } from "firebase/firestore";
 import { 
     getAuth, 
@@ -41,12 +42,12 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 // Set Firestore log level to silent to suppress connectivity errors
-setLogLevel("silent"); // Changed from "warn" to "silent" to hide all Firestore logs
+setLogLevel("silent");
 
 // Initialize Firestore with memory cache and enable offline persistence
 const db = initializeFirestore(app, {
-    cache: memoryLocalCache(), // Use memory cache for offline support
-    experimentalForceOwningTab: true // Ensure Firestore works in a single tab to avoid conflicts
+    cache: memoryLocalCache(),
+    experimentalForceOwningTab: true
 });
 
 // Initialize Auth and Storage
@@ -72,5 +73,6 @@ export {
     orderBy, 
     onSnapshot, 
     serverTimestamp,
-    limit 
+    limit,
+    writeBatch // Add writeBatch here
 };

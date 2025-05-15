@@ -271,12 +271,7 @@ export default function Dashboard() {
 
   const stats = {
     totalMovies: userMovies.length,
-    averageRating: userMovies.length
-      ? (userMovies.reduce((sum, m) => sum + (m.rating || 0), 0) / userMovies.length).toFixed(1)
-      : 0,
     mostPopularGenre: "Action",
-    totalViews: userMovies.reduce((sum, m) => sum + (m.views || 0), 0),
-    totalLikes: userMovies.reduce((sum, m) => sum + (m.likes || 0), 0),
     totalComments: userMovies.reduce((sum, m) => sum + (m.comments || 0), 0),
   };
 
@@ -630,10 +625,10 @@ export default function Dashboard() {
                   transition={{ type: "spring", stiffness: 300 }}
                 >
                   <h3 className={`text-xl sm:text-2xl font-bold ${theme === "light" ? "text-gray-800" : "text-gray-100"} mb-6`}>
-                    Video Upload Management
+                    Movie Ticket Upload Management
                   </h3>
                   <p className={`${theme === "light" ? "text-gray-700" : "text-gray-300"} mb-6 text-sm sm:text-base`}>
-                    The owner can upload, manage, and organize videos, providing details such as titles, descriptions, and posters.
+                    The owner can upload, manage, and organize movie tickets, providing details such as titles, descriptions, and posters.
                   </p>
                   <div
                     className={`${
@@ -641,10 +636,10 @@ export default function Dashboard() {
                     } p-4 sm:p-6 rounded-xl shadow-md hover:shadow-lg transition-shadow`}
                   >
                     <h4 className={`text-lg sm:text-xl font-semibold ${theme === "light" ? "text-gray-800" : "text-gray-100"} mb-4`}>
-                      Upload New Video
+                      Upload Movie Ticket
                     </h4>
                     <p className={`${theme === "light" ? "text-gray-700" : "text-gray-300"} mb-6 text-sm sm:text-base`}>
-                      Upload new videos by providing a title, description, and poster. Your videos will be added to the platform.
+                      Upload new movie tickets by providing a title, description, and poster. Your tickets will be added to the platform.
                     </p>
                     <button
                       onClick={() => router.push("/dashboard/videoUploadDetail")}
@@ -653,7 +648,7 @@ export default function Dashboard() {
                       } px-4 py-2 rounded-md transition-all hover:bg-purple-600 hover:text-white flex items-center space-x-2 text-sm sm:text-base`}
                     >
                       <Upload size={16} />
-                      <span>Upload New Video</span>
+                      <span>Upload Movie Ticket</span>
                     </button>
                   </div>
                 </motion.div>
@@ -661,7 +656,7 @@ export default function Dashboard() {
             </div>
             <div className="flex-grow p-4 sm:p-8">
               <h2 className={`text-2xl sm:text-3xl font-bold ${theme === "light" ? "text-gray-900" : "text-gray-100"} mb-6`}>
-                Your Uploaded Movies
+                Your Uploaded Tickets
               </h2>
               {userMovies.length === 0 ? (
                 <div className={`text-center ${theme === "light" ? "text-gray-700" : "text-gray-300"}`}>
@@ -679,7 +674,7 @@ export default function Dashboard() {
                         onClick={() => handleMovieClick(movie.movieID)}
                       >
                         <p className={`text-base sm:text-lg font-semibold ${theme === "light" ? "text-gray-800" : "text-gray-100"} mb-4`}>
-                          Movie ID: {movie.movieID}
+                          Movie Name: {movie.title}
                         </p>
                         <img src={movie.poster} alt="Movie Poster" className="rounded-lg w-full h-auto object-cover" />
                       </div>
@@ -714,7 +709,7 @@ export default function Dashboard() {
               <h2 className={`text-2xl sm:text-3xl font-bold ${theme === "light" ? "text-gray-900" : "text-gray-100"} mb-6`}>
                 Statistical Analysis
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
                 <div
                   className={`${
                     theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"
@@ -731,39 +726,9 @@ export default function Dashboard() {
                   } p-4 sm:p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}
                 >
                   <h3 className={`text-lg sm:text-2xl font-semibold ${theme === "light" ? "text-gray-800" : "text-gray-100"}`}>
-                    Average Rating
-                  </h3>
-                  <p className="mt-4 text-3xl sm:text-4xl font-bold text-green-500">{stats.averageRating} ⭐</p>
-                </div>
-                <div
-                  className={`${
-                    theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"
-                  } p-4 sm:p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}
-                >
-                  <h3 className={`text-lg sm:text-2xl font-semibold ${theme === "light" ? "text-gray-800" : "text-gray-100"}`}>
                     Most Popular Genre
                   </h3>
                   <p className="mt-4 text-3xl sm:text-4xl font-bold text-purple-500">{stats.mostPopularGenre}</p>
-                </div>
-                <div
-                  className={`${
-                    theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"
-                  } p-4 sm:p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}
-                >
-                  <h3 className={`text-lg sm:text-2xl font-semibold ${theme === "light" ? "text-gray-800" : "text-gray-100"}`}>
-                    Total Views
-                  </h3>
-                  <p className="mt-4 text-3xl sm:text-4xl font-bold text-yellow-500">{stats.totalViews.toLocaleString()}</p>
-                </div>
-                <div
-                  className={`${
-                    theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"
-                  } p-4 sm:p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow`}
-                >
-                  <h3 className={`text-lg sm:text-2xl font-semibold ${theme === "light" ? "text-gray-800" : "text-gray-100"}`}>
-                    Total Likes
-                  </h3>
-                  <p className="mt-4 text-3xl sm:text-4xl font-bold text-pink-500">{stats.totalLikes.toLocaleString()}</p>
                 </div>
                 <div
                   className={`${

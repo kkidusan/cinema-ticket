@@ -1,9 +1,8 @@
-
 "use client";
 
 import { useState, useEffect, useRef, useContext } from "react";
 import { useRouter } from "next/navigation";
-import { auth, db, collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, deleteDoc, updateDoc } from "../../firebaseconfig";
+import { auth, db, collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, deleteDoc, updateDoc, getDocs, writeBatch } from "../../firebaseconfig";
 import { ArrowLeft, Send, Paperclip, Trash2, Edit, Copy, Reply, Pin, X, Smile } from "lucide-react";
 import { PacmanLoader, ClipLoader } from "react-spinners";
 import { toast, ToastContainer } from "react-toastify";
@@ -123,6 +122,51 @@ export default function Messages() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // Update all messages' show field to false when the last message is read
+  const markAllMessagesAsRead = async () => {
+    if (messages.length === 0) return;
+
+    try {
+      const q = query(
+        collection(db, "messages"),
+        where("ownerEmail", "==", userEmail),
+        where("show", "==", true)
+      );
+      const querySnapshot = await getDocs(q);
+      const batch = writeBatch(db);
+      querySnapshot.forEach((doc) => {
+        batch.update(doc.ref, { show: false });
+      });
+      await batch.commit();
+      setMessages((prevMessages) =>
+        prevMessages.map((msg) => (msg.show ? { ...msg, show: false } : msg))
+      );
+      toast.success("All messages marked as read!", { position: "bottom-right", autoClose: 3000, theme: theme });
+    } catch (error) {
+      toast.error("Failed to mark messages as read.", { position: "bottom-right", autoClose: 3000, theme: theme });
+    }
+  };
+
+  // Observe the last message to detect when it's visible
+  useEffect(() => {
+    if (!messagesEndRef.current || messages.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          const lastMessage = messages[messages.length - 1];
+          if (lastMessage.sender === "admin" && lastMessage.show) {
+            markAllMessagesAsRead();
+          }
+        }
+      },
+      { threshold: 1.0, rootMargin: "0px" } // Trigger when fully visible
+    );
+
+    observer.observe(messagesEndRef.current);
+    return () => observer.disconnect();
+  }, [messages, userEmail]);
+
   // Handle file change
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -216,7 +260,7 @@ export default function Messages() {
         text: newMessage,
         sender: "owner",
         from: auth.currentUser?.displayName || userEmail,
-        show: true,
+        show: false,
         timestamp: new Date(),
         status: "sending",
         replyTo: replyingToMessage ? replyingToMessage.id : null,
@@ -417,10 +461,10 @@ export default function Messages() {
       <div className="flex-grow px-3 sm:px-4 py-4 overflow-y-auto custom-scrollbar w-full">
         <AnimatePresence>
           {messages.length > 0 ? (
-            messages.map((msg) => (
+            messages.map((msg, index) => (
               <motion.div
                 key={msg.id || msg.tempId}
-                className={`flex ${msg.sender === "owner" ? "justify-end" : "justify-start"} mb-3 sm:mb-4 w-full`}
+                className={`flex ${msg.sender === "owner" ? "justify-end" : "justify-start"} mb-3 sm:mb-4 w-full ${msg.show && msg.sender === "admin" ? "bg-blue-100/50" : ""}`}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}

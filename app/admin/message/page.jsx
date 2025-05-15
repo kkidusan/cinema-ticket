@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useRef, useContext } from "react";
@@ -16,6 +15,8 @@ import {
   updateDoc,
   deleteDoc,
   getDoc,
+  getDocs,
+  where,
 } from "firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
 import { FaSearch, FaPaperPlane, FaReply, FaShare, FaTimes } from "react-icons/fa";
@@ -25,6 +26,12 @@ import "react-toastify/dist/ReactToastify.css";
 import { ThemeContext } from "../../context/ThemeContext";
 import { ClipLoader } from "react-spinners";
 import EmojiPicker from "emoji-picker-react";
+import { Document, Page, pdfjs } from "react-pdf";
+import "react-pdf/dist/esm/Page/AnnotationLayer.css";
+import "react-pdf/dist/esm/Page/TextLayer.css";
+
+// Set up PDF.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
 export default function ChatApp() {
   const { theme } = useContext(ThemeContext);
@@ -48,28 +55,37 @@ export default function ChatApp() {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showPdfModal, setShowPdfModal] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState(null);
+  const [numPages, setNumPages] = useState(null);
+  const [pageNumber, setPageNumber] = useState(1);
+  const [scale, setScale] = useState(1.0);
   const messageEndRef = useRef(null);
   const actionCardRef = useRef(null);
   const chatAreaRef = useRef(null);
   const inputRef = useRef(null);
+  const pdfContainerRef = useRef(null);
   const router = useRouter();
 
   // Format timestamp
   const formatTimestamp = (timestamp) => {
-    if (!timestamp?.toDate) return "";
-    const date = timestamp.toDate();
+    if (!timestamp?.toDate) return "Unknown time";
+    try {
+      const date = timestamp.toDate();
+      const now = new Date();
+      const diffInDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
 
-    const now = new Date();
-    const diffInDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
-
-    if (diffInDays === 0) {
-      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true });
-    } else if (diffInDays === 1) {
-      return `Yesterday at ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true })}`;
-    } else if (diffInDays < 7) {
-      return date.toLocaleDateString([], { weekday: "short", hour: "2-digit", minute: "2-digit", hour12: true });
-    } else {
-      return date.toLocaleDateString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: true });
+      if (diffInDays === 0) {
+        return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true });
+      } else if (diffInDays === 1) {
+        return `Yesterday at ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true })}`;
+      } else if (diffInDays < 7) {
+        return date.toLocaleDateString([], { weekday: "short", hour: "2-digit", minute: "2-digit", hour12: true });
+      } else {
+        return date.toLocaleDateString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: true });
+      }
+    } catch (error) {
+      return "Invalid timestamp";
     }
   };
 
@@ -175,6 +191,57 @@ export default function ChatApp() {
     }
   }, [userRole, selectedOwnerEmail]);
 
+  // Mark messages as read when last message is visible
+  const markMessagesAsRead = async () => {
+    if (!selectedOwnerEmail || selectedMessages.length === 0) return;
+
+    try {
+      const q = query(
+        collection(db, "messages"),
+        where("ownerEmail", "==", selectedOwnerEmail),
+        where("show", "==", false)
+      );
+      const querySnapshot = await getDocs(q);
+      const batch = writeBatch(db);
+      querySnapshot.forEach((doc) => {
+        batch.update(doc.ref, { show: true });
+      });
+      await batch.commit();
+
+      setSelectedMessages((prevMessages) =>
+        prevMessages.map((msg) => (msg.show ? msg : { ...msg, show: true }))
+      );
+      setNewMessageCounts((prev) => ({
+        ...prev,
+        [selectedOwnerEmail]: 0,
+      }));
+      toast.success("All messages marked as read!", { position: "bottom-right", autoClose: 2000, theme });
+    } catch (error) {
+      console.error("Error marking messages as read:", error);
+      toast.error("Failed to mark messages as read.", { position: "bottom-right", autoClose: 3000, theme });
+    }
+  };
+
+  // Observe the last message for visibility
+  useEffect(() => {
+    if (!messageEndRef.current || selectedMessages.length === 0 || !selectedOwnerEmail) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          const lastMessage = selectedMessages[selectedMessages.length - 1];
+          if (lastMessage.sender === "owner" && !lastMessage.show) {
+            markMessagesAsRead();
+          }
+        }
+      },
+      { threshold: 1.0, rootMargin: "0px" }
+    );
+
+    observer.observe(messageEndRef.current);
+    return () => observer.disconnect();
+  }, [selectedMessages, selectedOwnerEmail]);
+
   // Handle file change
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -223,7 +290,7 @@ export default function ChatApp() {
           });
           throw error;
         }
-        await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait before retry
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
   };
@@ -241,26 +308,15 @@ export default function ChatApp() {
     setReplyingTo(null);
     setFile(null);
     setShowEmojiPicker(false);
+    setShowPdfModal(false);
+    setPdfUrl(null);
+    setPageNumber(1);
+    setScale(1.0);
     const selectedMsgs = groupedMessages[email] || [];
     setSelectedMessages(selectedMsgs);
 
     const ownerInfo = await fetchOwnerData(email);
     setSelectedOwnerInfo(ownerInfo);
-
-    const batch = writeBatch(db);
-    selectedMsgs.forEach((msg) => {
-      if (msg.sender === "owner" && !msg.show) {
-        const messageRef = doc(db, "messages", msg.id);
-        batch.update(messageRef, { show: true });
-      }
-    });
-
-    try {
-      await batch.commit();
-    } catch (error) {
-      console.error("Error updating messages:", error);
-      toast.error("Failed to mark messages as read.", { position: "bottom-right", autoClose: 3000, theme });
-    }
   };
 
   // Send message
@@ -453,7 +509,27 @@ export default function ChatApp() {
     setShowForwardModal(false);
   };
 
-  // Close action card and emoji picker on outside click
+  // Handle PDF modal
+  const openPdfModal = (url) => {
+    setPdfUrl(url);
+    setShowPdfModal(true);
+    setPageNumber(1);
+    setScale(1.0);
+  };
+
+  const closePdfModal = () => {
+    setShowPdfModal(false);
+    setPdfUrl(null);
+    setNumPages(null);
+    setPageNumber(1);
+    setScale(1.0);
+  };
+
+  const onDocumentLoadSuccess = ({ numPages }) => {
+    setNumPages(numPages);
+  };
+
+  // Close action card, emoji picker, and PDF modal on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (
@@ -633,7 +709,7 @@ export default function ChatApp() {
                 selectedMessages.map((msg, index) => (
                   <motion.div
                     key={msg.id || index}
-                    className={`flex flex-col ${msg.sender === "admin" ? "items-end" : "items-start"} hover:bg-opacity-10 hover:bg-gray-500 transition-colors rounded-lg p-1`}
+                    className={`flex flex-col ${msg.sender === "admin" ? "items-end" : "items-start"} hover:bg-opacity-10 hover:bg-gray-500 transition-colors rounded-lg p-1 ${!msg.show && msg.sender === "owner" ? "bg-blue-100/50" : ""}`}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3 }}
@@ -680,14 +756,12 @@ export default function ChatApp() {
                                 Your browser does not support the video tag.
                               </video>
                             ) : (
-                              <a
-                                href={msg.fileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className={`text-sm underline ${theme === "light" ? "text-blue-600" : "text-blue-400"} hover:underline`}
+                              <button
+                                onClick={() => openPdfModal(msg.fileUrl)}
+                                className={`text-sm underline ${theme === "light" ? "text-blue-600 hover:text-blue-800" : "text-blue-400 hover:text-blue-300"}`}
                               >
                                 View PDF
-                              </a>
+                              </button>
                             )}
                           </div>
                         )}
@@ -1007,14 +1081,12 @@ export default function ChatApp() {
                         Your browser does not support the video tag.
                       </video>
                     ) : (
-                      <a
-                        href={forwardingMessage.fileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`text-sm underline ${theme === "light" ? "text-blue-600" : "text-blue-400"} hover:underline`}
+                      <button
+                        onClick={() => openPdfModal(forwardingMessage.fileUrl)}
+                        className={`text-sm underline ${theme === "light" ? "text-blue-600 hover:text-blue-800" : "text-blue-400 hover:text-blue-300"}`}
                       >
                         View PDF
-                      </a>
+                      </button>
                     )}
                   </div>
                 )}
@@ -1035,6 +1107,89 @@ export default function ChatApp() {
                     <p className={`font-medium ${theme === "light" ? "text-gray-800" : "text-white"}`}>{getDisplayName(email)}</p>
                   </motion.div>
                 ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* PDF Viewer Modal */}
+      <AnimatePresence>
+        {showPdfModal && pdfUrl && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            onClick={closePdfModal}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className={`relative ${theme === "light" ? "bg-white" : "bg-gray-800"} rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-auto`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={closePdfModal}
+                className={`absolute top-4 right-4 p-1 rounded-full ${theme === "light" ? "hover:bg-gray-200" : "hover:bg-gray-700"}`}
+                aria-label="Close PDF viewer"
+              >
+                <FaTimes className={theme === "light" ? "text-gray-600" : "text-gray-300"} />
+              </button>
+              <h3 className={`text-xl font-bold mb-4 ${theme === "light" ? "text-gray-800" : "text-white"}`}>PDF Viewer</h3>
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setPageNumber((prev) => Math.max(prev - 1, 1))}
+                    disabled={pageNumber <= 1}
+                    className={`p-2 rounded-md ${theme === "light" ? "bg-gray-200 hover:bg-gray-300" : "bg-gray-700 hover:bg-gray-600"} ${pageNumber <= 1 ? "opacity-50 cursor-not-allowed" : ""}`}
+                    aria-label="Previous page"
+                  >
+                    Previous
+                  </button>
+                  <span className={`text-sm ${theme === "light" ? "text-gray-800" : "text-white"}`}>
+                    Page {pageNumber} of {numPages || "?"}
+                  </span>
+                  <button
+                    onClick={() => setPageNumber((prev) => Math.min(prev + 1, numPages || prev))}
+                    disabled={pageNumber >= numPages}
+                    className={`p-2 rounded-md ${theme === "light" ? "bg-gray-200 hover:bg-gray-300" : "bg-gray-700 hover:bg-gray-600"} ${pageNumber >= numPages ? "opacity-50 cursor-not-allowed" : ""}`}
+                    aria-label="Next page"
+                  >
+                    Next
+                  </button>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setScale((prev) => Math.max(prev - 0.1, 0.5))}
+                    className={`p-2 rounded-md ${theme === "light" ? "bg-gray-200 hover:bg-gray-300" : "bg-gray-700 hover:bg-gray-600"}`}
+                    aria-label="Zoom out"
+                  >
+                    -
+                  </button>
+                  <span className={`text-sm ${theme === "light" ? "text-gray-800" : "text-white"}`}>{Math.round(scale * 100)}%</span>
+                  <button
+                    onClick={() => setScale((prev) => Math.min(prev + 0.1, 2.0))}
+                    className={`p-2 rounded-md ${theme === "light" ? "bg-gray-200 hover:bg-gray-300" : "bg-gray-700 hover:bg-gray-600"}`}
+                    aria-label="Zoom in"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              <div ref={pdfContainerRef} className="overflow-auto max-h-[70vh]">
+                <Document
+                  file={pdfUrl}
+                  onLoadSuccess={onDocumentLoadSuccess}
+                  onLoadError={(error) => {
+                    console.error("PDF load error:", error);
+                    toast.error("Failed to load PDF.", { position: "bottom-right", autoClose: 3000, theme });
+                    closePdfModal();
+                  }}
+                >
+                  <Page pageNumber={pageNumber} scale={scale} />
+                </Document>
               </div>
             </motion.div>
           </motion.div>

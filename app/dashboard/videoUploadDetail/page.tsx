@@ -1,5 +1,7 @@
+
 "use client";
 
+import React from "react";
 import { useEffect, useState, useContext, useCallback, useMemo } from "react";
 import { db } from "../../firebaseconfig";
 import { collection, addDoc, Timestamp, query, where, getDocs, onSnapshot } from "firebase/firestore";
@@ -435,7 +437,21 @@ export default function VideoUploadForm() {
               });
               setErrors((prev) => ({
                 ...prev,
-                availableSite: totalSeatsValue > 0 ? "" : "No valid seat arrangement found. Please design seats.",
+                availableSite: totalSeatsValue > 0 ? "" : (
+                  <>
+                    No valid seat arrangement found.{" "}
+                    <a
+                      onClick={handleDesignSeats}
+                      className={`text-sm font-medium cursor-pointer ${
+                        theme === "light"
+                          ? "text-indigo-600 hover:text-indigo-800"
+                          : "text-indigo-400 hover:text-indigo-300"
+                      } underline transition-colors`}
+                    >
+                      Make Seat Arrangement
+                    </a>
+                  </>
+                ),
               }));
             } else {
               setTotalSeats(0);
@@ -443,10 +459,25 @@ export default function VideoUploadForm() {
               setFormData((prev) => ({
                 ...prev,
                 seats: [],
+                availableSite: "",
               }));
               setErrors((prev) => ({
                 ...prev,
-                availableSite: "No seat arrangement found. Please design seats first.",
+                availableSite: (
+                  <>
+                    No seat arrangement found.{" "}
+                    <a
+                      onClick={handleDesignSeats}
+                      className={`text-sm font-medium cursor-pointer ${
+                        theme === "light"
+                          ? "text-indigo-600 hover:text-indigo-800"
+                          : "text-indigo-400 hover:text-indigo-300"
+                      } underline transition-colors`}
+                    >
+                      Make Seat Arrangement
+                    </a>
+                  </>
+                ),
               }));
             }
           }, (error) => {
@@ -459,6 +490,31 @@ export default function VideoUploadForm() {
               draggable: true,
               theme: theme === "light" ? "light" : "dark",
             });
+            setTotalSeats(0);
+            setSeatArrangement(null);
+            setFormData((prev) => ({
+              ...prev,
+              seats: [],
+              availableSite: "",
+            }));
+            setErrors((prev) => ({
+              ...prev,
+              availableSite: (
+                <>
+                  Failed to load seat arrangement.{" "}
+                  <a
+                    onClick={handleDesignSeats}
+                    className={`text-sm font-medium cursor-pointer ${
+                      theme === "light"
+                        ? "text-indigo-600 hover:text-indigo-800"
+                        : "text-indigo-400 hover:text-indigo-300"
+                      } underline transition-colors`}
+                  >
+                    Make Seat Arrangement
+                  </a>
+                </>
+              ),
+            }));
           });
         } else {
           toast.error("No email or role found.", {
@@ -495,7 +551,7 @@ export default function VideoUploadForm() {
     setFormData((prev) => ({ ...prev, [name]: value }));
     setErrors((prev) => ({ ...prev, [name]: "" }));
     if (name === "category") setIsCategoryOpen(false);
-    if (name === "availableSite" && totalSeats !== null) {
+    if (name === "availableSite" && totalSeats !== null && totalSeats > 0) {
       const numValue = Number(value);
       if (!Number.isInteger(numValue) || numValue <= 0) {
         setErrors((prev) => ({
@@ -507,9 +563,18 @@ export default function VideoUploadForm() {
           ...prev,
           availableSite: `Available site cannot exceed total seats (${totalSeats})`,
         }));
+      } else if (seatArrangement && totalSeats !== null) {
+        const reservedSeatsCount = seatArrangement.filter(seat => seat.reserved).length;
+        const availableSeats = totalSeats - reservedSeatsCount;
+        if (numValue > availableSeats) {
+          setErrors((prev) => ({
+            ...prev,
+            availableSite: `Available site cannot exceed available seats (${availableSeats}) after reserving ${reservedSeatsCount} seats`,
+          }));
+        }
       }
     }
-  }, [totalSeats]);
+  }, [totalSeats, seatArrangement]);
 
   const handleFileChange = useCallback(async (e) => {
     const file = e.target.files[0];
@@ -671,6 +736,28 @@ export default function VideoUploadForm() {
     return Array.from({ length: 8 }, () => characters.charAt(Math.floor(Math.random() * characters.length))).join("");
   }, []);
 
+  const handleDesignSeats = useCallback(() => {
+    try {
+      const encryptedData = encryptData(formData);
+      if (encryptedData) {
+        localStorage.setItem("videoUploadFormData", encryptedData);
+      } else {
+        throw new Error("Failed to encrypt form data");
+      }
+      router.push("/dashboard/designseat?from=videoUploadDetail");
+    } catch (error) {
+      toast.error("Failed to save form data. Please try again.", {
+        position: "top-right",
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === "light" ? "light" : "dark",
+      });
+    }
+  }, [formData, router, theme]);
+
   const validateStep = useCallback((step) => {
     const newErrors = {};
 
@@ -706,6 +793,22 @@ export default function VideoUploadForm() {
           Number(formData.availableSite) <= 0
         ) {
           newErrors.availableSite = "Available site must be a positive integer";
+        } else if (totalSeats === 0 || totalSeats === null || !seatArrangement) {
+          newErrors.availableSite = (
+            <>
+              {"No valid seat arrangement found. "}
+              <a
+                onClick={handleDesignSeats}
+                className={`text-sm font-medium cursor-pointer ${
+                  theme === "light"
+                    ? "text-indigo-600 hover:text-indigo-800"
+                    : "text-indigo-400 hover:text-indigo-300"
+                } underline transition-colors`}
+              >
+                Make Seat Arrangement
+              </a>
+            </>
+          );
         } else if (totalSeats !== null && Number(formData.availableSite) > totalSeats) {
           newErrors.availableSite = `Available site cannot exceed total seats (${totalSeats})`;
         } else if (seatArrangement && totalSeats !== null) {
@@ -739,7 +842,21 @@ export default function VideoUploadForm() {
           }
         }
         if (!formData.seats || formData.seats.length === 0) {
-          newErrors.availableSite = "No seat arrangement found. Please design seats first.";
+          newErrors.availableSite = (
+            <>
+              {"No seat arrangement found. "}
+              <a
+                onClick={handleDesignSeats}
+                className={`text-sm font-medium cursor-pointer ${
+                  theme === "light"
+                    ? "text-indigo-600 hover:text-indigo-800"
+                    : "text-indigo-400 hover:text-indigo-300"
+                } underline transition-colors`}
+              >
+                Make Seat Arrangement
+              </a>
+            </>
+          );
         }
         break;
       case 4:
@@ -756,7 +873,7 @@ export default function VideoUploadForm() {
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [formData, touched, totalSeats, seatArrangement]);
+  }, [formData, touched, totalSeats, seatArrangement, theme]);
 
   const handleNext = useCallback(() => {
     if (currentStep === 4) {
@@ -847,28 +964,6 @@ export default function VideoUploadForm() {
     }
   }, [formData, userEmail, ownerDetails, currentStep, validateStep, router, theme, initialFormData]);
 
-  const handleDesignSeats = useCallback(() => {
-    try {
-      const encryptedData = encryptData(formData);
-      if (encryptedData) {
-        localStorage.setItem("videoUploadFormData", encryptedData);
-      } else {
-        throw new Error("Failed to encrypt form data");
-      }
-    } catch (error) {
-      toast.error("Failed to save form data. Please try again.", {
-        position: "top-right",
-        autoClose: 3000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        theme: theme === "light" ? "light" : "dark",
-      });
-    }
-    router.push("/dashboard/designseat?from=videoUploadDetail");
-  }, [formData, router, theme]);
-
   if (authLoading) {
     return (
       <div
@@ -885,7 +980,7 @@ export default function VideoUploadForm() {
 
   // Calculate available seats for the label
   const reservedSeatsCount = seatArrangement ? seatArrangement.filter(seat => seat.reserved).length : 0;
-  const availableSeats = totalSeats !== null ? totalSeats - reservedSeatsCount : null;
+  const availableSeats = totalSeats !== null && totalSeats > 0 ? totalSeats - reservedSeatsCount : null;
 
   const steps = [
     {
@@ -1042,7 +1137,7 @@ export default function VideoUploadForm() {
 
         <form onSubmit={handleSubmit} autoComplete="off">
           <div className="space-y-6">
-            {totalSeats > 0 && currentStep === 3 && (
+            {totalSeats > 0 && seatArrangement && currentStep === 3 && (
               <div
                 className={`mb-6 p-6 rounded-xl ${
                   theme === "light"
@@ -1427,7 +1522,7 @@ export default function VideoUploadForm() {
                       step={field.type === "number" ? "1" : undefined}
                       autoComplete="off"
                     />
-                    {field.name === "availableSite" && totalSeats > 0 && (
+                    {field.name === "availableSite" && totalSeats > 0 && seatArrangement ? (
                       <a
                         onClick={handleDesignSeats}
                         className={`mt-2 inline-block text-sm font-medium cursor-pointer ${
@@ -1437,6 +1532,17 @@ export default function VideoUploadForm() {
                         } underline transition-colors`}
                       >
                         Modify Seat Arrangement
+                      </a>
+                    ) : field.name === "availableSite" && (
+                      <a
+                        onClick={handleDesignSeats}
+                        className={`mt-2 inline-block text-sm font-medium cursor-pointer ${
+                          theme === "light"
+                            ? "text-indigo-600 hover:text-indigo-800"
+                            : "text-indigo-400 hover:text-indigo-300"
+                        } underline transition-colors`}
+                      >
+                        Make Seat Arrangement
                       </a>
                     )}
                   </div>

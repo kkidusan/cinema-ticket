@@ -122,7 +122,6 @@ export default function Dashboard() {
           throw new Error(errorMessage);
         }
       } catch (error) {
-        // Suppress console.error and rely on toast
         setTimeout(() => {
           router.replace("/login");
         }, 3500); // Delay redirect to show toast
@@ -153,17 +152,35 @@ export default function Dashboard() {
       }
     };
 
-    const fetchMovies = async () => {
+    const fetchMovies = () => {
       try {
         const q = query(collection(db, "Movies"), where("email", "==", userEmail));
-        const querySnapshot = await getDocs(q);
-        setUserMovies(querySnapshot.docs.map((doc) => doc.data()));
+        return onSnapshot(q, (querySnapshot) => {
+          const movies = querySnapshot.docs.map((doc) => doc.data());
+          setUserMovies(movies);
+          const totalComments = movies.reduce((sum, movie) => {
+            const reviews = Array.isArray(movie.reviews) ? movie.reviews : [];
+            return sum + reviews.length;
+          }, 0);
+          setStats((prev) => ({
+            ...prev,
+            totalMovies: movies.length,
+            totalComments,
+          }));
+        }, (error) => {
+          toast.error("Failed to fetch movies.", {
+            position: "top-right",
+            autoClose: 3000,
+            theme: theme === "light" ? "light" : "dark",
+          });
+        });
       } catch (error) {
         toast.error("Failed to fetch movies.", {
           position: "top-right",
           autoClose: 3000,
           theme: theme === "light" ? "light" : "dark",
         });
+        return () => {};
       }
     };
 
@@ -178,6 +195,12 @@ export default function Dashboard() {
         return onSnapshot(q, (querySnapshot) => {
           setMessageCount(querySnapshot.size);
           setMessages(querySnapshot.docs.map((doc) => doc.data()));
+        }, (error) => {
+          toast.error("Failed to fetch messages.", {
+            position: "top-right",
+            autoClose: 3000,
+            theme: theme === "light" ? "light" : "dark",
+          });
         });
       } catch (error) {
         toast.error("Failed to fetch messages.", {
@@ -185,13 +208,17 @@ export default function Dashboard() {
           autoClose: 3000,
           theme: theme === "light" ? "light" : "dark",
         });
+        return () => {};
       }
     };
 
     fetchUserData();
-    fetchMovies();
+    const unsubscribeMovies = fetchMovies();
     const unsubscribeMessages = fetchMessages();
-    return () => unsubscribeMessages && unsubscribeMessages();
+    return () => {
+      unsubscribeMovies && unsubscribeMovies();
+      unsubscribeMessages && unsubscribeMessages();
+    };
   }, [isAuthenticated, userEmail, userRole, theme]);
 
   // Real-time listener for user approval status
@@ -205,9 +232,15 @@ export default function Dashboard() {
       } else {
         setIsApproved(false);
       }
+    }, (error) => {
+      toast.error("Failed to fetch approval status.", {
+        position: "top-right",
+        autoClose: 3000,
+        theme: theme === "light" ? "light" : "dark",
+      });
     });
     return () => unsubscribe();
-  }, [isAuthenticated, userEmail]);
+  }, [isAuthenticated, userEmail, theme]);
 
   const handleMessageClick = async () => {
     try {
@@ -269,11 +302,11 @@ export default function Dashboard() {
     }
   };
 
-  const stats = {
-    totalMovies: userMovies.length,
+  const [stats, setStats] = useState({
+    totalMovies: 0,
     mostPopularGenre: "Action",
-    totalComments: userMovies.reduce((sum, m) => sum + (m.comments || 0), 0),
-  };
+    totalComments: 0,
+  });
 
   const profileMenuItems = [
     { label: "My Account", path: "/dashboard/profile" },

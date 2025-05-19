@@ -13,6 +13,7 @@ import {
     addDoc, 
     serverTimestamp, 
     doc, 
+    Timestamp,
     updateDoc, 
     deleteDoc, 
     limit,
@@ -71,7 +72,8 @@ export {
     updatePassword, 
     signInWithEmailAndPassword, 
     orderBy, 
-    onSnapshot, 
+    onSnapshot,
+    Timestamp,
     serverTimestamp,
     limit,
     writeBatch // Add writeBatch here

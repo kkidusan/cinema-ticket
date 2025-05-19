@@ -6,7 +6,7 @@ import { collection, query, where, getDocs, doc, updateDoc, addDoc, onSnapshot }
 import { db } from '../../firebaseconfig';
 import { ThemeContext } from '../../context/ThemeContext';
 import { PuffLoader } from 'react-spinners';
-import { DollarSign, ArrowDownCircle, ArrowUpCircle, Eye, EyeOff } from 'lucide-react';
+import { DollarSign, ArrowDownCircle, ArrowUpCircle, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import { FaArrowLeft } from 'react-icons/fa';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -263,7 +263,6 @@ export default function FinancePage() {
       return false;
     }
     if (formData.isMobileMoney) {
-      // Enhanced validation for Ethiopian phone numbers
       const phoneRegex = /^\+251(9|7)\d{8}$/;
       if (!phoneRegex.test(formData.account_number)) {
         toast.error('Please enter a valid Ethiopian phone number (e.g., +2519XXXXXXXX or +2517XXXXXXXX).', {
@@ -303,6 +302,18 @@ export default function FinancePage() {
       });
       return false;
     }
+    if (!formData.account_name.match(/^[A-Za-z\s]+$/)) {
+      toast.error('Account name must contain only letters and spaces.', {
+        position: 'bottom-right',
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === 'light' ? 'light' : 'dark',
+      });
+      return false;
+    }
     if (!formData.isMobileMoney && !formData.bank_code) {
       toast.error('Please select a bank.', {
         position: 'bottom-right',
@@ -315,6 +326,16 @@ export default function FinancePage() {
       });
       return false;
     }
+    toast.success('Form validated successfully. Processing your request...', {
+      position: 'bottom-right',
+      autoClose: 2000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+      theme: theme === 'light' ? 'light' : 'dark',
+      className: 'bg-blue-100 text-blue-800 font-medium rounded-xl shadow-lg',
+    });
     return true;
   };
 
@@ -373,15 +394,29 @@ export default function FinancePage() {
                   totalBalance - Number(formData.amount)
                 ).toLocaleString('en-US', { minimumFractionDigits: 2 })} ETB.`;
 
-            toast.success(successMessage, {
-              position: 'bottom-right',
-              autoClose: 3000,
-              hideProgressBar: false,
-              closeOnClick: true,
-              pauseOnHover: true,
-              draggable: true,
-              theme: theme === 'light' ? 'light' : 'dark',
-            });
+            toast.success(
+              <div className="flex items-center gap-2">
+                <CheckCircle size={24} className="text-green-600" />
+                <span>{successMessage}</span>
+              </div>,
+              {
+                position: 'top-right',
+                autoClose: 3000, // Changed from 4000 to 3000
+                hideProgressBar: false,
+                closeOnClick: true,
+                pauseOnHover: true,
+                draggable: true,
+                theme: theme === 'light' ? 'light' : 'dark',
+                className: `${
+                  theme === 'light'
+                    ? 'bg-gradient-to-r from-green-100 to-green-200 text-green-800'
+                    : 'bg-gradient-to-r from-green-700 to-green-800 text-green-100'
+                } font-semibold rounded-xl shadow-xl border ${
+                  theme === 'light' ? 'border-green-300' : 'border-green-600'
+                } p-4`,
+                style: { minWidth: '300px', animation: 'slideIn 0.3s ease-in-out' },
+              }
+            );
           } catch (firestoreError) {
             toast.warn(
               `Withdrawal of ${formData.amount} ETB successful, but failed to record in history. Contact support.`,
@@ -719,6 +754,18 @@ export default function FinancePage() {
 
   return (
     <div className={`min-h-screen ${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'}`}>
+      <style jsx global>{`
+        @keyframes slideIn {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+      `}</style>
       <ToastContainer
         position="bottom-right"
         autoClose={3000}

@@ -1,19 +1,144 @@
+'use client';
+import React, { useState, useEffect, useContext } from 'react';
+import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
+import {
+  db,
+  collection,
+  query,
+  where,
+  onSnapshot,
+  doc,
+  updateDoc,
+  addDoc,
+  getDocs,
+  Timestamp,
+} from '../../../firebaseconfig';
+import { PuffLoader } from 'react-spinners';
+import { FaArrowLeft, FaStar, FaChevronDown, FaChevronUp, FaTimes } from 'react-icons/fa';
+import { ThemeContext } from '../../../context/ThemeContext';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import { toGregorian, toEthiopian } from 'ethiopian-date';
 
-"use client";
+// Ethiopian months for formatting
+const ethMonths = [
+  'Meskerem',
+  'Tikimt',
+  'Hidar',
+  'Tahsas',
+  'Tir',
+  'Yekatit',
+  'Megabit',
+  'Miazia',
+  'Ginbot',
+  'Sene',
+  'Hamle',
+  'Nehase',
+  'Pagume',
+];
 
-import React, { useState, useEffect, useContext } from "react";
-import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-import { db, collection, query, where, onSnapshot } from "../../../firebaseconfig";
-import { PuffLoader } from "react-spinners";
-import { FaArrowLeft } from "react-icons/fa";
-import { ThemeContext } from "../../../context/ThemeContext";
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+// EthiopianDatePicker Component
+function EthiopianDatePicker({ name, value, onChange, error, theme }) {
+  const getCurrentEthiopianDate = () => {
+    const today = new Date();
+    const [ethYear, ethMonth, ethDay] = toEthiopian(
+      today.getFullYear(),
+      today.getMonth() + 1,
+      today.getDate()
+    );
+    return `${ethYear}-${String(ethMonth).padStart(2, '0')}-${String(ethDay).padStart(2, '0')}`;
+  };
+
+  const initialDate = value ? value.split('T')[0] : getCurrentEthiopianDate();
+  const initialTime = value ? value.split('T')[1] || '00:00' : '00:00';
+
+  const [ethiopianDate, setEthiopianDate] = useState(initialDate);
+  const [time, setTime] = useState(initialTime);
+
+  useEffect(() => {
+    if (value) {
+      const [datePart, timePart] = value.split('T');
+      setEthiopianDate(datePart);
+      setTime(timePart || '00:00');
+    } else {
+      const currentEthiopianDate = getCurrentEthiopianDate();
+      setEthiopianDate(currentEthiopianDate);
+      setTime('00:00');
+    }
+  }, [value]);
+
+  const handleDateChange = (e) => {
+    const { value } = e.target;
+    setEthiopianDate(value);
+    onChange({ target: { name, value: `${value}T${time}` } });
+  };
+
+  const handleTimeChange = (e) => {
+    const { value } = e.target;
+    setTime(value);
+    if (ethiopianDate) {
+      onChange({ target: { name, value: `${ethiopianDate}T${time}` } });
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex gap-2">
+        <input
+          type="date"
+          value={ethiopianDate}
+          onChange={handleDateChange}
+          className={`mt-1 block w-1/2 px-3 py-2 rounded-lg border ${
+            error
+              ? 'border-2 border-red-500 focus:border-red-500 focus:ring-red-500'
+              : theme === 'light'
+              ? 'border-gray-300 bg-white text-gray-900 focus:ring-indigo-500'
+              : 'border-gray-600 bg-gray-700 text-gray-100 focus:ring-indigo-500'
+          } focus:outline-none focus:ring-2`}
+        />
+        <input
+          type="time"
+          value={time}
+          onChange={handleTimeChange}
+          className={`mt-1 block w-1/2 px-3 py-2 rounded-lg border ${
+            error
+              ? 'border-2 border-red-500 focus:border-red-500 focus:ring-red-500'
+              : theme === 'light'
+              ? 'border-gray-300 bg-white text-gray-900 focus:ring-indigo-500'
+              : 'border-gray-600 bg-gray-700 text-gray-100 focus:ring-indigo-500'
+          } focus:outline-none focus:ring-2`}
+        />
+      </div>
+      {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
+    </div>
+  );
+}
+
+// Function to format date in Ethiopian Calendar
+const formatEthiopianDate = (dateString) => {
+  const [datePart, timePart] = dateString.split('T');
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [gregYear, gregMonth, gregDay] = toGregorian(year, month, day);
+  const date = new Date(gregYear, gregMonth - 1, gregDay);
+  const [ethYear, ethMonth, ethDay] = toEthiopian(
+    date.getFullYear(),
+    date.getMonth() + 1,
+    date.getDate()
+  );
+
+  const [hours, minutes] = timePart.split(':');
+  const hourNum = parseInt(hours);
+  const isPM = hourNum >= 12;
+  const hour12 = hourNum % 12 || 12;
+  const time = `${hour12.toString().padStart(2, '0')}:${minutes} ${isPM ? 'PMnasium' : 'AM'}`;
+
+  return `${ethDay} ${ethMonths[ethMonth - 1]} ${ethYear}, ${time}`;
+};
 
 export default function VideoDetail({ params: paramsPromise }) {
-  const params = React.use(paramsPromise); // Unwrap params using React.use
-  const { id } = params; // Destructure id after unwrapping
+  const params = React.use(paramsPromise);
+  const { id } = params;
   const router = useRouter();
   const { theme } = useContext(ThemeContext);
 
@@ -23,26 +148,115 @@ export default function VideoDetail({ params: paramsPromise }) {
   const [userRole, setUserRole] = useState(null);
   const [soldTickets, setSoldTickets] = useState(0);
   const [availableSite, setAvailableSite] = useState(0);
+  const [reviews, setReviews] = useState([]);
+  const [userProfiles, setUserProfiles] = useState({});
+  const [showMore, setShowMore] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [dialogAction, setDialogAction] = useState(null);
+  const [dialogMessage, setDialogMessage] = useState('');
+  const [showPostponeForm, setShowPostponeForm] = useState(false);
+  const [newScreeningDate, setNewScreeningDate] = useState('');
+  const [dateError, setDateError] = useState('');
+  const [tickets, setTickets] = useState([]);
+
+  const fetchUserProfile = async (userId) => {
+    try {
+      const userRef = doc(db, 'Users', userId);
+      const unsubscribe = onSnapshot(userRef, (userDoc) => {
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          setUserProfiles((prev) => ({
+            ...prev,
+            [userId]: { email: data.email || userId },
+          }));
+        } else {
+          setUserProfiles((prev) => ({
+            ...prev,
+            [userId]: { email: userId },
+          }));
+        }
+      }, () => {
+        setUserProfiles((prev) => ({
+          ...prev,
+          [userId]: { email: userId },
+        }));
+      });
+      return unsubscribe;
+    } catch {
+      return () => {};
+    }
+  };
+
+  const addProvidedReview = async (movieDocRef, currentReviews) => {
+    try {
+      const providedReview = {
+        rating: 3,
+        review: 'mis wedfkjdfskjkdhfsjkjhdfsjk',
+        timestamp: Timestamp.fromDate(new Date('2025-05-18T13:28:09-08:00')),
+        userId: 'mekuriawerede64@gmail.com',
+      };
+
+      const reviewExists = currentReviews.some(
+        (r) =>
+          r.userId === providedReview.userId &&
+          r.review === providedReview.review &&
+          r.timestamp.toMillis() === providedReview.timestamp.toMillis()
+      );
+
+      if (!reviewExists) {
+        const cleanedReviews = currentReviews.map(({ rating, review, timestamp, userId }) => ({
+          rating,
+          review,
+          timestamp,
+          userId,
+        }));
+        await updateDoc(movieDocRef, {
+          reviews: [...cleanedReviews, providedReview],
+        });
+        toast.success('Review added successfully!', {
+          position: 'bottom-right',
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme,
+        });
+      }
+    } catch (error) {
+      console.error('Error adding review:', error);
+      toast.error('Failed to add review.', {
+        position: 'bottom-right',
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme,
+      });
+    }
+  };
 
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const response = await fetch("/api/validate", {
-          method: "GET",
-          credentials: "include",
+        const response = await fetch('/api/validate', {
+          method: 'GET',
+          credentials: 'include',
         });
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          const errorMessage = errorData.error || "Unauthorized access. Please log in.";
+          const errorMessage = errorData.error || 'Unauthorized access. Please log in.';
           toast.error(errorMessage, {
-            position: "top-right",
+            position: 'bottom-right',
             autoClose: 3000,
             hideProgressBar: false,
             closeOnClick: true,
             pauseOnHover: true,
             draggable: true,
-            theme: theme === "light" ? "light" : "dark",
+            theme,
           });
           throw new Error(errorMessage);
         }
@@ -52,34 +266,35 @@ export default function VideoDetail({ params: paramsPromise }) {
           setUserEmail(data.email);
           setUserRole(data.role);
 
-          if (data.role !== "owner") {
-            toast.error("User is not an owner.", {
-              position: "top-right",
+          if (data.role !== 'owner') {
+            toast.error('User is not an owner.', {
+              position: 'bottom-right',
               autoClose: 3000,
               hideProgressBar: false,
               closeOnClick: true,
               pauseOnHover: true,
               draggable: true,
-              theme: theme === "light" ? "light" : "dark",
+              theme,
             });
-            throw new Error("User is not an owner.");
+            throw new Error('User is not an owner.');
           }
         } else {
-          toast.error("No email or role found.", {
-            position: "top-right",
+          toast.error('No email or role found.', {
+            position: 'bottom-right',
             autoClose: 3000,
             hideProgressBar: false,
             closeOnClick: true,
             pauseOnHover: true,
             draggable: true,
-            theme: theme === "light" ? "light" : "dark",
+            theme,
           });
-          throw new Error("No email or role found");
+          setTimeout(() => {
+            router.replace('/login');
+          }, 2000);
+          throw new Error('No email or role found');
         }
       } catch (error) {
-        setTimeout(() => {
-          router.replace("/login");
-        }, 3500); // Delay redirect to show toast
+        console.error('Error fetching user:', error);
       } finally {
         setLoading(false);
       }
@@ -89,43 +304,447 @@ export default function VideoDetail({ params: paramsPromise }) {
   }, [router, theme]);
 
   useEffect(() => {
-    if (id && userRole === "owner") {
-      const q = query(collection(db, "Movies"), where("movieID", "==", id));
-
-      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+    if (id && userRole === 'owner') {
+      const q = query(collection(db, 'Movies'), where('movieID', '==', id));
+      const unsubscribe = onSnapshot(q, async (querySnapshot) => {
         if (!querySnapshot.empty) {
-          const movieData = querySnapshot.docs[0].data();
+          const movieDoc = querySnapshot.docs[0];
+          const movieData = movieDoc.data();
           setVideo(movieData);
           setSoldTickets(movieData.soldTickets || 0);
           setAvailableSite(movieData.availableSite || 0);
+
+          let reviewsData = [];
+          if (Array.isArray(movieData.reviews) && movieData.reviews.length > 0) {
+            const uniqueReviews = new Set();
+            reviewsData = movieData.reviews
+              .filter((review) => {
+                return review.userId && review.rating && review.review && review.timestamp;
+              })
+              .filter((review) => {
+                const reviewKey = `${review.userId}-${review.timestamp?.toMillis() || ''}-${review.review}`;
+                if (uniqueReviews.has(reviewKey)) {
+                  return false;
+                }
+                uniqueReviews.add(reviewKey);
+                return true;
+              })
+              .map((review, index) => ({
+                id: `${id}-${review.userId}-${index}`,
+                rating: review.rating,
+                review: review.review,
+                timestamp: review.timestamp,
+                userId: review.userId,
+              }));
+
+            const userIds = [...new Set(reviewsData.map((review) => review.userId))];
+            const unsubscribeUsers = userIds.map(fetchUserProfile);
+            setReviews(reviewsData);
+
+            if (id === 'sBlZqZ3U') {
+              await addProvidedReview(doc(db, 'Movies', movieDoc.id), reviewsData);
+            }
+
+            return () => {
+              unsubscribeUsers.forEach((unsubscribe) => unsubscribe());
+            };
+          } else {
+            setReviews([]);
+          }
         } else {
-          toast.error("No video found with the given ID!", {
-            position: "top-right",
+          toast.error('No video found with the given ID!', {
+            position: 'bottom-right',
             autoClose: 3000,
             hideProgressBar: false,
             closeOnClick: true,
             pauseOnHover: true,
             draggable: true,
-            theme: theme === "light" ? "light" : "dark",
+            theme,
           });
+          setVideo(null);
         }
+        setLoading(false);
+      }, () => {
+        setVideo(null);
         setLoading(false);
       });
 
-      return () => unsubscribe();
+      return () => {
+        unsubscribe();
+      };
     }
   }, [id, userRole, theme]);
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      router.back();
+    } else {
+      router.push('/movies');
+    }
+  };
+
+  const checkIfCancelled = async () => {
+    try {
+      const q = query(collection(db, 'CancelledTickets'), where('movieID', '==', id));
+      const querySnapshot = await getDocs(q);
+      return !querySnapshot.empty;
+    } catch (error) {
+      console.error('Error checking cancellation status:', error);
+      toast.error('Failed to check cancellation status.', {
+        position: 'top-right',
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme,
+      });
+      return false;
+    }
+  };
+
+  const checkPaymentHistory = async () => {
+    try {
+      const paymentHistoryRef = collection(db, "paymentHistory");
+      const q = query(paymentHistoryRef, where("movieId", "==", id));
+      const paymentSnapshot = await getDocs(q);
+
+      if (paymentSnapshot.empty) {
+        setTickets([]);
+        return [];
+      }
+
+      const ticketsData = await Promise.all(
+        paymentSnapshot.docs.map(async (doc) => {
+          const ticketData = doc.data();
+          const moviesRef = collection(db, "Movies");
+          const movieQuery = query(moviesRef, where("movieID", "==", ticketData.movieId));
+          const movieSnapshot = await getDocs(movieQuery);
+
+          let movieDetails = {};
+          if (!movieSnapshot.empty) {
+            const movieData = movieSnapshot.docs[0].data();
+            movieDetails = {
+              title: movieData.title,
+              cinemaLocation: movieData.cinemaLocation,
+              cinemaName: movieData.cinemaName,
+            };
+          }
+
+          return {
+            id: doc.id,
+            data: {
+              firstName: ticketData.firstName,
+              lastName: ticketData.lastName,
+              movieId: ticketData.movieId,
+              orderId: ticketData.orderId,
+              paymentDate: ticketData.paymentDate,
+              ticketId: ticketData.ticketId || doc.id,
+              screeningDate: ticketData.screeningDate || "Date TBD",
+              docId: doc.id,
+              movieDetails,
+            }
+          };
+        })
+      );
+
+      setTickets(ticketsData.map(item => item.data));
+      return ticketsData;
+    } catch (error) {
+      console.error("Error fetching tickets:", error);
+      setTickets([]);
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateOrInsertPaymentHistory = async (movieId, updates) => {
+    try {
+      const paymentHistoryDocs = await checkPaymentHistory();
+      const isPostponed = updates.postponed === "true";
+
+      if (paymentHistoryDocs.length > 0) {
+        // Update existing documents if tickets exist
+        for (const payment of paymentHistoryDocs) {
+          if (payment.data.movieId === movieId) {
+            const paymentRef = doc(db, 'paymentHistory', payment.id);
+            await updateDoc(paymentRef, {
+              postponed: isPostponed ? "true" : "false",
+              cancelled: updates.cancelled,
+              lastUpdated: Timestamp.now(),
+            });
+          }
+        }
+      } else {
+        // Insert new document if no tickets exist
+        const now = new Date();
+        const [ethYear, ethMonth, ethDay] = toEthiopian(
+          now.getFullYear(),
+          now.getMonth() + 1,
+          now.getDate()
+        );
+        const ethDate = `${ethDay} ${ethMonths[ethMonth - 1]} ${ethYear}, ${now
+          .toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' })
+          .replace(/,/, '')}`;
+        const orderId = `TX-${Date.now()}`;
+        const ticketId = `WO-FU-${Math.floor(1000 + Math.random() * 9000)}`;
+
+        await addDoc(collection(db, 'paymentHistory'), {
+          email: userEmail || 'mekuriawerede64@gmail.com',
+          firstName: 'mekuria',
+          lastName: 'were',
+          movieId,
+          orderId,
+          paymentDate: Timestamp.now(),
+          postponed: isPostponed ? "true" : "false",
+          cancelled: updates.cancelled,
+          purchaseDateEthiopian: ethDate,
+          screeningDate: video.screeningDate || 'Unknown',
+          seatNumber: '1',
+          ticketId,
+          lastUpdated: Timestamp.now(),
+        });
+      }
+
+      toast.success('Payment history updated successfully.', {
+        position: 'top-right',
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme,
+        className: `${
+          theme === 'light'
+            ? 'bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800'
+            : 'bg-gradient-to-r from-blue-700 to-blue-800 text-blue-100'
+        } font-semibold rounded-xl shadow-xl border ${
+          theme === 'light' ? 'border-blue-300' : 'border-blue-600'
+        } p-4`,
+        style: { minWidth: '300px', animation: 'slideIn 0.3s ease-in-out' },
+      });
+    } catch (error) {
+      console.error('Error updating or inserting payment history:', error);
+      toast.error('Failed to update payment history.', {
+        position: 'top-right',
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme,
+      });
+    }
+  };
+
+  const handleTicketCancellation = () => {
+    setIsModalOpen(true);
+    setShowPostponeForm(false);
+  };
+
+  const handleOpenDialog = async (action) => {
+    if (action === 'cancel') {
+      const isCancelled = await checkIfCancelled();
+      if (isCancelled) {
+        setIsModalOpen(false);
+        toast.error('The ticket is already canceled.', {
+          position: 'top-right',
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme,
+          className: `${
+            theme === 'light'
+              ? 'bg-gradient-to-r from-red-100 to-red-200 text-red-800'
+              : 'bg-gradient-to-r from-red-700 to-red-800 text-red-100'
+          } font-semibold rounded-xl shadow-xl border ${
+            theme === 'light' ? 'border-red-300' : 'border-red-600'
+          } p-4`,
+          style: { minWidth: '300px', animation: 'slideIn 0.3s ease-in-out' },
+        });
+        return;
+      }
+      setIsModalOpen(false);
+      setDialogAction(action);
+      setDialogMessage('Are you sure you want to cancel all tickets?');
+      setIsDialogOpen(true);
+    } else if (action === 'postpone') {
+      setShowPostponeForm(true);
+      setIsModalOpen(true);
+    }
+  };
+
+  const handleConfirmDialog = async () => {
+    try {
+      if (dialogAction === 'cancel') {
+        await addDoc(collection(db, 'CancelledTickets'), {
+          movieID: id,
+          title: video.title,
+          timestamp: Timestamp.now(),
+          userEmail,
+        });
+
+        await updateOrInsertPaymentHistory(id, { postponed: "false", cancelled: "true" });
+
+        toast.success('All tickets cancelled successfully.', {
+          position: 'top-right',
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme,
+          className: `${
+            theme === 'light'
+              ? 'bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800'
+              : 'bg-gradient-to-r from-blue-700 to-blue-800 text-blue-100'
+          } font-semibold rounded-xl shadow-xl border ${
+            theme === 'light' ? 'border-blue-300' : 'border-blue-600'
+          } p-4`,
+          style: { minWidth: '300px', animation: 'slideIn 0.3s ease-in-out' },
+        });
+      }
+    } catch (error) {
+      console.error('Error processing action:', error);
+      toast.error('Failed to process the action.', {
+        position: 'top-right',
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme,
+      });
+    } finally {
+      setIsDialogOpen(false);
+      setDialogAction(null);
+      setDialogMessage('');
+    }
+  };
+
+  const handleCancelDialog = () => {
+    setIsDialogOpen(false);
+    setIsModalOpen(true);
+    setShowPostponeForm(false);
+    setDialogAction(null);
+    setDialogMessage('');
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setShowPostponeForm(false);
+    setNewScreeningDate('');
+    setDateError('');
+  };
+
+  const validateScreeningDate = (dateString) => {
+    if (!dateString) {
+      return 'Please select a valid screening date and time.';
+    }
+    const [datePart] = dateString.split('T');
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [gregYear, gregMonth, gregDay] = toGregorian(year, month, day);
+    const screeningDate = new Date(gregYear, gregMonth - 1, gregDay);
+    const today = new Date();
+    const minDate = new Date(today);
+    minDate.setDate(today.getDate() + 1);
+    minDate.setHours(0, 0, 0, 0);
+
+    if (screeningDate < minDate) {
+      return 'Screening date must be at least one day in the future';
+    }
+    return '';
+  };
+
+  const handleUpdateScreeningDate = async (e) => {
+    e.preventDefault();
+    const validationError = validateScreeningDate(newScreeningDate);
+    if (validationError) {
+      setDateError(validationError);
+      return;
+    }
+
+    try {
+      const movieQuery = query(collection(db, 'Movies'), where('movieID', '==', id));
+      const movieSnapshot = await getDocs(movieQuery);
+      if (!movieSnapshot.empty) {
+        const movieDocRef = doc(db, 'Movies', movieSnapshot.docs[0].id);
+        const formattedDate = formatEthiopianDate(newScreeningDate);
+        await updateDoc(movieDocRef, {
+          screeningDate: formattedDate,
+          lastUpdated: Timestamp.now(),
+          isEthiopianDate: true,
+        });
+
+        await addDoc(collection(db, 'Postponed'), {
+          movieID: id,
+          newScreeningDate: formattedDate,
+          timestamp: Timestamp.now(),
+          userEmail,
+        });
+
+        await updateOrInsertPaymentHistory(id, { postponed: "true", cancelled: "false" });
+
+        toast.success('Screening date updated and postponement recorded successfully.', {
+          position: 'top-right',
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme,
+          className: `${
+            theme === 'light'
+              ? 'bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800'
+              : 'bg-gradient-to-r from-blue-700 to-blue-800 text-blue-100'
+          } font-semibold rounded-xl shadow-xl border ${
+            theme === 'light' ? 'border-blue-300' : 'border-blue-600'
+          } p-4`,
+          style: { minWidth: '300px', animation: 'slideIn 0.3s ease-in-out' },
+        });
+        setIsModalOpen(false);
+        setShowPostponeForm(false);
+        setNewScreeningDate('');
+        setDateError('');
+      } else {
+        toast.error('Movie not found.', {
+          position: 'top-right',
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme,
+        });
+      }
+    } catch (error) {
+      console.error('Error updating screening date or recording postponement:', error);
+      toast.error(`Failed to update: ${error.message}`, {
+        position: 'top-right',
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme,
+      });
+    }
+  };
+
   if (loading) {
     return (
-      <div className={`min-h-screen ${theme === "light" ? "bg-zinc-100" : "bg-gray-900"} flex items-center justify-center`}>
+      <div
+        className={`min-h-screen ${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'} flex items-center justify-center`}
+      >
         <motion.div
-          className="flex flex-col items-center"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
         >
-          <PuffLoader color={theme === "light" ? "#3b82f6" : "#818cf8"} size={100} />
+          <PuffLoader color={theme === 'light' ? '#3b82f6' : '#a5b4fc'} size={120} />
         </motion.div>
       </div>
     );
@@ -133,22 +752,21 @@ export default function VideoDetail({ params: paramsPromise }) {
 
   if (!video) {
     return (
-      <div className={`min-h-screen ${theme === "light" ? "bg-zinc-100" : "bg-gray-900"} flex items-center justify-center`}>
+      <div
+        className={`min-h-screen ${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'} flex items-center justify-center`}
+      >
         <motion.div
-          className="flex flex-col items-center"
+          className="text-center"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <PuffLoader color={theme === "light" ? "#ef4444" : "#f87171"} size={100} />
-          <motion.p
-            className="mt-4 text-2xl font-bold text-zinc-700"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5, duration: 0.5 }}
+          <PuffLoader color={theme === 'light' ? '#ef4444' : '#f87171'} size={120} />
+          <p
+            className={`mt-4 text-2xl font-bold ${theme === 'light' ? 'text-gray-800' : 'text-gray-200'}`}
           >
             Movie not found!
-          </motion.p>
+          </p>
         </motion.div>
       </div>
     );
@@ -158,10 +776,109 @@ export default function VideoDetail({ params: paramsPromise }) {
   const soldPercentage = totalTickets > 0 ? (soldTickets / totalTickets) * 100 : 0;
   const availablePercentage = totalTickets > 0 ? (availableSite / totalTickets) * 100 : 0;
 
+  const visibleFields = [
+    { label: 'Title', value: video.title },
+    { label: 'Category', value: video.category },
+    { label: 'Duration', value: video.duration },
+    { label: 'Cinema Name', value: video.cinemaName },
+    { label: 'Location', value: video.cinemaLocation },
+    { label: 'Available Seats', value: video.availableSite },
+    { label: 'Ticket Price', value: `$${video.ticketPrice}` },
+    { label: 'Description', value: video.description },
+    { label: 'Screening Date', value: video.screeningDate },
+  ];
+
+  const hiddenFields = [
+    {
+      label: 'Created At',
+      value: video.createdAt ? video.createdAt.toDate().toLocaleString() : 'Not available',
+    },
+    {
+      label: 'Last Updated',
+      value: video.lastUpdated ? video.lastUpdated.toDate().toLocaleString() : 'Not available',
+    },
+    { label: 'Email', value: video.email || 'Not available' },
+    { label: 'First Name', value: video.firstName || 'Not available' },
+    { label: 'Last Name', value: video.lastName || 'Not available' },
+    { label: 'Is Ethiopian Date', value: video.isEthiopianDate ? 'Yes' : 'No' },
+    {
+      label: 'Promotion Video',
+      value: video.promotionVideo ? (
+        <a
+          href={video.promotionVideo}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-indigo-500 hover:underline"
+        >
+          View Video
+        </a>
+      ) : (
+        'Not available'
+      ),
+    },
+    {
+      label: 'Rating',
+      value: video.rating ? video.rating.toFixed(2) : 'Not rated',
+    },
+    {
+      label: 'Sold Tickets',
+      value: video.soldTickets !== undefined ? video.soldTickets : 'Not available',
+    },
+    {
+      label: 'Uploading Date',
+      value: video.uploadingDate ? video.uploadingDate.toDate().toLocaleString() : 'Not available',
+    },
+    {
+      label: 'Main Cast',
+      value: video.mainCast?.length ? (
+        video.mainCast.map((cast) => (
+          <div key={cast.name} className="flex items-center gap-2">
+            <img
+              src={cast.image}
+              alt={cast.name}
+              className="w-10 h-10 rounded-full object-cover"
+              loading="lazy"
+            />
+            <span>{cast.name}</span>
+          </div>
+        ))
+      ) : (
+        'No cast available'
+      ),
+    },
+    {
+      label: 'Seats',
+      value: video.seats?.length ? (
+        video.seats.map((seat) => (
+          <div key={seat.id} className="flex gap-2">
+            <span>Seat {seat.number}:</span>
+            <span>{seat.reserved ? 'Reserved' : 'Available'}</span>
+          </div>
+        ))
+      ) : (
+        'No seats available'
+      ),
+    },
+  ];
+
   return (
-    <div className={`min-h-screen ${theme === "light" ? "bg-zinc-100" : "bg-gray-900"}`}>
+    <div
+      className={`min-h-screen font-sans ${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'} relative`}
+    >
+      <style jsx global>{`
+        @keyframes slideIn {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+      `}</style>
       <ToastContainer
-        position="top-right"
+        position="bottom-right"
         autoClose={3000}
         hideProgressBar={false}
         newestOnTop={false}
@@ -170,171 +887,466 @@ export default function VideoDetail({ params: paramsPromise }) {
         pauseOnFocusLoss
         draggable
         pauseOnHover
-        theme={theme === "light" ? "light" : "dark"}
+        theme={theme}
       />
-      {/* Fixed Navigation Header with zinc-100 gradient */}
-      <header className={`sticky top-0 z-50 ${theme === "light" ? "bg-gradient-to-br from-zinc-100 to-zinc-200" : "bg-gradient-to-br from-gray-800 to-gray-900"} border-b ${theme === "light" ? "border-zinc-200" : "border-gray-700"} shadow-sm`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => router.back()}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg ${theme === "light" ? "text-purple-700 hover:bg-purple-100" : "text-purple-300 hover:bg-purple-800"} transition-colors`}
-            >
-              <FaArrowLeft className="h-5 w-5" />
-              <span className="text-lg font-medium">Back</span>
-            </button>
-          </div>
-        </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
+      <div
+        id="page-content"
+        className={`transition-all duration-300 ${
+          isModalOpen || isDialogOpen ? 'blur-sm pointer-events-none' : ''
+        }`}
+      >
+        <div
+          className={`sticky top-0 z-50 ${
+            theme === 'light' ? 'bg-gradient-to-br from-zinc-100 to-zinc-200' : 'bg-gradient-to-br from-gray-800 to-gray-900'
+          } border-b ${theme === 'light' ? 'border-zinc-200' : 'border-zinc-700'}`}
         >
-          {/* Movie Header */}
-          <motion.div
-            className="mb-8 text-center"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.4 }}
-          >
-            <h1 className={`text-4xl font-bold ${theme === "light" ? "text-zinc-800" : "text-white"} mb-4`}>
-              {video.title}
-            </h1>
-          </motion.div>
-
-          {/* Movie Details Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Left Column - Poster */}
-            <motion.div
-              className="flex justify-center"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.4, duration: 0.5 }}
-            >
-              <motion.div
-                className={`w-full h-full ${theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"} rounded-2xl p-4 shadow-xl hover:shadow-2xl transition-shadow`}
-                whileHover={{ scale: 1.01 }}
-                transition={{ type: "spring", stiffness: 300 }}
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div className="flex items-center justify-between">
+              <motion.button
+                onClick={handleBack}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+                  theme === 'light' ? 'text-purple-700 hover:bg-purple-100' : 'text-purple-300 hover:bg-purple-800'
+                } transition-colors`}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
               >
-                <div className="aspect-video w-full h-full rounded-lg overflow-hidden">
-                  <motion.img
-                    src={video.poster}
-                    alt={video.title}
-                    className="w-full h-full object-cover"
-                    initial={{ scale: 0.9 }}
-                    animate={{ scale: 1 }}
-                    transition={{ delay: 0.6, duration: 0.5 }}
-                    onError={(e) => {
-                      e.target.src = '/default-poster.jpg';
-                      e.target.onerror = null;
-                    }}
-                  />
-                </div>
-              </motion.div>
-            </motion.div>
-
-            {/* Right Column - Details */}
-            <div className="space-y-8">
-              <motion.div
-                className="grid grid-cols-1 sm:grid-cols-2 gap-4"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.6, staggerChildren: 0.1 }}
+                <FaArrowLeft className="h-5 w-5" />
+                <span className="text-lg font-medium">Back</span>
+              </motion.button>
+              <p
+                className={`text-2xl font-bold ${
+                  theme === 'light' ? 'text-gray-900' : 'text-gray-100'
+                } mx-auto truncate max-w-md text-center`}
               >
-                {[
-                  { label: "Category", value: video.category },
-                  { label: "Duration", value: `${video.duration} minutes` },
-                  { label: "Cinema Name", value: video.cinemaName },
-                  { label: "Location", value: video.cinemaLocation },
-                  { label: "Available On", value: video.availableSite },
-                  { label: "Ticket Price", value: `$${video.ticketPrice}` },
-                  { label: "Description", value: video.description },
-                ].map((item, index) => (
-                  <motion.div
-                    key={index}
-                    className={`${theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"} p-6 rounded-xl shadow-xl hover:shadow-2xl transition-shadow`}
-                    whileHover={{ scale: 1.02 }}
-                    transition={{ type: "spring", stiffness: 300 }}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.7 + index * 0.1, duration: 0.4 }}
-                  >
-                    <h3 className={`text-sm font-semibold ${theme === "light" ? "text-zinc-500" : "text-gray-400"} mb-1`}>
-                      {item.label}
-                    </h3>
-                    <p className={`text-lg font-medium ${theme === "light" ? "text-zinc-800" : "text-white"}`}>
-                      {item.value}
-                    </p>
-                  </motion.div>
-                ))}
-              </motion.div>
-
-              {/* Ticket Statistics */}
-              <motion.div
-                className={`${theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"} p-8 rounded-xl shadow-xl hover:shadow-2xl transition-shadow`}
-                whileHover={{ scale: 1.01 }}
-                transition={{ type: "spring", stiffness: 300 }}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.8, duration: 0.4 }}
+                {video.title}
+              </p>
+              <motion.button
+                onClick={handleTicketCancellation}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+                  theme === 'light' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-500 text-white hover:bg-blue-600'
+                } transition-colors`}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                aria-label="Cancel tickets"
               >
-                <h2 className={`text-2xl font-bold ${theme === "light" ? "text-zinc-800" : "text-white"} mb-6`}>
-                  Ticket Statistics
-                </h2>
-                <div className="space-y-6">
-                  <div>
-                    <p className={`text-lg font-medium ${theme === "light" ? "text-zinc-700" : "text-gray-300"} mb-2`}>
-                      Sold Tickets: <span className="font-bold">{soldTickets}</span>
-                    </p>
-                    <div className="w-full bg-zinc-200 rounded-full h-3">
-                      <motion.div
-                        className="bg-green-500 h-3 rounded-full"
-                        initial={{ width: 0 }}
-                        animate={{ width: `${soldPercentage}%` }}
-                        transition={{ delay: 0.9, duration: 0.6 }}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <p className={`text-lg font-medium ${theme === "light" ? "text-zinc-700" : "text-gray-300"} mb-2`}>
-                      Available Tickets: <span className="font-bold">{availableSite}</span>
-                    </p>
-                    <div className="w-full bg-zinc-200 rounded-full h-3">
-                      <motion.div
-                        className="bg-blue-500 h-3 rounded-full"
-                        initial={{ width: 0 }}
-                        animate={{ width: `${availablePercentage}%` }}
-                        transition={{ delay: 1, duration: 0.6 }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Action Buttons */}
-              <motion.div
-                className="flex flex-col sm:flex-row gap-4"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 1.1, duration: 0.4 }}
-              >
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className={`w-full sm:w-auto px-8 py-3 ${theme === "light" ? "bg-blue-600 text-white" : "bg-blue-700 text-white"} rounded-lg hover:bg-blue-700 transition-colors`}
-                  onClick={() => router.push(`/updateMovie/${id}`)}
-                >
-                  Edit Movie Details
-                </motion.button>
-              </motion.div>
+                <FaTimes className="h-5 w-5" />
+                <span className="text-lg font-medium">Cancel Ticket</span>
+              </motion.button>
             </div>
           </div>
-        </motion.div>
-      </main>
+        </div>
+
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+            <div className="flex flex-col lg:flex-row gap-8">
+              <div className="lg:w-3/4 space-y-8">
+                <motion.section
+                  className={`p-6 rounded-2xl shadow-xl ${
+                    theme === 'light' ? 'bg-gradient-to-br from-blue-50 to-purple-50' : 'bg-gradient-to-br from-gray-800 to-gray-900'
+                  }`}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3, duration: 0.5 }}
+                >
+                  <h2
+                    className={`text-2xl font-bold ${theme === 'light' ? 'text-gray-800' : 'text-gray-100'} mb-6`}
+                  >
+                    Movie Details
+                  </h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {visibleFields.map((item, index) => (
+                      <motion.div
+                        key={index}
+                        className={`p-4 rounded-lg ${
+                          theme === 'light' ? 'bg-gray-50' : 'bg-gray-800'
+                        } hover:bg-opacity-80 transition-colors`}
+                        whileHover={{ scale: 1.02 }}
+                        transition={{ type: 'spring', stiffness: 300 }}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 + index * 0.1, duration: 0.3 }}
+                      >
+                        <h3
+                          className={`text-sm font-medium ${
+                            theme === 'light' ? 'text-gray-500' : 'text-gray-400'
+                          }`}
+                        >
+                          {item.label}
+                        </h3>
+                        <div
+                          className={`text-lg ${theme === 'light' ? 'text-gray-800' : 'text-gray-100'}`}
+                        >
+                          {item.value}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                  <motion.div
+                    className="mt-6"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.5, duration: 0.3 }}
+                  >
+                    <button
+                      onClick={() => setShowMore(!showMore)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+                        theme === 'light'
+                          ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                          : 'bg-purple-600 text-white hover:bg-purple-700'
+                      } transition-colors`}
+                      aria-label={showMore ? 'Show less details' : 'Show more details'}
+                    >
+                      {showMore ? (
+                        <>
+                          <FaChevronUp /> Less
+                        </>
+                      ) : (
+                        <>
+                          <FaChevronDown /> More
+                        </>
+                      )}
+                    </button>
+                    {showMore && (
+                      <motion.div
+                        className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        {hiddenFields.map((item, index) => (
+                          <motion.div
+                            key={index}
+                            className={`p-4 rounded-lg ${
+                              theme === 'light' ? 'bg-gray-50' : 'bg-gray-800'
+                            } hover:bg-opacity-80 transition-colors`}
+                            whileHover={{ scale: 1.02 }}
+                            transition={{ type: 'spring', stiffness: 300 }}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.6 + index * 0.1, duration: 0.3 }}
+                          >
+                            <h3
+                              className={`text-sm font-medium ${
+                                theme === 'light' ? 'text-gray-500' : 'text-gray-400'
+                              }`}
+                            >
+                              {item.label}
+                            </h3>
+                            <div
+                              className={`text-lg ${theme === 'light' ? 'text-gray-800' : 'text-gray-100'}`}
+                            >
+                              {item.value}
+                            </div>
+                          </motion.div>
+                        ))}
+                      </motion.div>
+                    )}
+                  </motion.div>
+                </motion.section>
+
+                <motion.section
+                  className={`p-6 rounded-2xl shadow-xl ${
+                    theme === 'light' ? 'bg-gradient-to-br from-blue-50 to-purple-50' : 'bg-gradient-to-br from-gray-800 to-gray-900'
+                  }`}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5, duration: 0.5 }}
+                >
+                  <h2
+                    className={`text-2xl font-bold ${theme === 'light' ? 'text-gray-800' : 'text-gray-100'} mb-6`}
+                  >
+                    Ticket Statistics
+                  </h2>
+                  <div className="space-y-6">
+                    <div>
+                      <p
+                        className={`text-lg ${theme === 'light' ? 'text-gray-700' : 'text-gray-300'} mb-2`}
+                      >
+                        Sold Tickets: <span className="font-bold">{soldTickets}</span>
+                      </p>
+                      <div className="w-full bg-gray-200 rounded-full h-4">
+                        <motion.div
+                          className="bg-indigo-500 h-4 rounded-full"
+                          initial={{ width: 0 }}
+                          animate={{ width: `${soldPercentage}%` }}
+                          transition={{ delay: 0.6, duration: 0.8 }}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <p
+                        className={`text-lg ${theme === 'light' ? 'text-gray-700' : 'text-gray-300'} mb-2`}
+                      >
+                        Available Tickets: <span className="font-bold">{availableSite}</span>
+                      </p>
+                      <div className="w-full bg-gray-200 rounded-full h-4">
+                        <motion.div
+                          className="bg-purple-500 h-4 rounded-full"
+                          initial={{ width: 0 }}
+                          animate={{ width: `${availablePercentage}%` }}
+                          transition={{ delay: 0.7, duration: 0.8 }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </motion.section>
+
+                <motion.section
+                  className={`p-6 rounded-2xl shadow-xl ${
+                    theme === 'light' ? 'bg-gradient-to-br from-blue-50 to-purple-50' : 'bg-gradient-to-br from-gray-800 to-gray-900'
+                  }`}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6, duration: 0.5 }}
+                >
+                  <h2
+                    className={`text-2xl font-bold ${theme === 'light' ? 'text-gray-800' : 'text-gray-100'} mb-6`}
+                  >
+                    Ratings & Reviews
+                  </h2>
+                  {reviews.length > 0 ? (
+                    <div className="space-y-4">
+                      {reviews.map((review) => (
+                        <motion.div
+                          key={review.id}
+                          className={`p-4 rounded-lg ${
+                            theme === 'light' ? 'bg-gray-50' : 'bg-gray-800'
+                          } flex gap-4 hover:bg-opacity-80 transition-colors`}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.7 + review.id.split('-').pop() * 0.1, duration: 0.3 }}
+                        >
+                          <div
+                            className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold ${
+                              theme === 'light' ? 'bg-indigo-200 text-indigo-700' : 'bg-indigo-900 text-indigo-300'
+                            }`}
+                          >
+                            {userProfiles[review.userId]?.email
+                              ? userProfiles[review.userId].email.charAt(0).toUpperCase()
+                              : '?'}
+                          </div>
+                          <div className="flex-1">
+                            <p
+                              className={`text-sm font-medium ${
+                                theme === 'light' ? 'text-gray-800' : 'text-gray-100'
+                              }`}
+                            >
+                              {userProfiles[review.userId]?.email || 'Anonymous'}
+                            </p>
+                            <div className="flex items-center gap-1 my-1">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <FaStar
+                                  key={star}
+                                  className={`w-4 h-4 ${
+                                    star <= review.rating
+                                      ? 'text-yellow-400'
+                                      : theme === 'light'
+                                      ? 'text-gray-300'
+                                      : 'text-gray-600'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                            <p
+                              className={`text-sm ${theme === 'light' ? 'text-gray-600' : 'text-gray-400'}`}
+                            >
+                              {review.review}
+                            </p>
+                            <p
+                              className={`text-xs ${theme === 'light' ? 'text-gray-500' : 'text-gray-500'} mt-1`}
+                            >
+                              Posted: {review.timestamp.toDate().toLocaleString()}
+                            </p>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className={`text-lg ${theme === 'light' ? 'text-gray-600' : 'text-gray-400'}`}>
+                      No reviews yet.
+                    </p>
+                  )}
+                </motion.section>
+              </div>
+
+              <motion.aside
+                className="lg:w-1/4 lg:sticky lg:top-24 self-start"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.4, duration: 0.5 }}
+              >
+                {/* Add additional sidebar content here if needed */}
+              </motion.aside>
+            </div>
+          </motion.div>
+        </main>
+      </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <motion.div
+            className={`relative w-full max-w-md p-6 rounded-2xl shadow-xl ${
+              theme === 'light' ? 'bg-gradient-to-br from-blue-50 to-purple-50' : 'bg-gradient-to-br from-gray-800 to-gray-900'
+            }`}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ duration: 0.3 }}
+          >
+            <motion.button
+              onClick={handleCloseModal}
+              className={`absolute top-4 right-4 p-2 rounded-full ${
+                theme === 'light' ? 'text-gray-600 hover:bg-gray-200' : 'text-gray-300 hover:bg-gray-700'
+              } transition-colors`}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              aria-label="Close modal"
+            >
+              <FaTimes className="h-5 w-5" />
+            </motion.button>
+            {showPostponeForm ? (
+              <>
+                <h2
+                  className={`text-2xl font-bold ${theme === 'light' ? 'text-gray-800' : 'text-gray-100'} mb-6 text-center`}
+                >
+                  Update Screening Date
+                </h2>
+                <form onSubmit={handleUpdateScreeningDate} className="space-y-4">
+                  <div>
+                    <label
+                      htmlFor="screeningDate"
+                      className={`block text-sm font-medium ${
+                        theme === 'light' ? 'text-gray-700' : 'text-gray-300'
+                      } mb-1`}
+                    >
+                      New Screening Date
+                    </label>
+                    <EthiopianDatePicker
+                      name="screeningDate"
+                      value={newScreeningDate}
+                      onChange={(e) => {
+                        setNewScreeningDate(e.target.value);
+                        setDateError('');
+                      }}
+                      error={dateError}
+                      theme={theme}
+                    />
+                  </div>
+                  <div className="flex justify-center gap-4">
+                    <motion.button
+                      type="submit"
+                      className={`px-4 py-2 rounded-lg ${
+                        theme === 'light' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-500 text-white hover:bg-blue-600'
+                      } transition-colors`}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      aria-label="Update"
+                    >
+                      Update
+                    </motion.button>
+                    <motion.button
+                      type="button"
+                      onClick={() => setShowPostponeForm(false)}
+                      className={`px-4 py-2 rounded-lg ${
+                        theme === 'light' ? 'bg-gray-300 text-gray-800 hover:bg-gray-400' : 'bg-gray-600 text-gray-100 hover:bg-gray-700'
+                      } transition-colors`}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      aria-label="Cancel"
+                    >
+                      Cancel
+                    </motion.button>
+                  </div>
+                </form>
+              </>
+            ) : (
+              <>
+                <h2
+                  className={`text-2xl font-bold ${theme === 'light' ? 'text-gray-800' : 'text-gray-100'} mb-6 text-center`}
+                >
+                  Ticket Options
+                </h2>
+                <div className="flex flex-col gap-4">
+                  <motion.button
+                    onClick={() => handleOpenDialog('cancel')}
+                    className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg ${
+                      theme === 'light' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-500 text-white hover:bg-blue-600'
+                    } transition-colors`}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    aria-label="Cancel ticket"
+                  >
+                    <FaTimes className="h-5 w-5" />
+                    <span className="text-lg font-medium">Cancel Ticket</span>
+                  </motion.button>
+                  <motion.button
+                    onClick={() => handleOpenDialog('postpone')}
+                    className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg ${
+                      theme === 'light' ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-purple-500 text-white hover:bg-purple-600'
+                    } transition-colors`}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    aria-label="Postpone"
+                  >
+                    <FaChevronDown className="h-5 w-5" />
+                    <span className="text-lg font-medium">Postpone</span>
+                  </motion.button>
+                </div>
+              </>
+            )}
+          </motion.div>
+        </div>
+      )}
+
+      {isDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <motion.div
+            className={`relative w-full max-w-md p-6 rounded-2xl shadow-xl ${
+              theme === 'light' ? 'bg-gradient-to-br from-blue-50 to-purple-50' : 'bg-gradient-to-br from-gray-800 to-gray-900'
+            }`}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ duration: 0.3 }}
+          >
+            <h2
+              className={`text-xl font-bold ${theme === 'light' ? 'text-gray-800' : 'text-gray-100'} mb-4 text-center`}
+            >
+              Confirm Action
+            </h2>
+            <p
+              className={`text-center mb-6 ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}
+            >
+              {dialogMessage}
+            </p>
+            <div className="flex justify-center gap-4">
+              <motion.button
+                onClick={handleConfirmDialog}
+                className={`px-4 py-2 rounded-lg ${
+                  theme === 'light' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-500 text-white hover:bg-blue-600'
+                } transition-colors`}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                aria-label="Confirm"
+              >
+                Confirm
+              </motion.button>
+              <motion.button
+                onClick={handleCancelDialog}
+                className={`px-4 py-2 rounded-lg ${
+                  theme === 'light' ? 'bg-gray-300 text-gray-800 hover:bg-gray-400' : 'bg-gray-600 text-gray-100 hover:bg-gray-700'
+                } transition-colors`}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                aria-label="Cancel"
+              >
+                Cancel
+              </motion.button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

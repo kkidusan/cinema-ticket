@@ -21,7 +21,6 @@ import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { toGregorian, toEthiopian } from 'ethiopian-date';
 
-// Ethiopian months for formatting
 const ethMonths = [
   'Meskerem',
   'Tikimt',
@@ -38,7 +37,6 @@ const ethMonths = [
   'Pagume',
 ];
 
-// EthiopianDatePicker Component
 function EthiopianDatePicker({ name, value, onChange, error, theme }) {
   const getCurrentEthiopianDate = () => {
     const today = new Date();
@@ -78,7 +76,7 @@ function EthiopianDatePicker({ name, value, onChange, error, theme }) {
     const { value } = e.target;
     setTime(value);
     if (ethiopianDate) {
-      onChange({ target: { name, value: `${ethiopianDate}T${time}` } });
+      onChange({ target: { name, value: `${ethiopianDate}T${value}` } });
     }
   };
 
@@ -115,7 +113,6 @@ function EthiopianDatePicker({ name, value, onChange, error, theme }) {
   );
 }
 
-// Function to format date in Ethiopian Calendar
 const formatEthiopianDate = (dateString) => {
   const [datePart, timePart] = dateString.split('T');
   const [year, month, day] = datePart.split('-').map(Number);
@@ -131,7 +128,7 @@ const formatEthiopianDate = (dateString) => {
   const hourNum = parseInt(hours);
   const isPM = hourNum >= 12;
   const hour12 = hourNum % 12 || 12;
-  const time = `${hour12.toString().padStart(2, '0')}:${minutes} ${isPM ? 'PMnasium' : 'AM'}`;
+  const time = `${hour12.toString().padStart(2, '0')}:${minutes} ${isPM ? 'PM' : 'AM'}`;
 
   return `${ethDay} ${ethMonths[ethMonth - 1]} ${ethYear}, ${time}`;
 };
@@ -147,7 +144,9 @@ export default function VideoDetail({ params: paramsPromise }) {
   const [userEmail, setUserEmail] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const [soldTickets, setSoldTickets] = useState(0);
+  const [ticketPrice, setTicketPrice] = useState(0);
   const [availableSite, setAvailableSite] = useState(0);
+  const [ownerTotalAmount, setOwnerTotalAmount] = useState(0);
   const [reviews, setReviews] = useState([]);
   const [userProfiles, setUserProfiles] = useState({});
   const [showMore, setShowMore] = useState(false);
@@ -304,55 +303,21 @@ export default function VideoDetail({ params: paramsPromise }) {
   }, [router, theme]);
 
   useEffect(() => {
-    if (id && userRole === 'owner') {
-      const q = query(collection(db, 'Movies'), where('movieID', '==', id));
-      const unsubscribe = onSnapshot(q, async (querySnapshot) => {
-        if (!querySnapshot.empty) {
-          const movieDoc = querySnapshot.docs[0];
-          const movieData = movieDoc.data();
-          setVideo(movieData);
-          setSoldTickets(movieData.soldTickets || 0);
-          setAvailableSite(movieData.availableSite || 0);
-
-          let reviewsData = [];
-          if (Array.isArray(movieData.reviews) && movieData.reviews.length > 0) {
-            const uniqueReviews = new Set();
-            reviewsData = movieData.reviews
-              .filter((review) => {
-                return review.userId && review.rating && review.review && review.timestamp;
-              })
-              .filter((review) => {
-                const reviewKey = `${review.userId}-${review.timestamp?.toMillis() || ''}-${review.review}`;
-                if (uniqueReviews.has(reviewKey)) {
-                  return false;
-                }
-                uniqueReviews.add(reviewKey);
-                return true;
-              })
-              .map((review, index) => ({
-                id: `${id}-${review.userId}-${index}`,
-                rating: review.rating,
-                review: review.review,
-                timestamp: review.timestamp,
-                userId: review.userId,
-              }));
-
-            const userIds = [...new Set(reviewsData.map((review) => review.userId))];
-            const unsubscribeUsers = userIds.map(fetchUserProfile);
-            setReviews(reviewsData);
-
-            if (id === 'sBlZqZ3U') {
-              await addProvidedReview(doc(db, 'Movies', movieDoc.id), reviewsData);
-            }
-
-            return () => {
-              unsubscribeUsers.forEach((unsubscribe) => unsubscribe());
-            };
-          } else {
-            setReviews([]);
-          }
-        } else {
-          toast.error('No video found with the given ID!', {
+    if (userEmail) {
+      const q = query(collection(db, 'ownerAmount'), where('movieEmail', '==', userEmail));
+      const unsubscribe = onSnapshot(
+        q,
+        (querySnapshot) => {
+          let total = 0;
+          querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            total += data.totalAmount || 0;
+          });
+          setOwnerTotalAmount(total);
+        },
+        (error) => {
+          console.error('Error fetching owner total amount:', error);
+          toast.error('Failed to fetch owner total amount.', {
             position: 'bottom-right',
             autoClose: 3000,
             hideProgressBar: false,
@@ -361,13 +326,82 @@ export default function VideoDetail({ params: paramsPromise }) {
             draggable: true,
             theme,
           });
-          setVideo(null);
         }
-        setLoading(false);
-      }, () => {
-        setVideo(null);
-        setLoading(false);
-      });
+      );
+      return () => unsubscribe();
+    }
+  }, [userEmail, theme]);
+
+  useEffect(() => {
+    if (id && userRole === 'owner') {
+      const q = query(collection(db, 'Movies'), where('movieID', '==', id));
+      const unsubscribe = onSnapshot(
+        q,
+        async (querySnapshot) => {
+          if (!querySnapshot.empty) {
+            const movieDoc = querySnapshot.docs[0];
+            const movieData = movieDoc.data();
+            setVideo(movieData);
+            setSoldTickets(movieData.soldTickets || 0);
+            setTicketPrice(movieData.ticketPrice || 0);
+            setAvailableSite(movieData.availableSite || 0);
+
+            let reviewsData = [];
+            if (Array.isArray(movieData.reviews) && movieData.reviews.length > 0) {
+              const uniqueReviews = new Set();
+              reviewsData = movieData.reviews
+                .filter((review) => {
+                  return review.userId && review.rating && review.review && review.timestamp;
+                })
+                .filter((review) => {
+                  const reviewKey = `${review.userId}-${review.timestamp?.toMillis() || ''}-${review.review}`;
+                  if (uniqueReviews.has(reviewKey)) {
+                    return false;
+                  }
+                  uniqueReviews.add(reviewKey);
+                  return true;
+                })
+                .map((review, index) => ({
+                  id: `${id}-${review.userId}-${index}`,
+                  rating: review.rating,
+                  review: review.review,
+                  timestamp: review.timestamp,
+                  userId: review.userId,
+                }));
+
+              const userIds = [...new Set(reviewsData.map((review) => review.userId))];
+              const unsubscribeUsers = userIds.map(fetchUserProfile);
+              setReviews(reviewsData);
+
+              if (id === 'sBlZqZ3U') {
+                await addProvidedReview(doc(db, 'Movies', movieDoc.id), reviewsData);
+              }
+
+              return () => {
+                unsubscribeUsers.forEach((unsubscribe) => unsubscribe());
+              };
+            } else {
+              setReviews([]);
+            }
+          } else {
+            toast.error('No video found with the given ID!', {
+              position: 'bottom-right',
+              autoClose: 3000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+              theme,
+            });
+            setVideo(null);
+          }
+          setLoading(false);
+        },
+        () => {
+          setVideo(null);
+          setLoading(false);
+        }
+      );
 
       return () => {
         unsubscribe();
@@ -405,8 +439,8 @@ export default function VideoDetail({ params: paramsPromise }) {
 
   const checkPaymentHistory = async () => {
     try {
-      const paymentHistoryRef = collection(db, "paymentHistory");
-      const q = query(paymentHistoryRef, where("movieId", "==", id));
+      const paymentHistoryRef = collection(db, 'paymentHistory');
+      const q = query(paymentHistoryRef, where('movieId', '==', id));
       const paymentSnapshot = await getDocs(q);
 
       if (paymentSnapshot.empty) {
@@ -417,8 +451,8 @@ export default function VideoDetail({ params: paramsPromise }) {
       const ticketsData = await Promise.all(
         paymentSnapshot.docs.map(async (doc) => {
           const ticketData = doc.data();
-          const moviesRef = collection(db, "Movies");
-          const movieQuery = query(moviesRef, where("movieID", "==", ticketData.movieId));
+          const moviesRef = collection(db, 'Movies');
+          const movieQuery = query(moviesRef, where('movieID', '==', ticketData.movieId));
           const movieSnapshot = await getDocs(movieQuery);
 
           let movieDetails = {};
@@ -440,18 +474,20 @@ export default function VideoDetail({ params: paramsPromise }) {
               orderId: ticketData.orderId,
               paymentDate: ticketData.paymentDate,
               ticketId: ticketData.ticketId || doc.id,
-              screeningDate: ticketData.screeningDate || "Date TBD",
+              screeningDate: ticketData.screeningDate || 'Date TBD',
               docId: doc.id,
               movieDetails,
-            }
+              postponedStatus: ticketData.postponedStatus || 0,
+              canceledStatus: ticketData.canceledStatus || 0,
+            },
           };
         })
       );
 
-      setTickets(ticketsData.map(item => item.data));
+      setTickets(ticketsData.map((item) => item.data));
       return ticketsData;
     } catch (error) {
-      console.error("Error fetching tickets:", error);
+      console.error('Error fetching tickets:', error);
       setTickets([]);
       return [];
     } finally {
@@ -459,25 +495,31 @@ export default function VideoDetail({ params: paramsPromise }) {
     }
   };
 
-  const updateOrInsertPaymentHistory = async (movieId, updates) => {
+  const updateOrInsertPaymentHistory = async (movieId, updates, isPostponement = false, oldScreeningDate = null, newScreeningDate = null) => {
     try {
       const paymentHistoryDocs = await checkPaymentHistory();
-      const isPostponed = updates.postponed === "true";
+      const isPostponed = updates.postponed === 'true';
 
       if (paymentHistoryDocs.length > 0) {
-        // Update existing documents if tickets exist
         for (const payment of paymentHistoryDocs) {
           if (payment.data.movieId === movieId) {
             const paymentRef = doc(db, 'paymentHistory', payment.id);
-            await updateDoc(paymentRef, {
-              postponed: isPostponed ? "true" : "false",
+            const updateData = {
+              postponed: isPostponed ? 'true' : 'false',
               cancelled: updates.cancelled,
+              status: 1,
               lastUpdated: Timestamp.now(),
-            });
+              postponedStatus: isPostponed ? 1 : (updates.cancelled === 'true' ? 0 : payment.data.postponedStatus || 0),
+              canceledStatus: updates.cancelled === 'true' ? 1 : 0,
+            };
+            if (isPostponement) {
+              updateData.oldScreeningDate = oldScreeningDate || payment.data.screeningDate || 'Unknown';
+              updateData.newScreeningDate = newScreeningDate || 'Unknown';
+            }
+            await updateDoc(paymentRef, updateData);
           }
         }
       } else {
-        // Insert new document if no tickets exist
         const now = new Date();
         const [ethYear, ethMonth, ethDay] = toEthiopian(
           now.getFullYear(),
@@ -490,21 +532,31 @@ export default function VideoDetail({ params: paramsPromise }) {
         const orderId = `TX-${Date.now()}`;
         const ticketId = `WO-FU-${Math.floor(1000 + Math.random() * 9000)}`;
 
-        await addDoc(collection(db, 'paymentHistory'), {
+        const newDocData = {
           email: userEmail || 'mekuriawerede64@gmail.com',
           firstName: 'mekuria',
           lastName: 'were',
           movieId,
           orderId,
           paymentDate: Timestamp.now(),
-          postponed: isPostponed ? "true" : "false",
+          postponed: isPostponed ? 'true' : 'false',
           cancelled: updates.cancelled,
+          status: 1,
           purchaseDateEthiopian: ethDate,
           screeningDate: video.screeningDate || 'Unknown',
           seatNumber: '1',
           ticketId,
           lastUpdated: Timestamp.now(),
-        });
+          postponedStatus: isPostponed ? 1 : 0,
+          canceledStatus: updates.cancelled === 'true' ? 1 : 0,
+        };
+
+        if (isPostponement) {
+          newDocData.oldScreeningDate = oldScreeningDate || video.screeningDate || 'Unknown';
+          newDocData.newScreeningDate = newScreeningDate || 'Unknown';
+        }
+
+        await addDoc(collection(db, 'paymentHistory'), newDocData);
       }
 
       toast.success('Payment history updated successfully.', {
@@ -515,14 +567,6 @@ export default function VideoDetail({ params: paramsPromise }) {
         pauseOnHover: true,
         draggable: true,
         theme,
-        className: `${
-          theme === 'light'
-            ? 'bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800'
-            : 'bg-gradient-to-r from-blue-700 to-blue-800 text-blue-100'
-        } font-semibold rounded-xl shadow-xl border ${
-          theme === 'light' ? 'border-blue-300' : 'border-blue-600'
-        } p-4`,
-        style: { minWidth: '300px', animation: 'slideIn 0.3s ease-in-out' },
       });
     } catch (error) {
       console.error('Error updating or inserting payment history:', error);
@@ -536,6 +580,28 @@ export default function VideoDetail({ params: paramsPromise }) {
         theme,
       });
     }
+  };
+
+  const validateTotalAmount = () => {
+    const requiredAmount = soldTickets * ticketPrice * 1.03;
+    if (ownerTotalAmount < requiredAmount) {
+      toast.error(
+        `Insufficient funds. Total amount (${ownerTotalAmount}) is less than required (${
+          soldTickets * ticketPrice
+        } + 3% = ${requiredAmount.toFixed(2)}).`,
+        {
+          position: 'top-right',
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme,
+        }
+      );
+      return false;
+    }
+    return true;
   };
 
   const handleTicketCancellation = () => {
@@ -556,14 +622,6 @@ export default function VideoDetail({ params: paramsPromise }) {
           pauseOnHover: true,
           draggable: true,
           theme,
-          className: `${
-            theme === 'light'
-              ? 'bg-gradient-to-r from-red-100 to-red-200 text-red-800'
-              : 'bg-gradient-to-r from-red-700 to-red-800 text-red-100'
-          } font-semibold rounded-xl shadow-xl border ${
-            theme === 'light' ? 'border-red-300' : 'border-red-600'
-          } p-4`,
-          style: { minWidth: '300px', animation: 'slideIn 0.3s ease-in-out' },
         });
         return;
       }
@@ -580,6 +638,11 @@ export default function VideoDetail({ params: paramsPromise }) {
   const handleConfirmDialog = async () => {
     try {
       if (dialogAction === 'cancel') {
+        if (!validateTotalAmount()) {
+          setIsDialogOpen(false);
+          return;
+        }
+
         await addDoc(collection(db, 'CancelledTickets'), {
           movieID: id,
           title: video.title,
@@ -587,7 +650,17 @@ export default function VideoDetail({ params: paramsPromise }) {
           userEmail,
         });
 
-        await updateOrInsertPaymentHistory(id, { postponed: "false", cancelled: "true" });
+        await updateOrInsertPaymentHistory(id, { postponed: 'false', cancelled: 'true' });
+
+        const movieQuery = query(collection(db, 'Movies'), where('movieID', '==', id));
+        const movieSnapshot = await getDocs(movieQuery);
+        if (!movieSnapshot.empty) {
+          const movieDocRef = doc(db, 'Movies', movieSnapshot.docs[0].id);
+          await updateDoc(movieDocRef, {
+            cancellation: true,
+            lastUpdated: Timestamp.now(),
+          });
+        }
 
         toast.success('All tickets cancelled successfully.', {
           position: 'top-right',
@@ -597,14 +670,6 @@ export default function VideoDetail({ params: paramsPromise }) {
           pauseOnHover: true,
           draggable: true,
           theme,
-          className: `${
-            theme === 'light'
-              ? 'bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800'
-              : 'bg-gradient-to-r from-blue-700 to-blue-800 text-blue-100'
-          } font-semibold rounded-xl shadow-xl border ${
-            theme === 'light' ? 'border-blue-300' : 'border-blue-600'
-          } p-4`,
-          style: { minWidth: '300px', animation: 'slideIn 0.3s ease-in-out' },
         });
       }
     } catch (error) {
@@ -668,11 +733,17 @@ export default function VideoDetail({ params: paramsPromise }) {
     }
 
     try {
+      if (!validateTotalAmount()) {
+        return;
+      }
+
       const movieQuery = query(collection(db, 'Movies'), where('movieID', '==', id));
       const movieSnapshot = await getDocs(movieQuery);
       if (!movieSnapshot.empty) {
         const movieDocRef = doc(db, 'Movies', movieSnapshot.docs[0].id);
         const formattedDate = formatEthiopianDate(newScreeningDate);
+        const oldScreeningDate = video.screeningDate || 'Unknown';
+
         await updateDoc(movieDocRef, {
           screeningDate: formattedDate,
           lastUpdated: Timestamp.now(),
@@ -686,7 +757,13 @@ export default function VideoDetail({ params: paramsPromise }) {
           userEmail,
         });
 
-        await updateOrInsertPaymentHistory(id, { postponed: "true", cancelled: "false" });
+        await updateOrInsertPaymentHistory(
+          id,
+          { postponed: 'true', cancelled: 'false' },
+          true,
+          oldScreeningDate,
+          formattedDate
+        );
 
         toast.success('Screening date updated and postponement recorded successfully.', {
           position: 'top-right',
@@ -696,14 +773,6 @@ export default function VideoDetail({ params: paramsPromise }) {
           pauseOnHover: true,
           draggable: true,
           theme,
-          className: `${
-            theme === 'light'
-              ? 'bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800'
-              : 'bg-gradient-to-r from-blue-700 to-blue-800 text-blue-100'
-          } font-semibold rounded-xl shadow-xl border ${
-            theme === 'light' ? 'border-blue-300' : 'border-blue-600'
-          } p-4`,
-          style: { minWidth: '300px', animation: 'slideIn 0.3s ease-in-out' },
         });
         setIsModalOpen(false);
         setShowPostponeForm(false);
@@ -786,6 +855,7 @@ export default function VideoDetail({ params: paramsPromise }) {
     { label: 'Ticket Price', value: `$${video.ticketPrice}` },
     { label: 'Description', value: video.description },
     { label: 'Screening Date', value: video.screeningDate },
+    { label: 'Owner Total Amount', value: `$${ownerTotalAmount.toFixed(2)}` },
   ];
 
   const hiddenFields = [
@@ -898,7 +968,9 @@ export default function VideoDetail({ params: paramsPromise }) {
       >
         <div
           className={`sticky top-0 z-50 ${
-            theme === 'light' ? 'bg-gradient-to-br from-zinc-100 to-zinc-200' : 'bg-gradient-to-br from-gray-800 to-gray-900'
+            theme === 'light'
+              ? 'bg-gradient-to-br from-zinc-100 to-zinc-200'
+              : 'bg-gradient-to-br from-gray-800 to-gray-900'
           } border-b ${theme === 'light' ? 'border-zinc-200' : 'border-zinc-700'}`}
         >
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -906,7 +978,9 @@ export default function VideoDetail({ params: paramsPromise }) {
               <motion.button
                 onClick={handleBack}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
-                  theme === 'light' ? 'text-purple-700 hover:bg-purple-100' : 'text-purple-300 hover:bg-purple-800'
+                  theme === 'light'
+                    ? 'text-purple-700 hover:bg-purple-100'
+                    : 'text-purple-300 hover:bg-purple-800'
                 } transition-colors`}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -921,36 +995,52 @@ export default function VideoDetail({ params: paramsPromise }) {
               >
                 {video.title}
               </p>
-              <motion.button
-                onClick={handleTicketCancellation}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
-                  theme === 'light' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-500 text-white hover:bg-blue-600'
-                } transition-colors`}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                aria-label="Cancel tickets"
-              >
-                <FaTimes className="h-5 w-5" />
-                <span className="text-lg font-medium">Cancel Ticket</span>
-              </motion.button>
+              {video.cancellation ? (
+                <p className="text-lg font-medium text-red-500">
+                  The movie is canceled
+                </p>
+              ) : (
+                <motion.button
+                  onClick={handleTicketCancellation}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+                    theme === 'light'
+                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'bg-blue-500 text-white hover:bg-blue-600'
+                  } transition-colors`}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  aria-label="Cancel tickets"
+                >
+                  <FaTimes className="h-5 w-5" />
+                  <span className="text-lg font-medium">Cancel Ticket</span>
+                </motion.button>
+              )}
             </div>
           </div>
         </div>
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+          >
             <div className="flex flex-col lg:flex-row gap-8">
               <div className="lg:w-3/4 space-y-8">
                 <motion.section
                   className={`p-6 rounded-2xl shadow-xl ${
-                    theme === 'light' ? 'bg-gradient-to-br from-blue-50 to-purple-50' : 'bg-gradient-to-br from-gray-800 to-gray-900'
+                    theme === 'light'
+                      ? 'bg-gradient-to-br from-blue-50 to-purple-50'
+                      : 'bg-gradient-to-br from-gray-800 to-gray-900'
                   }`}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3, duration: 0.5 }}
                 >
                   <h2
-                    className={`text-2xl font-bold ${theme === 'light' ? 'text-gray-800' : 'text-gray-100'} mb-6`}
+                    className={`text-2xl font-bold ${
+                      theme === 'light' ? 'text-gray-800' : 'text-gray-100'
+                    } mb-6`}
                   >
                     Movie Details
                   </h2>
@@ -1047,14 +1137,18 @@ export default function VideoDetail({ params: paramsPromise }) {
 
                 <motion.section
                   className={`p-6 rounded-2xl shadow-xl ${
-                    theme === 'light' ? 'bg-gradient-to-br from-blue-50 to-purple-50' : 'bg-gradient-to-br from-gray-800 to-gray-900'
+                    theme === 'light'
+                      ? 'bg-gradient-to-br from-blue-50 to-purple-50'
+                      : 'bg-gradient-to-br from-gray-800 to-gray-900'
                   }`}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.5, duration: 0.5 }}
                 >
                   <h2
-                    className={`text-2xl font-bold ${theme === 'light' ? 'text-gray-800' : 'text-gray-100'} mb-6`}
+                    className={`text-2xl font-bold ${
+                      theme === 'light' ? 'text-gray-800' : 'text-gray-100'
+                    } mb-6`}
                   >
                     Ticket Statistics
                   </h2>
@@ -1094,14 +1188,18 @@ export default function VideoDetail({ params: paramsPromise }) {
 
                 <motion.section
                   className={`p-6 rounded-2xl shadow-xl ${
-                    theme === 'light' ? 'bg-gradient-to-br from-blue-50 to-purple-50' : 'bg-gradient-to-br from-gray-800 to-gray-900'
+                    theme === 'light'
+                      ? 'bg-gradient-to-br from-blue-50 to-purple-50'
+                      : 'bg-gradient-to-br from-gray-800 to-gray-900'
                   }`}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.6, duration: 0.5 }}
                 >
                   <h2
-                    className={`text-2xl font-bold ${theme === 'light' ? 'text-gray-800' : 'text-gray-100'} mb-6`}
+                    className={`text-2xl font-bold ${
+                      theme === 'light' ? 'text-gray-800' : 'text-gray-100'
+                    } mb-6`}
                   >
                     Ratings & Reviews
                   </h2>
@@ -1115,11 +1213,16 @@ export default function VideoDetail({ params: paramsPromise }) {
                           } flex gap-4 hover:bg-opacity-80 transition-colors`}
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.7 + review.id.split('-').pop() * 0.1, duration: 0.3 }}
+                          transition={{
+                            delay: 0.7 + review.id.split('-').pop() * 0.1,
+                            duration: 0.3,
+                          }}
                         >
                           <div
                             className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold ${
-                              theme === 'light' ? 'bg-indigo-200 text-indigo-700' : 'bg-indigo-900 text-indigo-300'
+                              theme === 'light'
+                                ? 'bg-indigo-200 text-indigo-700'
+                                : 'bg-indigo-900 text-indigo-300'
                             }`}
                           >
                             {userProfiles[review.userId]?.email
@@ -1163,7 +1266,9 @@ export default function VideoDetail({ params: paramsPromise }) {
                       ))}
                     </div>
                   ) : (
-                    <p className={`text-lg ${theme === 'light' ? 'text-gray-600' : 'text-gray-400'}`}>
+                    <p
+                      className={`text-lg ${theme === 'light' ? 'text-gray-600' : 'text-gray-400'}`}
+                    >
                       No reviews yet.
                     </p>
                   )}
@@ -1175,9 +1280,7 @@ export default function VideoDetail({ params: paramsPromise }) {
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.4, duration: 0.5 }}
-              >
-                {/* Add additional sidebar content here if needed */}
-              </motion.aside>
+              ></motion.aside>
             </div>
           </motion.div>
         </main>
@@ -1187,7 +1290,9 @@ export default function VideoDetail({ params: paramsPromise }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <motion.div
             className={`relative w-full max-w-md p-6 rounded-2xl shadow-xl ${
-              theme === 'light' ? 'bg-gradient-to-br from-blue-50 to-purple-50' : 'bg-gradient-to-br from-gray-800 to-gray-900'
+              theme === 'light'
+                ? 'bg-gradient-to-br from-blue-50 to-purple-50'
+                : 'bg-gradient-to-br from-gray-800 to-gray-900'
             }`}
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -1208,7 +1313,9 @@ export default function VideoDetail({ params: paramsPromise }) {
             {showPostponeForm ? (
               <>
                 <h2
-                  className={`text-2xl font-bold ${theme === 'light' ? 'text-gray-800' : 'text-gray-100'} mb-6 text-center`}
+                  className={`text-2xl font-bold ${
+                    theme === 'light' ? 'text-gray-800' : 'text-gray-100'
+                  } mb-6 text-center`}
                 >
                   Update Screening Date
                 </h2>
@@ -1237,7 +1344,9 @@ export default function VideoDetail({ params: paramsPromise }) {
                     <motion.button
                       type="submit"
                       className={`px-4 py-2 rounded-lg ${
-                        theme === 'light' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-500 text-white hover:bg-blue-600'
+                        theme === 'light'
+                          ? 'bg-blue-600 text-white hover:bg-blue-700'
+                          : 'bg-blue-500 text-white hover:bg-blue-600'
                       } transition-colors`}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
@@ -1249,7 +1358,9 @@ export default function VideoDetail({ params: paramsPromise }) {
                       type="button"
                       onClick={() => setShowPostponeForm(false)}
                       className={`px-4 py-2 rounded-lg ${
-                        theme === 'light' ? 'bg-gray-300 text-gray-800 hover:bg-gray-400' : 'bg-gray-600 text-gray-100 hover:bg-gray-700'
+                        theme === 'light'
+                          ? 'bg-gray-300 text-gray-800 hover:bg-gray-400'
+                          : 'bg-gray-600 text-gray-100 hover:bg-gray-700'
                       } transition-colors`}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
@@ -1263,7 +1374,9 @@ export default function VideoDetail({ params: paramsPromise }) {
             ) : (
               <>
                 <h2
-                  className={`text-2xl font-bold ${theme === 'light' ? 'text-gray-800' : 'text-gray-100'} mb-6 text-center`}
+                  className={`text-2xl font-bold ${
+                    theme === 'light' ? 'text-gray-800' : 'text-gray-100'
+                  } mb-6 text-center`}
                 >
                   Ticket Options
                 </h2>
@@ -1271,7 +1384,9 @@ export default function VideoDetail({ params: paramsPromise }) {
                   <motion.button
                     onClick={() => handleOpenDialog('cancel')}
                     className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg ${
-                      theme === 'light' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-500 text-white hover:bg-blue-600'
+                      theme === 'light'
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-blue-500 text-white hover:bg-blue-600'
                     } transition-colors`}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
@@ -1283,7 +1398,9 @@ export default function VideoDetail({ params: paramsPromise }) {
                   <motion.button
                     onClick={() => handleOpenDialog('postpone')}
                     className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg ${
-                      theme === 'light' ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-purple-500 text-white hover:bg-purple-600'
+                      theme === 'light'
+                        ? 'bg-purple-600 text-white hover:bg-purple-700'
+                        : 'bg-purple-500 text-white hover:bg-purple-600'
                     } transition-colors`}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
@@ -1303,7 +1420,9 @@ export default function VideoDetail({ params: paramsPromise }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <motion.div
             className={`relative w-full max-w-md p-6 rounded-2xl shadow-xl ${
-              theme === 'light' ? 'bg-gradient-to-br from-blue-50 to-purple-50' : 'bg-gradient-to-br from-gray-800 to-gray-900'
+              theme === 'light'
+                ? 'bg-gradient-to-br from-blue-50 to-purple-50'
+                : 'bg-gradient-to-br from-gray-800 to-gray-900'
             }`}
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -1311,7 +1430,9 @@ export default function VideoDetail({ params: paramsPromise }) {
             transition={{ duration: 0.3 }}
           >
             <h2
-              className={`text-xl font-bold ${theme === 'light' ? 'text-gray-800' : 'text-gray-100'} mb-4 text-center`}
+              className={`text-xl font-bold ${
+                theme === 'light' ? 'text-gray-800' : 'text-gray-100'
+              } mb-4 text-center`}
             >
               Confirm Action
             </h2>
@@ -1324,7 +1445,9 @@ export default function VideoDetail({ params: paramsPromise }) {
               <motion.button
                 onClick={handleConfirmDialog}
                 className={`px-4 py-2 rounded-lg ${
-                  theme === 'light' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-500 text-white hover:bg-blue-600'
+                  theme === 'light'
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-blue-500 text-white hover:bg-blue-600'
                 } transition-colors`}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -1335,7 +1458,9 @@ export default function VideoDetail({ params: paramsPromise }) {
               <motion.button
                 onClick={handleCancelDialog}
                 className={`px-4 py-2 rounded-lg ${
-                  theme === 'light' ? 'bg-gray-300 text-gray-800 hover:bg-gray-400' : 'bg-gray-600 text-gray-100 hover:bg-gray-700'
+                  theme === 'light'
+                    ? 'bg-gray-300 text-gray-800 hover:bg-gray-400'
+                    : 'bg-gray-600 text-gray-100 hover:bg-gray-700'
                 } transition-colors`}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}

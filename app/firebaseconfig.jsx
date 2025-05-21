@@ -17,7 +17,8 @@ import {
     updateDoc, 
     deleteDoc, 
     limit,
-    writeBatch // Add writeBatch here
+    writeBatch,
+    getDoc // Add getDoc here
 } from "firebase/firestore";
 import { 
     getAuth, 
@@ -76,5 +77,6 @@ export {
     Timestamp,
     serverTimestamp,
     limit,
-    writeBatch // Add writeBatch here
+    writeBatch,
+    getDoc // Add getDoc here
 };

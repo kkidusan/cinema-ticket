@@ -2,7 +2,7 @@
 import { useState, useEffect, useContext } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
-import { collection, query, where, getDocs, doc, addDoc, onSnapshot, runTransaction, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, addDoc, onSnapshot, runTransaction } from 'firebase/firestore';
 import { db } from '../../firebaseconfig';
 import { ThemeContext } from '../../context/ThemeContext';
 import { PuffLoader } from 'react-spinners';
@@ -11,10 +11,6 @@ import { FaArrowLeft } from 'react-icons/fa';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { motion } from 'framer-motion';
-
-// Assuming ethiopian-date library is available for EC date handling
-// If not installed, you can install it via npm: npm install ethiopian-date
-import { toGregorian, toEthiopian } from 'ethiopian-date';
 
 const bankCodes = [
   { code: '001', name: 'Commercial Bank of Ethiopia (CBE)' },
@@ -27,106 +23,6 @@ const generateReference = () => {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 8).toUpperCase();
   return `txn-${timestamp}-${random}`;
-};
-
-// Utility function to parse Ethiopian date string (e.g., "8 Ginbot 2017, 12:00 AM")
-const parseEthiopianDate = (dateString) => {
-  const [datePart, timePart] = dateString.split(', ');
-  const [day, month, year] = datePart.split(' ');
-  const months = {
-    Yekatit: 5,
-    Megabit: 6,
-    Miazia: 7,
-    Ginbot: 8,
-    Sene: 9,
-    // Add other months as needed
-  };
-  const ecDay = parseInt(day, 10);
-  const ecMonth = months[month] || 1; // Default to 1 if month not found
-  const ecYear = parseInt(year, 10);
-  return { ecDay, ecMonth, ecYear };
-};
-
-// Utility function to check if newScreeningDate + 2 days <= current Ethiopian date
-const isDateExpired = (newScreeningDate, currentEthiopianDate) => {
-  try {
-    const { ecDay, ecMonth, ecYear } = parseEthiopianDate(newScreeningDate);
-    const [currentDay, currentMonth, currentYear] = currentEthiopianDate;
-
-    // Convert EC dates to Gregorian for comparison
-    const screeningGregorian = toGregorian(ecYear, ecMonth, ecDay);
-    const currentGregorian = toGregorian(currentYear, currentMonth, currentDay);
-
-    const screeningDate = new Date(screeningGregorian[0], screeningGregorian[1] - 1, screeningGregorian[2]);
-    const currentDate = new Date(currentGregorian[0], currentGregorian[1] - 1, currentGregorian[2]);
-
-    // Add 2 days to screening date
-    screeningDate.setDate(screeningDate.getDate() + 2);
-
-    return screeningDate <= currentDate;
-  } catch (err) {
-    console.error('Error parsing dates:', err.message);
-    return false;
-  }
-};
-
-// Utility function to update paymentHistory new status
-const updatePaymentHistoryNewStatus = async (userEmail, theme) => {
-  try {
-    // Get current Ethiopian date
-    const currentDate = new Date();
-    const ethDate = toEthiopian(
-      currentDate.getFullYear(),
-      currentDate.getMonth() + 1,
-      currentDate.getDate()
-    );
-
-    const paymentQuery = query(
-      collection(db, 'paymentHistory'),
-      where('ownerEmail', '==', userEmail),
-      where('new', '==', true)
-    );
-    const paymentSnapshot = await getDocs(paymentQuery);
-
-    const updates = [];
-    paymentSnapshot.forEach((doc) => {
-      const data = doc.data();
-      if (data.newScreeningDate && isDateExpired(data.newScreeningDate, ethDate)) {
-        updates.push({ id: doc.id, ref: doc.ref });
-      }
-    });
-
-    // Update documents in a transaction
-    for (const { ref } of updates) {
-      await runTransaction(db, async (transaction) => {
-        transaction.update(ref, { new: false });
-      });
-    }
-
-    if (updates.length > 0) {
-      console.log(`Updated ${updates.length} paymentHistory records for user: ${userEmail}`);
-      toast.success(`${updates.length} payment records updated successfully.`, {
-        position: 'bottom-right',
-        autoClose: 3000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        theme: theme === 'light' ? 'light' : 'dark',
-      });
-    }
-  } catch (err) {
-    console.error('Error updating paymentHistory:', err.message);
-    toast.error('Failed to update payment records.', {
-      position: 'bottom-right',
-      autoClose: 3000,
-      hideProgressBar: false,
-      closeOnClick: true,
-      pauseOnHover: true,
-      draggable: true,
-      theme: theme === 'light' ? 'light' : 'dark',
-    });
-  }
 };
 
 // Utility function to check saleTicket and withdrawal amount against totalAmount
@@ -381,13 +277,6 @@ export default function FinancePage() {
     };
     fetchUser();
   }, [router, theme]);
-
-  // Update paymentHistory new status when userEmail and isAuthenticated change
-  useEffect(() => {
-    if (isAuthenticated && userEmail) {
-      updatePaymentHistoryNewStatus(userEmail, theme);
-    }
-  }, [isAuthenticated, userEmail, theme]);
 
   // Handle tab navigation
   useEffect(() => {

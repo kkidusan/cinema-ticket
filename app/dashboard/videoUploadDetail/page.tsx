@@ -1,8 +1,6 @@
-
 "use client";
 
-import React from "react";
-import { useEffect, useState, useContext, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useContext, useCallback, useMemo } from "react";
 import { db } from "../../firebaseconfig";
 import { collection, addDoc, Timestamp, query, where, getDocs, onSnapshot } from "firebase/firestore";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -271,6 +269,52 @@ const decryptData = (encryptedData) => {
   }
 };
 
+// Define steps outside the component to avoid redefinition
+const steps = [
+  {
+    title: "Basic Info",
+    fields: [
+      { name: "title", label: "Movie Title", type: "text" },
+      { name: "category", label: "Category", type: "select" },
+      { name: "duration", label: "Duration (HH:MM:SS)*", type: "time" },
+    ],
+  },
+  {
+    title: "Cast & Venue",
+    fields: [
+      { name: "mainCast", label: "Main Cast", type: "custom-cast" },
+      { name: "cinemaName", label: "Cinema Name", type: "text" },
+      { name: "cinemaLocation", label: "Cinema Location", type: "text" },
+    ],
+  },
+  {
+    title: "Ticket Info",
+    fields: [
+      { name: "availableSite", label: `Available Site`, type: "number" },
+      { name: "ticketPrice", label: "Ticket Price (ETB)", type: "number" },
+      { name: "screeningDate", label: "Screening Date", type: "custom" },
+    ],
+  },
+  {
+    title: "Media",
+    fields: [
+      { name: "description", label: "Description", type: "textarea" },
+      {
+        name: "poster",
+        label: "Poster (Image Only)",
+        type: "file",
+        accept: "image/*",
+      },
+      {
+        name: "promotionVideo",
+        label: "Promotion Video (Video Only)",
+        type: "file",
+        accept: "video/*",
+      },
+    ],
+  },
+];
+
 export default function VideoUploadForm() {
   const initialFormData = useMemo(getInitialFormData, []);
   const [formData, setFormData] = useState(initialFormData);
@@ -296,255 +340,34 @@ export default function VideoUploadForm() {
     mainCast: false,
   });
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
+  const [isPending, setIsPending] = useState<boolean | null>(null);
 
-  // Handle form data restoration
-  useEffect(() => {
-    const from = searchParams.get("from");
-    const encryptedFormData = localStorage.getItem("videoUploadFormData");
+  const generateMovieID = useCallback(() => {
+    const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    return Array.from({ length: 8 }, () => characters.charAt(Math.floor(Math.random() * characters.length))).join("");
+  }, []);
 
-    if (encryptedFormData && (from === "designseat" || from === "videoUploadDetail")) {
-      const decryptedData = decryptData(encryptedFormData);
-      if (decryptedData) {
-        setFormData((prev) => {
-          const newData = {
-            ...prev,
-            ...decryptedData,
-            mainCast: Array.isArray(decryptedData.mainCast) ? decryptedData.mainCast : [],
-            seats: Array.isArray(decryptedData.seats) ? decryptedData.seats : [],
-          };
-          if (JSON.stringify(prev) !== JSON.stringify(newData)) {
-            return newData;
-          }
-          return prev;
-        });
-        if (from === "designseat") {
-          setCurrentStep((prev) => (prev !== 3 ? 3 : prev));
-        }
+  const handleDesignSeats = useCallback(() => {
+    try {
+      const encryptedData = encryptData(formData);
+      if (encryptedData) {
+        localStorage.setItem("videoUploadFormData", encryptedData);
       } else {
-        localStorage.removeItem("videoUploadFormData");
-        setFormData(initialFormData);
-        toast.error("Failed to restore form data. Starting fresh.", {
-          position: "top-right",
-          autoClose: 3000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          theme: theme === "light" ? "light" : "dark",
-        });
+        throw new Error("Failed to encrypt form data");
       }
-    } else {
-      localStorage.removeItem("videoUploadFormData");
-      setFormData((prev) => (JSON.stringify(prev) !== JSON.stringify(initialFormData) ? initialFormData : prev));
+      router.push("/dashboard/designseat?from=videoUploadDetail");
+    } catch (error) {
+      toast.error("Failed to save form data. Please try again.", {
+        position: "top-right",
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === "light" ? "light" : "dark",
+      });
     }
-    setLoading(false);
-  }, [searchParams, theme, initialFormData]);
-
-  // Fetch user, owner, and seat arrangement data with real-time listener
-  useEffect(() => {
-    let unsubscribeSeatArrangements = null;
-
-    const fetchUserAndOwner = async () => {
-      try {
-        setLoading(true);
-        setAuthLoading(true);
-
-        const response = await fetch("/api/validate", {
-          method: "GET",
-          credentials: "include",
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          const errorMessage = errorData.error || "Unauthorized access. Please log in.";
-          toast.error(errorMessage, {
-            position: "top-right",
-            autoClose: 3000,
-            hideProgressBar: false,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
-            theme: theme === "light" ? "light" : "dark",
-          });
-          throw new Error(errorMessage);
-        }
-
-        const data = await response.json();
-        if (data.email && data.role) {
-          setUserEmail(data.email);
-          setUserRole(data.role);
-          setAuthLoading(false);
-
-          if (data.role !== "owner") {
-            toast.error("User is not an owner.", {
-              position: "top-right",
-              autoClose: 3000,
-              hideProgressBar: false,
-              closeOnClick: true,
-              pauseOnHover: true,
-              draggable: true,
-              theme: theme === "light" ? "light" : "dark",
-            });
-            throw new Error("User is not an owner.");
-          }
-
-          const ownerQuery = query(
-            collection(db, "owner"),
-            where("email", "==", data.email)
-          );
-          const ownerSnapshot = await getDocs(ownerQuery);
-          if (!ownerSnapshot.empty) {
-            const ownerData = ownerSnapshot.docs[0].data();
-            setOwnerDetails({
-              firstName: ownerData.firstName || "",
-              lastName: ownerData.lastName || "",
-            });
-          } else {
-            toast.error("Owner details not found.", {
-              position: "top-right",
-              autoClose: 3000,
-              hideProgressBar: false,
-              closeOnClick: true,
-              pauseOnHover: true,
-              draggable: true,
-              theme: theme === "light" ? "light" : "dark",
-            });
-            throw new Error("Owner details not found");
-          }
-
-          const arrangementsQuery = query(
-            collection(db, "seatArrangements"),
-            where("userEmail", "==", data.email)
-          );
-
-          unsubscribeSeatArrangements = onSnapshot(arrangementsQuery, (snapshot) => {
-            if (!snapshot.empty) {
-              const arrangementsData = snapshot.docs[0].data();
-              const totalSeatsValue = Number.isInteger(arrangementsData.totalSeats) ? arrangementsData.totalSeats : 0;
-              const seats = Array.isArray(arrangementsData.seats) ? arrangementsData.seats : [];
-              setTotalSeats(totalSeatsValue);
-              setSeatArrangement(seats);
-              setFormData((prev) => {
-                const newData = {
-                  ...prev,
-                  availableSite: totalSeatsValue.toString(),
-                  seats: seats,
-                };
-                if (JSON.stringify(prev) !== JSON.stringify(newData)) {
-                  return newData;
-                }
-                return prev;
-              });
-              setErrors((prev) => ({
-                ...prev,
-                availableSite: totalSeatsValue > 0 ? "" : (
-                  <>
-                    No valid seat arrangement found.{" "}
-                    <a
-                      onClick={handleDesignSeats}
-                      className={`text-sm font-medium cursor-pointer ${
-                        theme === "light"
-                          ? "text-indigo-600 hover:text-indigo-800"
-                          : "text-indigo-400 hover:text-indigo-300"
-                      } underline transition-colors`}
-                    >
-                      Make Seat Arrangement
-                    </a>
-                  </>
-                ),
-              }));
-            } else {
-              setTotalSeats(0);
-              setSeatArrangement(null);
-              setFormData((prev) => ({
-                ...prev,
-                seats: [],
-                availableSite: "",
-              }));
-              setErrors((prev) => ({
-                ...prev,
-                availableSite: (
-                  <>
-                    No seat arrangement found.{" "}
-                    <a
-                      onClick={handleDesignSeats}
-                      className={`text-sm font-medium cursor-pointer ${
-                        theme === "light"
-                          ? "text-indigo-600 hover:text-indigo-800"
-                          : "text-indigo-400 hover:text-indigo-300"
-                      } underline transition-colors`}
-                    >
-                      Make Seat Arrangement
-                    </a>
-                  </>
-                ),
-              }));
-            }
-          }, (error) => {
-            toast.error("Failed to fetch seat arrangement.", {
-              position: "top-right",
-              autoClose: 3000,
-              hideProgressBar: false,
-              closeOnClick: true,
-              pauseOnHover: true,
-              draggable: true,
-              theme: theme === "light" ? "light" : "dark",
-            });
-            setTotalSeats(0);
-            setSeatArrangement(null);
-            setFormData((prev) => ({
-              ...prev,
-              seats: [],
-              availableSite: "",
-            }));
-            setErrors((prev) => ({
-              ...prev,
-              availableSite: (
-                <>
-                  Failed to load seat arrangement.{" "}
-                  <a
-                    onClick={handleDesignSeats}
-                    className={`text-sm font-medium cursor-pointer ${
-                      theme === "light"
-                        ? "text-indigo-600 hover:text-indigo-800"
-                        : "text-indigo-400 hover:text-indigo-300"
-                      } underline transition-colors`}
-                  >
-                    Make Seat Arrangement
-                  </a>
-                </>
-              ),
-            }));
-          });
-        } else {
-          toast.error("No email or role found.", {
-            position: "top-right",
-            autoClose: 3000,
-            hideProgressBar: false,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
-            theme: theme === "light" ? "light" : "dark",
-          });
-          throw new Error("No email or role found");
-        }
-      } catch (error) {
-        setTimeout(() => {
-          router.replace("/login");
-        }, 3500); // Delay redirect to show toast
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUserAndOwner();
-
-    return () => {
-      if (unsubscribeSeatArrangements) {
-        unsubscribeSeatArrangements();
-      }
-    };
-  }, [router, theme]);
+  }, [formData, router, theme]);
 
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
@@ -620,7 +443,7 @@ export default function VideoUploadForm() {
     } finally {
       setImageUploading(false);
     }
-  }, [theme]);
+  }, [theme, generateMovieID]);
 
   const handleVideoUpload = useCallback(async (e) => {
     const file = e.target.files[0];
@@ -731,33 +554,6 @@ export default function VideoUploadForm() {
     }));
   }, []);
 
-  const generateMovieID = useCallback(() => {
-    const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    return Array.from({ length: 8 }, () => characters.charAt(Math.floor(Math.random() * characters.length))).join("");
-  }, []);
-
-  const handleDesignSeats = useCallback(() => {
-    try {
-      const encryptedData = encryptData(formData);
-      if (encryptedData) {
-        localStorage.setItem("videoUploadFormData", encryptedData);
-      } else {
-        throw new Error("Failed to encrypt form data");
-      }
-      router.push("/dashboard/designseat?from=videoUploadDetail");
-    } catch (error) {
-      toast.error("Failed to save form data. Please try again.", {
-        position: "top-right",
-        autoClose: 3000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        theme: theme === "light" ? "light" : "dark",
-      });
-    }
-  }, [formData, router, theme]);
-
   const validateStep = useCallback((step) => {
     const newErrors = {};
 
@@ -796,7 +592,7 @@ export default function VideoUploadForm() {
         } else if (totalSeats === 0 || totalSeats === null || !seatArrangement) {
           newErrors.availableSite = (
             <>
-              {"No valid seat arrangement found. "}
+              No valid seat arrangement found.{" "}
               <a
                 onClick={handleDesignSeats}
                 className={`text-sm font-medium cursor-pointer ${
@@ -844,7 +640,7 @@ export default function VideoUploadForm() {
         if (!formData.seats || formData.seats.length === 0) {
           newErrors.availableSite = (
             <>
-              {"No seat arrangement found. "}
+              No seat arrangement found.{" "}
               <a
                 onClick={handleDesignSeats}
                 className={`text-sm font-medium cursor-pointer ${
@@ -873,7 +669,7 @@ export default function VideoUploadForm() {
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [formData, touched, totalSeats, seatArrangement, theme]);
+  }, [formData, touched, totalSeats, seatArrangement, theme, handleDesignSeats]);
 
   const handleNext = useCallback(() => {
     if (currentStep === 4) {
@@ -964,79 +760,340 @@ export default function VideoUploadForm() {
     }
   }, [formData, userEmail, ownerDetails, currentStep, validateStep, router, theme, initialFormData]);
 
-  if (authLoading) {
+  useEffect(() => {
+    const from = searchParams.get("from");
+    const encryptedFormData = localStorage.getItem("videoUploadFormData");
+
+    if (encryptedFormData && (from === "designseat" || from === "videoUploadDetail")) {
+      const decryptedData = decryptData(encryptedFormData);
+      if (decryptedData) {
+        setFormData((prev) => {
+          const newData = {
+            ...prev,
+            ...decryptedData,
+            mainCast: Array.isArray(decryptedData.mainCast) ? decryptedData.mainCast : [],
+            seats: Array.isArray(decryptedData.seats) ? decryptedData.seats : [],
+          };
+          if (JSON.stringify(prev) !== JSON.stringify(newData)) {
+            return newData;
+          }
+          return prev;
+        });
+        if (from === "designseat") {
+          setCurrentStep((prev) => (prev !== 3 ? 3 : prev));
+        }
+      } else {
+        localStorage.removeItem("videoUploadFormData");
+        setFormData(initialFormData);
+        toast.error("Failed to restore form data. Starting fresh.", {
+          position: "top-right",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: theme === "light" ? "light" : "dark",
+        });
+      }
+    } else {
+      localStorage.removeItem("videoUploadFormData");
+      setFormData((prev) => (JSON.stringify(prev) !== JSON.stringify(initialFormData) ? initialFormData : prev));
+    }
+    setLoading(false);
+  }, [searchParams, theme, initialFormData]);
+
+  useEffect(() => {
+    let unsubscribeSeatArrangements = null;
+    let unsubscribePending = null;
+
+    const fetchUserAndOwner = async () => {
+      try {
+        setLoading(true);
+        setAuthLoading(true);
+
+        const response = await fetch("/api/validate", {
+          method: "GET",
+          credentials: "include",
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage = errorData.error || "Unauthorized access. Please log in.";
+          toast.error(errorMessage, {
+            position: "top-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+          });
+          throw new Error(errorMessage);
+        }
+
+        const data = await response.json();
+        if (data.email && data.role) {
+          setUserEmail(data.email);
+          setUserRole(data.role);
+          setAuthLoading(false);
+
+          if (data.role !== "owner") {
+            toast.error("User is not an owner.", {
+              position: "top-right",
+              autoClose: 3000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+              theme: theme === "light" ? "light" : "dark",
+            });
+            throw new Error("User is not an owner.");
+          }
+
+          const ownerQuery = query(
+            collection(db, "owner"),
+            where("email", "==", data.email)
+          );
+          const ownerSnapshot = await getDocs(ownerQuery);
+          if (!ownerSnapshot.empty) {
+            const ownerData = ownerSnapshot.docs[0].data();
+            setOwnerDetails({
+              firstName: ownerData.firstName || "",
+              lastName: ownerData.lastName || "",
+            });
+            setIsPending(ownerData.pending === true);
+          } else {
+            toast.error("Owner details not found.", {
+              position: "top-right",
+              autoClose: 3000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+              theme: theme === "light" ? "light" : "dark",
+            });
+            throw new Error("Owner details not found");
+          }
+
+          unsubscribePending = onSnapshot(
+            ownerQuery,
+            (querySnapshot) => {
+              if (!querySnapshot.empty) {
+                const userDoc = querySnapshot.docs[0].data();
+                setIsPending(userDoc.pending === true);
+              } else {
+                setIsPending(false);
+              }
+            },
+            (error) => {
+              toast.error("Failed to fetch pending status.", {
+                position: "top-right",
+                autoClose: 3000,
+                hideProgressBar: false,
+                closeOnClick: true,
+                pauseOnHover: true,
+                draggable: true,
+                theme: theme === "light" ? "light" : "dark",
+              });
+            }
+          );
+
+          if (isPending === false) {
+            const arrangementsQuery = query(
+              collection(db, "seatArrangements"),
+              where("userEmail", "==", data.email)
+            );
+
+            unsubscribeSeatArrangements = onSnapshot(arrangementsQuery, (snapshot) => {
+              if (!snapshot.empty) {
+                const arrangementsData = snapshot.docs[0].data();
+                const totalSeatsValue = Number.isInteger(arrangementsData.totalSeats) ? arrangementsData.totalSeats : 0;
+                const seats = Array.isArray(arrangementsData.seats) ? arrangementsData.seats : [];
+                setTotalSeats(totalSeatsValue);
+                setSeatArrangement(seats);
+                setFormData((prev) => {
+                  const newData = {
+                    ...prev,
+                    availableSite: totalSeatsValue.toString(),
+                    seats: seats,
+                  };
+                  if (JSON.stringify(prev) !== JSON.stringify(newData)) {
+                    return newData;
+                  }
+                  return prev;
+                });
+                setErrors((prev) => ({
+                  ...prev,
+                  availableSite: totalSeatsValue > 0 ? "" : (
+                    <>
+                      No valid seat arrangement found.{" "}
+                      <a
+                        onClick={handleDesignSeats}
+                        className={`text-sm font-medium cursor-pointer ${
+                          theme === "light"
+                            ? "text-indigo-600 hover:text-indigo-800"
+                            : "text-indigo-400 hover:text-indigo-300"
+                        } underline transition-colors`}
+                      >
+                        Make Seat Arrangement
+                      </a>
+                    </>
+                  ),
+                }));
+              } else {
+                setTotalSeats(0);
+                setSeatArrangement(null);
+                setFormData((prev) => ({
+                  ...prev,
+                  seats: [],
+                  availableSite: "",
+                }));
+                setErrors((prev) => ({
+                  ...prev,
+                  availableSite: (
+                    <>
+                      No seat arrangement found.{" "}
+                      <a
+                        onClick={handleDesignSeats}
+                        className={`text-sm font-medium cursor-pointer ${
+                          theme === "light"
+                            ? "text-indigo-600 hover:text-indigo-800"
+                            : "text-indigo-400 hover:text-indigo-300"
+                        } underline transition-colors`}
+                      >
+                        Make Seat Arrangement
+                      </a>
+                    </>
+                  ),
+                }));
+              }
+            }, (error) => {
+              toast.error("Failed to fetch seat arrangement.", {
+                position: "top-right",
+                autoClose: 3000,
+                hideProgressBar: false,
+                closeOnClick: true,
+                pauseOnHover: true,
+                draggable: true,
+                theme: theme === "light" ? "light" : "dark",
+              });
+              setTotalSeats(0);
+              setSeatArrangement(null);
+              setFormData((prev) => ({
+                ...prev,
+                seats: [],
+                availableSite: "",
+              }));
+              setErrors((prev) => ({
+                ...prev,
+                availableSite: (
+                  <>
+                    Failed to load seat arrangement.{" "}
+                    <a
+                      onClick={handleDesignSeats}
+                      className={`text-sm font-medium cursor-pointer ${
+                        theme === "light"
+                          ? "text-indigo-600 hover:text-indigo-800"
+                          : "text-indigo-400 hover:text-indigo-300"
+                      } underline transition-colors`}
+                    >
+                      Make Seat Arrangement
+                    </a>
+                  </>
+                ),
+              }));
+            });
+          }
+        } else {
+          toast.error("No email or role found.", {
+            position: "top-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+          });
+          throw new Error("No email or role found");
+        }
+      } catch (error) {
+        setTimeout(() => {
+          router.replace("/login");
+        }, 3500);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserAndOwner();
+
+    return () => {
+      if (unsubscribeSeatArrangements) {
+        unsubscribeSeatArrangements();
+      }
+      if (unsubscribePending) {
+        unsubscribePending();
+      }
+    };
+  }, [router, theme, isPending]);
+
+  if (authLoading || userRole !== "owner") {
     return (
       <div
         className={`min-h-screen flex items-center justify-center ${
-          theme === "light"
-            ? "bg-gradient-to-br from-indigo-50 to-purple-50"
-            : "bg-gradient-to-br from-gray-900 to-indigo-900"
+          theme === "light" ? "bg-zinc-100" : "bg-zinc-900"
         }`}
       >
-        <PuffLoader color="#6366f1" size={100} />
+        <motion.div
+          className="flex flex-col items-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <PuffLoader color={theme === "light" ? "#3b82f6" : "#FFFFFF"} size={100} />
+          <motion.p
+            className={`mt-4 text-2xl font-bold ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5, duration: 0.5 }}
+          >
+            Loading video upload form...
+          </motion.p>
+        </motion.div>
+        <ToastContainer
+          position="top-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme={theme === "light" ? "light" : "dark"}
+        />
       </div>
     );
   }
 
-  // Calculate available seats for the label
   const reservedSeatsCount = seatArrangement ? seatArrangement.filter(seat => seat.reserved).length : 0;
   const availableSeats = totalSeats !== null && totalSeats > 0 ? totalSeats - reservedSeatsCount : null;
 
-  const steps = [
-    {
-      title: "Basic Info",
-      fields: [
-        { name: "title", label: "Movie Title", type: "text" },
-        { name: "category", label: "Category", type: "select" },
-        { name: "duration", label: "Duration (HH:MM:SS)*", type: "time" },
-      ],
-    },
-    {
-      title: "Cast & Venue",
-      fields: [
-        { name: "mainCast", label: "Main Cast", type: "custom-cast" },
-        { name: "cinemaName", label: "Cinema Name", type: "text" },
-        { name: "cinemaLocation", label: "Cinema Location", type: "text" },
-      ],
-    },
-    {
-      title: "Ticket Info",
-      fields: [
-        { name: "availableSite", label: `Available Site (Max: ${availableSeats !== null ? availableSeats : "N/A"})`, type: "number" },
-        { name: "ticketPrice", label: "Ticket Price (ETB)", type: "number" },
-        { name: "screeningDate", label: "Screening Date", type: "custom" },
-      ],
-    },
-    {
-      title: "Media",
-      fields: [
-        { name: "description", label: "Description", type: "textarea" },
-        {
-          name: "poster",
-          label: "Poster (Image Only)",
-          type: "file",
-          accept: "image/*",
-        },
-        {
-          name: "promotionVideo",
-          label: "Promotion Video (Video Only)",
-          type: "file",
-          accept: "video/*",
-        },
-      ],
-    },
-  ];
+  const dynamicSteps = steps.map((step, index) =>
+    index === 2
+      ? {
+          ...step,
+          fields: step.fields.map((field) =>
+            field.name === "availableSite"
+              ? { ...field, label: `Available Site (Max: ${availableSeats !== null ? availableSeats : "N/A"})` }
+              : field
+          ),
+        }
+      : step
+  );
 
   return (
-    <div
-      className={`min-h-screen flex items-center justify-center ${
-        theme === "light"
-          ? "bg-gradient-to-br from-indigo-50 to-purple-50"
-          : "bg-gradient-to-br from-gray-900 to-indigo-900"
-      } p-4 sm:p-6 transition-all duration-300 ${
-        isCategoryOpen ? "backdrop-blur-sm" : ""
-      }`}
-    >
+    <div className={`min-h-screen flex flex-col ${theme === "light" ? "bg-zinc-100" : "bg-zinc-900"}`}>
       <ToastContainer
         position="top-right"
         autoClose={3000}
@@ -1049,601 +1106,671 @@ export default function VideoUploadForm() {
         pauseOnHover
         theme={theme === "light" ? "light" : "dark"}
       />
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5, type: "spring" }}
-        className={`w-full max-w-4xl ${
-          theme === "light"
-            ? "bg-gradient-to-br from-blue-50 to-purple-50"
-            : "bg-gradient-to-br from-gray-800 to-gray-900"
-        } p-6 sm:p-8 rounded-2xl shadow-xl hover:shadow-Born transition-shadow`}
-        whileHover={{ scale: 1.02 }}
-        transition={{ type: "spring", stiffness: 300 }}
-      >
+      {isPending === null ? (
+        <div className={`min-h-screen flex items-center justify-center ${theme === "light" ? "bg-zinc-100" : "bg-zinc-900"}`}>
+          <motion.div
+            className="flex flex-col items-center"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <PuffLoader color={theme === "light" ? "#3b82f6" : "#FFFFFF"} size={100} />
+            <motion.p
+              className={`mt-4 text-2xl font-bold ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5, duration: 0.5 }}
+            >
+              Checking status...
+            </motion.p>
+          </motion.div>
+        </div>
+      ) : isPending === true ? (
+        <div className={`min-h-screen flex items-center justify-center ${theme === "light" ? "bg-zinc-100" : "bg-zinc-900"}`}>
+          <motion.div
+            className="text-center px-4"
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+          >
+            <motion.h1
+              className="text-3xl sm:text-4xl font-extrabold bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 bg-clip-text text-transparent"
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.5, duration: 0.5 }}
+            >
+              Request Pending
+            </motion.h1>
+            <motion.p
+              className={`mt-4 text-lg sm:text-xl ${theme === "light" ? "text-gray-700" : "text-gray-300"}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1, duration: 0.8 }}
+            >
+              Your request is being processed. Please wait a few days.
+            </motion.p>
+            <motion.div
+              className="mt-8"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.5, duration: 0.8 }}
+            >
+              <div className="flex justify-center">
+                <div className="w-16 h-16 sm:w-24 sm:h-24 border-4 border-purple-500 rounded-full animate-spin border-t-transparent"></div>
+              </div>
+              <p className={`mt-4 ${theme === "light" ? "text-gray-600" : "text-gray-400"} text-sm sm:text-base`}>
+                We appreciate your patience!
+              </p>
+            </motion.div>
+          </motion.div>
+        </div>
+      ) : (
         <div
-          className={`${
-            theme === "light" ? "bg-indigo-50" : "bg-indigo-900"
-          } rounded-t-2xl p-4 mb-6 border-b ${
-            theme === "light" ? "border-indigo-100" : "border-indigo-800"
+          className={`min-h-screen flex items-center justify-center ${
+            theme === "light"
+              ? "bg-gradient-to-br from-indigo-50 to-purple-50"
+              : "bg-gradient-to-br from-gray-900 to-indigo-900"
+          } p-4 sm:p-6 transition-all duration-300 ${
+            isCategoryOpen ? "backdrop-blur-sm" : ""
           }`}
         >
-          <div className="flex items-center justify-between">
-            <motion.button
-              onClick={() => router.back()}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
-                theme === "light"
-                  ? "text-indigo-700 hover:bg-indigo-100"
-                  : "text-indigo-300 hover:bg-indigo-800"
-              } transition-colors`}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, type: "spring" }}
+            className={`w-full max-w-4xl ${
+              theme === "light"
+                ? "bg-gradient-to-br from-blue-50 to-purple-50"
+                : "bg-gradient-to-br from-gray-800 to-gray-900"
+            } p-6 sm:p-8 rounded-2xl shadow-xl hover:shadow-Born transition-shadow`}
+            whileHover={{ scale: 1.02 }}
+            transition={{ type: "spring", stiffness: 300 }}
+          >
+            <div
+              className={`${
+                theme === "light" ? "bg-indigo-50" : "bg-indigo-900"
+              } rounded-t-2xl p-4 mb-6 border-b ${
+                theme === "light" ? "border-indigo-100" : "border-indigo-800"
+              }`}
             >
-              <ArrowLeftIcon className="h-5 w-5" />
-              <span className="text-lg font-medium">Back</span>
-            </motion.button>
+              <div className="flex items-center justify-between">
+                <motion.button
+                  onClick={() => router.back()}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+                    theme === "light"
+                      ? "text-indigo-700 hover:bg-indigo-100"
+                      : "text-indigo-300 hover:bg-indigo-800"
+                  } transition-colors`}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <ArrowLeftIcon className="h-5 w-5" />
+                  <span className="text-lg font-medium">Back</span>
+                </motion.button>
 
-            <div className="flex items-center gap-4">
-              {steps.map((step, index) => (
-                <div key={index} className="flex items-center gap-2">
+                <div className="flex items-center gap-4">
+                  {dynamicSteps.map((step, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <div
+                        className={`flex items-center justify-center w-8 h-8 rounded-full ${
+                          currentStep > index + 1
+                            ? "bg-green-500"
+                            : currentStep === index + 1
+                            ? "bg-indigo-600"
+                            : theme === "light"
+                            ? "bg-indigo-200"
+                            : "bg-indigo-700"
+                        } text-white transition-colors`}
+                      >
+                        {currentStep > index + 1 ? (
+                          <CheckIcon className="h-4 w-4" />
+                        ) : (
+                          index + 1
+                        )}
+                      </div>
+                      <span
+                        className={`hidden md:inline ${
+                          currentStep === index + 1 ? "font-semibold" : ""
+                        } ${
+                          theme === "light" ? "text-indigo-700" : "text-indigo-300"
+                        }`}
+                      >
+                        {step.title}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <h2
+                className={`text-3xl font-bold ${
+                  theme === "light" ? "text-indigo-900" : "text-white"
+                }`}
+              >
+                {dynamicSteps[currentStep - 1].title}
+              </h2>
+              <p
+                className={`mt-1 ${
+                  theme === "light" ? "text-indigo-600" : "text-indigo-400"
+                }`}
+              >
+                Step {currentStep} of {totalSteps}
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit} autoComplete="off">
+              <div className="space-y-6">
+                {totalSeats > 0 && seatArrangement && currentStep === 3 && (
                   <div
-                    className={`flex items-center justify-center w-8 h-8 rounded-full ${
-                      currentStep > index + 1
-                        ? "bg-green-500"
-                        : currentStep === index + 1
-                        ? "bg-indigo-600"
-                        : theme === "light"
-                        ? "bg-indigo-200"
-                        : "bg-indigo-700"
-                    } text-white transition-colors`}
+                    className={`mb-6 p-6 rounded-xl ${
+                      theme === "light"
+                        ? "bg-gradient-to-r from-green-50 to-teal-50"
+                        : "bg-gradient-to-r from-green-900 to-teal-900"
+                    } border ${
+                      theme === "light" ? "border-green-200" : "border-green-700"
+                    } shadow-lg hover:shadow-xl transition-shadow cursor-pointer`}
+                    onClick={handleDesignSeats}
                   >
-                    {currentStep > index + 1 ? (
-                      <CheckIcon className="h-4 w-4" />
+                    <div className="flex items-center gap-4">
+                      <TableCellsIcon
+                        className={`h-8 w-8 ${
+                          theme === "light" ? "text-green-600" : "text-green-300"
+                        }`}
+                      />
+                      <div>
+                        <p
+                          className={`text-base font-semibold ${
+                            theme === "light" ? "text-green-700" : "text-green-300"
+                          }`}
+                        >
+                          Seat arrangement found ({totalSeats} seats)
+                        </p>
+                        <p
+                          className={`text-sm ${
+                            theme === "light" ? "text-green-600" : "text-green-400"
+                          }`}
+                        >
+                          Click to modify the seat arrangement.
+                        </p>
+                      </div>
+                      <motion.button
+                        type="button"
+                        className={`ml-auto px-4 py-2 rounded-lg ${
+                          theme === "light"
+                            ? "bg-green-600 text-white hover:bg-green-700"
+                            : "bg-green-700 text-white hover:bg-green-800"
+                        } flex items-center gap-2 transition-colors shadow-md`}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <TableCellsIcon className="h-5 w-5" />
+                        Modify Seats
+                      </motion.button>
+                    </div>
+                  </div>
+                )}
+                {dynamicSteps[currentStep - 1].fields.map((field, index) => (
+                  <div key={index}>
+                    <label
+                      className={`block text-sm font-medium mb-2 ${
+                        theme === "light" ? "text-indigo-700" : "text-indigo-300"
+                      }`}
+                    >
+                      {field.label}
+                      <span className="text-red-500">*</span>
+                    </label>
+                    {field.type === "textarea" ? (
+                      <textarea
+                        name={field.name}
+                        value={formData[field.name]}
+                        onChange={handleChange}
+                        className={`mt-1 block w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
+                          errors[field.name]
+                            ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
+                            : theme === "light"
+                            ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
+                            : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
+                        } ${theme === "light" ? "bg-white" : "bg-gray-700"} transition-all duration-200`}
+                        rows={4}
+                        autoComplete="off"
+                      />
+                    ) : field.type === "file" ? (
+                      <div
+                        className={`mt-1 flex flex-col items-center justify-center w-full px-4 py-8 border-2 border-dashed rounded-lg transition-colors ${
+                          errors[field.name] && touched[field.name]
+                            ? "border-red-500 bg-red-50/50"
+                            : theme === "light"
+                            ? "border-indigo-200 bg-indigo-50 hover:border-indigo-300"
+                            : "border-indigo-700 bg-gray-700 hover:border-indigo-600"
+                        }`}
+                      >
+                        <div className="text-center">
+                          {field.name === "promotionVideo" && videoUploading ? (
+                            <div className="flex flex-col items-center gap-2">
+                              <ClipLoader color="#6366f1" size={40} />
+                              <p
+                                className={`text-sm font-medium ${
+                                  theme === "light" ? "text-indigo-600" : "text-indigo-400"
+                                }`}
+                              >
+                                Uploading video...
+                              </p>
+                            </div>
+                          ) : field.name === "poster" && imageUploading ? (
+                            <div className="flex flex-col items-center gap-2">
+                              <ClipLoader color="#6366f1" size={40} />
+                              <p
+                                className={`text-sm font-medium ${
+                                  theme === "light" ? "text-indigo-600" : "text-indigo-400"
+                                }`}
+                              >
+                                Uploading poster...
+                              </p>
+                            </div>
+                          ) : (
+                            <>
+                              <p
+                                className={`mb-3 ${
+                                  errors[field.name] && touched[field.name]
+                                    ? "text-red-500 font-medium"
+                                    : theme === "light"
+                                    ? "text-indigo-600"
+                                    : "text-indigo-400"
+                                }`}
+                              >
+                                {formData[field.name]
+                                  ? "File selected"
+                                  : errors[field.name] && touched[field.name]
+                                  ? `Please upload ${
+                                      field.accept.includes("image")
+                                        ? "an image"
+                                        : "a video"
+                                    }`
+                                  : `Click to upload ${
+                                      field.accept.includes("image")
+                                        ? "an image"
+                                        : "a video"
+                                    }`}
+                              </p>
+                              <input
+                                type="file"
+                                name={field.name}
+                                accept={field.accept}
+                                onChange={
+                                  field.name === "poster"
+                                    ? handleFileChange
+                                    : handleVideoUpload
+                                }
+                                className="hidden"
+                                id={field.name}
+                                disabled={
+                                  (field.name === "promotionVideo" && videoUploading) ||
+                                  (field.name === "poster" && imageUploading)
+                                }
+                              />
+                              <label
+                                htmlFor={field.name}
+                                className={`inline-flex items-center px-5 py-2 rounded-lg cursor-pointer transition-colors ${
+                                  errors[field.name] && touched[field.name]
+                                    ? "bg-gradient-to-r from-red-500 to-pink-500 text-white hover:from-red-600 hover:to-pink-600"
+                                    : theme === "light"
+                                    ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                                    : "bg-indigo-700 text-white hover:bg-indigo-800"
+                                } ${
+                                  (field.name === "promotionVideo" && videoUploading) ||
+                                  (field.name === "poster" && imageUploading)
+                                    ? "opacity-50 cursor-not-allowed"
+                                    : ""
+                                }`}
+                              >
+                                {formData[field.name] ? "Change File" : "Choose File"}
+                              </label>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ) : field.type === "custom" ? (
+                      <EthiopianDatePicker
+                        name={field.name}
+                        value={formData[field.name]}
+                        onChange={handleChange}
+                        error={errors[field.name]}
+                        theme={theme}
+                      />
+                    ) : field.type === "custom-cast" ? (
+                      <div className="space-y-4">
+                        <AnimatePresence>
+                          {formData.mainCast.map((cast, idx) => (
+                            <motion.div
+                              key={idx}
+                              initial={{ opacity: 0, y: -20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: 20 }}
+                              className={`flex items-center gap-4 p-4 rounded-xl ${
+                                theme === "light" ? "bg-indigo-50" : "bg-gray-700"
+                              } shadow-md hover:shadow-lg transition-all duration-200`}
+                            >
+                              {cast.image && (
+                                <motion.div
+                                  initial={{ opacity: 0, scale: 0.8 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  className="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden border-2 border-indigo-200"
+                                >
+                                  <img
+                                    src={cast.image}
+                                    alt="Cast preview"
+                                    className="w-full h-full object-cover"
+                                  />
+                                </motion.div>
+                              )}
+                              <div className="flex-1">
+                                <input
+                                  type="text"
+                                  value={cast.name}
+                                  onChange={(e) =>
+                                    handleCastChange(idx, "name", e.target.value)
+                                  }
+                                  placeholder="Cast member name"
+                                  className={`w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
+                                    errors.mainCast && !cast.name.trim()
+                                      ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
+                                      : theme === "light"
+                                      ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
+                                      : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
+                                  } ${
+                                    theme === "light" ? "bg-white" : "bg-gray-600"
+                                  } transition-all duration-200`}
+                                />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Tooltip text="Upload Cast Image" theme={theme}>
+                                  <div className="relative">
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={(e) =>
+                                        handleCastImage(idx, e.target.files[0])
+                                      }
+                                      className="hidden"
+                                      id={`cast-image-${idx}`}
+                                      disabled={castImageUploading[idx]}
+                                    />
+                                    <motion.label
+                                      htmlFor={`cast-image-${idx}`}
+                                      whileHover={{ scale: 1.1 }}
+                                      whileTap={{ scale: 0.9 }}
+                                      className={`cursor-pointer ${
+                                        castImageUploading[idx]
+                                          ? "opacity-50 cursor-not-allowed"
+                                          : ""
+                                      }`}
+                                      aria-label="Upload cast image"
+                                    >
+                                      {castImageUploading[idx] ? (
+                                        <ClipLoader color="#6366f1" size={20} />
+                                      ) : (
+                                        <ArrowUpOnSquareIcon
+                                          className="h-10 w-10 p-3 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white shadow-md hover:shadow-lg transition-all duration-200"
+                                        />
+                                      )}
+                                    </motion.label>
+                                  </div>
+                                </Tooltip>
+                                <Tooltip text="Remove Cast Member" theme={theme}>
+                                  <motion.button
+                                    type="button"
+                                    onClick={() => removeCastMember(idx)}
+                                    className="p-3 rounded-full bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-md hover:shadow-lg transition-all duration-200"
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    aria-label="Remove cast member"
+                                  >
+                                    <XCircleIcon className="h-5 w-5" />
+                                  </motion.button>
+                                </Tooltip>
+                              </div>
+                            </motion.div>
+                          ))}
+                        </AnimatePresence>
+                        <motion.button
+                          type="button"
+                          onClick={addCastMember}
+                          className={`flex items-center gap-2 px-5 py-3 rounded-lg ${
+                            theme === "light"
+                              ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700"
+                              : "bg-gradient-to-r from-indigo-700 to-purple-700 text-white hover:from-indigo-800 hover:to-purple-800"
+                          } transition-all shadow-md`}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          <PlusIcon className="h-5 w-5" />
+                          Add Cast Member
+                        </motion.button>
+                      </div>
+                    ) : field.type === "select" ? (
+                      <div className="relative">
+                        <motion.button
+                          type="button"
+                          onClick={() => setIsCategoryOpen(!isCategoryOpen)}
+                          className={`flex items-center justify-between w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
+                            errors[field.name]
+                              ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
+                              : theme === "light"
+                              ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
+                              : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
+                          } ${theme === "light" ? "bg-white" : "bg-gray-600"} transition-all duration-200`}
+                          whileHover={{ scale: 1.02 }}
+                        >
+                          <span
+                            className={`${
+                              formData[field.name] ? "" : "text-gray-500"
+                            }`}
+                          >
+                            {formData[field.name] || "Select a category"}
+                          </span>
+                          <ChevronDownIcon
+                            className={`h-5 w-5 ${
+                              theme === "light"
+                                ? "text-indigo-500"
+                                : "text-indigo-400"
+                            }`}
+                          />
+                        </motion.button>
+                        <AnimatePresence>
+                          {isCategoryOpen && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -10 }}
+                              className={`absolute z-20 w-full mt-2 rounded-lg shadow-xl ${
+                                theme === "light" ? "bg-white" : "bg-gray-700"
+                              } max-h-60 overflow-y-auto`}
+                            >
+                              {movieCategories.map((category) => (
+                                <motion.div
+                                  key={category}
+                                  whileHover={{ scale: 1.02 }}
+                                  className={`px-4 py-3 cursor-pointer transition-colors ${
+                                    formData[field.name] === category
+                                      ? theme === "light"
+                                        ? "bg-indigo-100 text-indigo-900"
+                                        : "bg-indigo-600 text-white"
+                                      : theme === "light"
+                                      ? "hover:bg-indigo-50"
+                                      : "hover:bg-indigo-700"
+                                  }`}
+                                  onClick={() =>
+                                    handleChange({
+                                      target: { name: field.name, value: category },
+                                    })
+                                  }
+                                >
+                                  {category}
+                                </motion.div>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    ) : field.name === "duration" ? (
+                      <input
+                        type="time"
+                        name={field.name}
+                        value={formData[field.name]}
+                        onChange={handleChange}
+                        step="1"
+                        className={`mt-1 block w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
+                          errors[field.name]
+                            ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
+                            : theme === "light"
+                            ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
+                            : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
+                        } ${theme === "light" ? "bg-white" : "bg-gray-600"} transition-all duration-200`}
+                        autoComplete="off"
+                      />
                     ) : (
-                      index + 1
+                      <div>
+                        <input
+                          type={field.type}
+                          name={field.name}
+                          value={formData[field.name]}
+                          onChange={handleChange}
+                          className={`mt-1 block w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
+                            errors[field.name]
+                              ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
+                            : theme === "light"
+                            ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
+                            : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
+                          } ${theme === "light" ? "bg-white" : "bg-gray-600"} transition-all duration-200`}
+                          step={field.type === "number" ? "1" : undefined}
+                          autoComplete="off"
+                        />
+                        {field.name === "availableSite" && totalSeats > 0 && seatArrangement ? (
+                          <a
+                            onClick={handleDesignSeats}
+                            className={`mt-2 inline-block text-sm font-medium cursor-pointer ${
+                              theme === "light"
+                                ? "text-indigo-600 hover:text-indigo-800"
+                                : "text-indigo-400 hover:text-indigo-300"
+                            } underline transition-colors`}
+                          >
+                            Modify Seat Arrangement
+                          </a>
+                        ) : field.name === "availableSite" && (
+                          <a
+                            onClick={handleDesignSeats}
+                            className={`mt-2 inline-block text-sm font-medium cursor-pointer ${
+                              theme === "light"
+                                ? "text-indigo-600 hover:text-indigo-800"
+                                : "text-indigo-400 hover:text-indigo-300"
+                              } underline transition-colors`}
+                          >
+                            Make Seat Arrangement
+                          </a>
+                        )}
+                      </div>
+                    )}
+                    {errors[field.name] &&
+                      field.type !== "file" &&
+                      field.type !== "custom-cast" &&
+                      field.type !== "select" && (
+                        <p className="mt-2 text-sm text-red-500">
+                          {errors[field.name]}
+                        </p>
+                      )}
+                    {errors[field.name] && field.type === "file" && touched[field.name] && (
+                      <p className="mt-2 text-sm text-red-500">
+                        {errors[field.name]}
+                      </p>
+                    )}
+                    {errors.mainCast &&
+                      field.type === "custom-cast" &&
+                      touched.mainCast && (
+                        <p className="mt-2 text-sm text-red-500">
+                          {errors.mainCast}
+                        </p>
+                      )}
+                    {errors[field.name] && field.type === "select" && (
+                      <p className="mt-2 text-sm text-red-500">
+                        {errors[field.name]}
+                      </p>
                     )}
                   </div>
-                  <span
-                    className={`hidden md:inline ${
-                      currentStep === index + 1 ? "font-semibold" : ""
-                    } ${
-                      theme === "light" ? "text-indigo-700" : "text-indigo-300"
-                    }`}
-                  >
-                    {step.title}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+                ))}
+              </div>
 
-        <div className="mb-6">
-          <h2
-            className={`text-3xl font-bold ${
-              theme === "light" ? "text-indigo-900" : "text-white"
-            }`}
-          >
-            {steps[currentStep - 1].title}
-          </h2>
-          <p
-            className={`mt-1 ${
-              theme === "light" ? "text-indigo-600" : "text-indigo-400"
-            }`}
-          >
-            Step {currentStep} of {totalSteps}
-          </p>
-        </div>
+              <div className="mt-8 flex justify-between">
+                <motion.button
+                  type="button"
+                  onClick={handleBack}
+                  disabled={currentStep === 1}
+                  className={`flex items-center gap-2 px-6 py-3 rounded-lg ${
+                    theme === "light"
+                      ? "text-indigo-700 hover:bg-indigo-100"
+                      : "text-indigo-300 hover:bg-indigo-800"
+                  } transition-colors disabled:opacity-50`}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <ArrowLeftIcon className="h-5 w-5" />
+                  Previous
+                </motion.button>
 
-        <form onSubmit={handleSubmit} autoComplete="off">
-          <div className="space-y-6">
-            {totalSeats > 0 && seatArrangement && currentStep === 3 && (
-              <div
-                className={`mb-6 p-6 rounded-xl ${
-                  theme === "light"
-                    ? "bg-gradient-to-r from-green-50 to-teal-50"
-                    : "bg-gradient-to-r from-green-900 to-teal-900"
-                } border ${
-                  theme === "light" ? "border-green-200" : "border-green-700"
-                } shadow-lg hover:shadow-xl transition-shadow cursor-pointer`}
-                onClick={handleDesignSeats}
-              >
-                <div className="flex items-center gap-4">
-                  <TableCellsIcon
-                    className={`h-8 w-8 ${
-                      theme === "light" ? "text-green-600" : "text-green-300"
-                    }`}
-                  />
-                  <div>
-                    <p
-                      className={`text-base font-semibold ${
-                        theme === "light" ? "text-green-700" : "text-green-300"
-                      }`}
-                    >
-                      Seat arrangement found ({totalSeats} seats)
-                    </p>
-                    <p
-                      className={`text-sm ${
-                        theme === "light" ? "text-green-600" : "text-green-400"
-                      }`}
-                    >
-                      Click to modify the seat arrangement.
-                    </p>
-                  </div>
+                {currentStep < totalSteps ? (
                   <motion.button
                     type="button"
-                    className={`ml-auto px-4 py-2 rounded-lg ${
-                      theme === "light"
-                        ? "bg-green-600 text-white hover:bg-green-700"
-                        : "bg-green-700 text-white hover:bg-green-800"
-                    } flex items-center gap-2 transition-colors shadow-md`}
+                    onClick={handleNext}
+                    className={`flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all`}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
-                    <TableCellsIcon className="h-5 w-5" />
-                    Modify Seats
+                    Next
+                    <ArrowRightIcon className="h-5 w-5" />
                   </motion.button>
-                </div>
-              </div>
-            )}
-            {steps[currentStep - 1].fields.map((field, index) => (
-              <div key={index}>
-                <label
-                  className={`block text-sm font-medium mb-2 ${
-                    theme === "light" ? "text-indigo-700" : "text-indigo-300"
-                  }`}
-                >
-                  {field.label}
-                  <span className="text-red-500">*</span>
-                </label>
-                {field.type === "textarea" ? (
-                  <textarea
-                    name={field.name}
-                    value={formData[field.name]}
-                    onChange={handleChange}
-                    className={`mt-1 block w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
-                      errors[field.name]
-                        ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
-                        : theme === "light"
-                        ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
-                        : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
-                    } ${theme === "light" ? "bg-white" : "bg-gray-700"} transition-all duration-200`}
-                    rows={4}
-                    autoComplete="off"
-                  />
-                ) : field.type === "file" ? (
-                  <div
-                    className={`mt-1 flex flex-col items-center justify-center w-full px-4 py-8 border-2 border-dashed rounded-lg transition-colors ${
-                      errors[field.name] && touched[field.name]
-                        ? "border-red-500 bg-red-50/50"
-                        : theme === "light"
-                        ? "border-indigo-200 bg-indigo-50 hover:border-indigo-300"
-                        : "border-indigo-700 bg-gray-700 hover:border-indigo-600"
-                    }`}
+                ) : (
+                  <motion.button
+                    type="submit"
+                    disabled={loading || videoUploading || imageUploading || Object.values(castImageUploading).some((v) => v)}
+                    className={`flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-indigo-500 text-white font-medium rounded-lg hover:from-green-600 hover:to-indigo-600 transition-all disabled:opacity-70`}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                   >
-                    <div className="text-center">
-                      {field.name === "promotionVideo" && videoUploading ? (
-                        <div className="flex flex-col items-center gap-2">
-                          <ClipLoader color="#6366f1" size={40} />
-                          <p
-                            className={`text-sm font-medium ${
-                              theme === "light" ? "text-indigo-600" : "text-indigo-400"
-                            }`}
-                          >
-                            Uploading video...
-                          </p>
-                        </div>
-                      ) : field.name === "poster" && imageUploading ? (
-                        <div className="flex flex-col items-center gap-2">
-                          <ClipLoader color="#6366f1" size={40} />
-                          <p
-                            className={`text-sm font-medium ${
-                              theme === "light" ? "text-indigo-600" : "text-indigo-400"
-                            }`}
-                          >
-                            Uploading poster...
-                          </p>
-                        </div>
-                      ) : (
-                        <>
-                          <p
-                            className={`mb-3 ${
-                              errors[field.name] && touched[field.name]
-                                ? "text-red-500 font-medium"
-                                : theme === "light"
-                                ? "text-indigo-600"
-                                : "text-indigo-400"
-                            }`}
-                          >
-                            {formData[field.name]
-                              ? "File selected"
-                              : errors[field.name] && touched[field.name]
-                              ? `Please upload ${
-                                  field.accept.includes("image")
-                                    ? "an image"
-                                    : "a video"
-                                }`
-                              : `Click to upload ${
-                                  field.accept.includes("image")
-                                    ? "an image"
-                                    : "a video"
-                                }`}
-                          </p>
-                          <input
-                            type="file"
-                            name={field.name}
-                            accept={field.accept}
-                            onChange={
-                              field.name === "poster"
-                                ? handleFileChange
-                                : handleVideoUpload
-                            }
-                            className="hidden"
-                            id={field.name}
-                            disabled={
-                              (field.name === "promotionVideo" && videoUploading) ||
-                              (field.name === "poster" && imageUploading)
-                            }
-                          />
-                          <label
-                            htmlFor={field.name}
-                            className={`inline-flex items-center px-5 py-2 rounded-lg cursor-pointer transition-colors ${
-                              errors[field.name] && touched[field.name]
-                                ? "bg-gradient-to-r from-red-500 to-pink-500 text-white hover:from-red-600 hover:to-pink-600"
-                                : theme === "light"
-                                ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                                : "bg-indigo-700 text-white hover:bg-indigo-800"
-                            } ${
-                              (field.name === "promotionVideo" && videoUploading) ||
-                              (field.name === "poster" && imageUploading)
-                                ? "opacity-50 cursor-not-allowed"
-                                : ""
-                            }`}
-                          >
-                            {formData[field.name] ? "Change File" : "Choose File"}
-                          </label>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ) : field.type === "custom" ? (
-                  <EthiopianDatePicker
-                    name={field.name}
-                    value={formData[field.name]}
-                    onChange={handleChange}
-                    error={errors[field.name]}
-                    theme={theme}
-                  />
-                ) : field.type === "custom-cast" ? (
-                  <div className="space-y-4">
-                    <AnimatePresence>
-                      {formData.mainCast.map((cast, idx) => (
-                        <motion.div
-                          key={idx}
-                          initial={{ opacity: 0, y: -20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: 20 }}
-                          className={`flex items-center gap-4 p-4 rounded-xl ${
-                            theme === "light" ? "bg-indigo-50" : "bg-gray-700"
-                          } shadow-md hover:shadow-lg transition-all duration-200`}
+                    {loading ? (
+                      <>
+                        <svg
+                          className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 24 24"
                         >
-                          {cast.image && (
-                            <motion.div
-                              initial={{ opacity: 0, scale: 0.8 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              className="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden border-2 border-indigo-200"
-                            >
-                              <img
-                                src={cast.image}
-                                alt="Cast preview"
-                                className="w-full h-full object-cover"
-                              />
-                            </motion.div>
-                          )}
-                          <div className="flex-1">
-                            <input
-                              type="text"
-                              value={cast.name}
-                              onChange={(e) =>
-                                handleCastChange(idx, "name", e.target.value)
-                              }
-                              placeholder="Cast member name"
-                              className={`w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
-                                errors.mainCast && !cast.name.trim()
-                                  ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
-                                  : theme === "light"
-                                  ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
-                                  : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
-                              } ${
-                                theme === "light" ? "bg-white" : "bg-gray-600"
-                              } transition-all duration-200`}
-                            />
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Tooltip text="Upload Cast Image" theme={theme}>
-                              <div className="relative">
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={(e) =>
-                                    handleCastImage(idx, e.target.files[0])
-                                  }
-                                  className="hidden"
-                                  id={`cast-image-${idx}`}
-                                  disabled={castImageUploading[idx]}
-                                />
-                                <motion.label
-                                  htmlFor={`cast-image-${idx}`}
-                                  whileHover={{ scale: 1.1 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  className={`cursor-pointer ${
-                                    castImageUploading[idx]
-                                      ? "opacity-50 cursor-not-allowed"
-                                      : ""
-                                  }`}
-                                  aria-label="Upload cast image"
-                                >
-                                  {castImageUploading[idx] ? (
-                                    <ClipLoader color="#6366f1" size={20} />
-                                  ) : (
-                                    <ArrowUpOnSquareIcon
-                                      className="h-10 w-10 p-3 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white shadow-md hover:shadow-lg transition-all duration-200"
-                                    />
-                                  )}
-                                </motion.label>
-                              </div>
-                            </Tooltip>
-                            <Tooltip text="Remove Cast Member" theme={theme}>
-                              <motion.button
-                                type="button"
-                                onClick={() => removeCastMember(idx)}
-                                className="p-3 rounded-full bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-md hover:shadow-lg transition-all duration-200"
-                                whileHover={{ scale: 1.1 }}
-                                whileTap={{ scale: 0.9 }}
-                                aria-label="Remove cast member"
-                              >
-                                <XCircleIcon className="h-5 w-5" />
-                              </motion.button>
-                            </Tooltip>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </AnimatePresence>
-                    <motion.button
-                      type="button"
-                      onClick={addCastMember}
-                      className={`flex items-center gap-2 px-5 py-3 rounded-lg ${
-                        theme === "light"
-                          ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700"
-                          : "bg-gradient-to-r from-indigo-700 to-purple-700 text-white hover:from-indigo-800 hover:to-purple-800"
-                      } transition-all shadow-md`}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      <PlusIcon className="h-5 w-5" />
-                      Add Cast Member
-                    </motion.button>
-                  </div>
-                ) : field.type === "select" ? (
-                  <div className="relative">
-                    <motion.button
-                      type="button"
-                      onClick={() => setIsCategoryOpen(!isCategoryOpen)}
-                      className={`flex items-center justify-between w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
-                        errors[field.name]
-                          ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
-                          : theme === "light"
-                          ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
-                          : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
-                      } ${theme === "light" ? "bg-white" : "bg-gray-600"} transition-all duration-200`}
-                      whileHover={{ scale: 1.02 }}
-                    >
-                      <span
-                        className={`${
-                          formData[field.name] ? "" : "text-gray-500"
-                        }`}
-                      >
-                        {formData[field.name] || "Select a category"}
-                      </span>
-                      <ChevronDownIcon
-                        className={`h-5 w-5 ${
-                          theme === "light"
-                            ? "text-indigo-500"
-                            : "text-indigo-400"
-                        }`}
-                      />
-                    </motion.button>
-                    <AnimatePresence>
-                      {isCategoryOpen && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          className={`absolute z-20 w-full mt-2 rounded-lg shadow-xl ${
-                            theme === "light" ? "bg-white" : "bg-gray-700"
-                          } max-h-60 overflow-y-auto`}
-                        >
-                          {movieCategories.map((category) => (
-                            <motion.div
-                              key={category}
-                              whileHover={{ scale: 1.02 }}
-                              className={`px-4 py-3 cursor-pointer transition-colors ${
-                                formData[field.name] === category
-                                  ? theme === "light"
-                                    ? "bg-indigo-100 text-indigo-900"
-                                    : "bg-indigo-600 text-white"
-                                  : theme === "light"
-                                  ? "hover:bg-indigo-50"
-                                  : "hover:bg-indigo-700"
-                              }`}
-                              onClick={() =>
-                                handleChange({
-                                  target: { name: field.name, value: category },
-                                })
-                              }
-                            >
-                              {category}
-                            </motion.div>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                ) : field.name === "duration" ? (
-                  <input
-                    type="time"
-                    name={field.name}
-                    value={formData[field.name]}
-                    onChange={handleChange}
-                    step="1"
-                    className={`mt-1 block w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
-                      errors[field.name]
-                        ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
-                        : theme === "light"
-                        ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
-                        : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
-                    } ${theme === "light" ? "bg-white" : "bg-gray-600"} transition-all duration-200`}
-                    autoComplete="off"
-                  />
-                ) : (
-                  <div>
-                    <input
-                      type={field.type}
-                      name={field.name}
-                      value={formData[field.name]}
-                      onChange={handleChange}
-                      className={`mt-1 block w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
-                        errors[field.name]
-                          ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
-                          : theme === "light"
-                          ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
-                          : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
-                      } ${theme === "light" ? "bg-white" : "bg-gray-600"} transition-all duration-200`}
-                      step={field.type === "number" ? "1" : undefined}
-                      autoComplete="off"
-                    />
-                    {field.name === "availableSite" && totalSeats > 0 && seatArrangement ? (
-                      <a
-                        onClick={handleDesignSeats}
-                        className={`mt-2 inline-block text-sm font-medium cursor-pointer ${
-                          theme === "light"
-                            ? "text-indigo-600 hover:text-indigo-800"
-                            : "text-indigo-400 hover:text-indigo-300"
-                        } underline transition-colors`}
-                      >
-                        Modify Seat Arrangement
-                      </a>
-                    ) : field.name === "availableSite" && (
-                      <a
-                        onClick={handleDesignSeats}
-                        className={`mt-2 inline-block text-sm font-medium cursor-pointer ${
-                          theme === "light"
-                            ? "text-indigo-600 hover:text-indigo-800"
-                            : "text-indigo-400 hover:text-indigo-300"
-                        } underline transition-colors`}
-                      >
-                        Make Seat Arrangement
-                      </a>
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8VFILLM4 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
+                        </svg>
+                        Uploading...
+                      </>
+                    ) : (
+                      "Submit Movie"
                     )}
-                  </div>
-                )}
-                {errors[field.name] &&
-                  field.type !== "file" &&
-                  field.type !== "custom-cast" &&
-                  field.type !== "select" && (
-                    <p className="mt-2 text-sm text-red-500">
-                      {errors[field.name]}
-                    </p>
-                  )}
-                {errors[field.name] && field.type === "file" && touched[field.name] && (
-                  <p className="mt-2 text-sm text-red-500">
-                    {errors[field.name]}
-                  </p>
-                )}
-                {errors.mainCast &&
-                  field.type === "custom-cast" &&
-                  touched.mainCast && (
-                    <p className="mt-2 text-sm text-red-500">
-                      {errors.mainCast}
-                    </p>
-                  )}
-                {errors[field.name] && field.type === "select" && (
-                  <p className="mt-2 text-sm text-red-500">
-                    {errors[field.name]}
-                  </p>
+                  </motion.button>
                 )}
               </div>
-            ))}
-          </div>
-
-          <div className="mt-8 flex justify-between">
-            <motion.button
-              type="button"
-              onClick={handleBack}
-              disabled={currentStep === 1}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg ${
-                theme === "light"
-                  ? "text-indigo-700 hover:bg-indigo-100"
-                  : "text-indigo-300 hover:bg-indigo-800"
-              } transition-colors disabled:opacity-50`}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <ArrowLeftIcon className="h-5 w-5" />
-              Previous
-            </motion.button>
-
-            {currentStep < totalSteps ? (
-              <motion.button
-                type="button"
-                onClick={handleNext}
-                className={`flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all`}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                Next
-                <ArrowRightIcon className="h-5 w-5" />
-              </motion.button>
-            ) : (
-              <motion.button
-                type="submit"
-                disabled={loading || videoUploading || imageUploading || Object.values(castImageUploading).some((v) => v)}
-                className={`flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-indigo-500 text-white font-medium rounded-lg hover:from-green-600 hover:to-indigo-600 transition-all disabled:opacity-70`}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                {loading ? (
-                  <>
-                    <svg
-                      className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8VFILLM4 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    Uploading...
-                  </>
-                ) : (
-                  "Submit Movie"
-                )}
-              </motion.button>
-            )}
-          </div>
-        </form>
-      </motion.div>
+            </form>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

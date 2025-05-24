@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useContext } from "react";
+import { useEffect, useState, useRef, useContext, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "../../firebaseconfig";
 import {
@@ -19,7 +19,7 @@ import {
   where,
 } from "firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
-import { FaSearch, FaPaperPlane, FaReply, FaShare, FaTimes } from "react-icons/fa";
+import { FaSearch, FaPaperPlane, FaReply, FaShare, FaTimes, FaCheck, FaCheckDouble } from "react-icons/fa";
 import { Trash2, Edit, Copy, Paperclip, Smile } from "lucide-react";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -65,10 +65,11 @@ export default function ChatApp() {
   const chatAreaRef = useRef(null);
   const inputRef = useRef(null);
   const pdfContainerRef = useRef(null);
+  const toastIdRef = useRef(null);
   const router = useRouter();
 
   // Format timestamp
-  const formatTimestamp = (timestamp) => {
+  const formatTimestamp = useCallback((timestamp) => {
     if (!timestamp?.toDate) return "Unknown time";
     try {
       const date = timestamp.toDate();
@@ -87,7 +88,7 @@ export default function ChatApp() {
     } catch (error) {
       return "Invalid timestamp";
     }
-  };
+  }, []);
 
   // Fetch user authentication
   useEffect(() => {
@@ -119,7 +120,7 @@ export default function ChatApp() {
   }, [router]);
 
   // Fetch owner data
-  const fetchOwnerData = async (email) => {
+  const fetchOwnerData = useCallback(async (email) => {
     try {
       const ownerDoc = await getDoc(doc(db, "owners", email));
       if (ownerDoc.exists()) {
@@ -136,9 +137,9 @@ export default function ChatApp() {
       console.error("Error fetching owner info:", error);
       return { email, fullName: email, firstName: "", lastName: "" };
     }
-  };
+  }, []);
 
-  // Update owner data when groupedMessages changes
+  // Update owner data
   useEffect(() => {
     const updateOwnerData = async () => {
       const owners = {};
@@ -154,7 +155,7 @@ export default function ChatApp() {
     if (Object.keys(groupedMessages).length > 0) {
       updateOwnerData();
     }
-  }, [groupedMessages]);
+  }, [groupedMessages, fetchOwnerData]);
 
   // Fetch messages
   useEffect(() => {
@@ -179,8 +180,8 @@ export default function ChatApp() {
           }
         });
 
-        setGroupedMessages((prev) => ({ ...prev, ...grouped }));
-        setNewMessageCounts((prev) => ({ ...prev, ...newMessageCounts }));
+        setGroupedMessages(grouped);
+        setNewMessageCounts(newMessageCounts);
 
         if (selectedOwnerEmail) {
           setSelectedMessages(grouped[selectedOwnerEmail] || []);
@@ -191,38 +192,56 @@ export default function ChatApp() {
     }
   }, [userRole, selectedOwnerEmail]);
 
-  // Mark messages as read when last message is visible
-  const markMessagesAsRead = async () => {
-    if (!selectedOwnerEmail || selectedMessages.length === 0) return;
+  // Mark messages as read
+  const markMessagesAsRead = useCallback(async (ownerEmail) => {
+    if (!ownerEmail) return;
 
     try {
       const q = query(
         collection(db, "messages"),
-        where("ownerEmail", "==", selectedOwnerEmail),
+        where("ownerEmail", "==", ownerEmail),
         where("show", "==", false)
       );
       const querySnapshot = await getDocs(q);
       const batch = writeBatch(db);
+      
       querySnapshot.forEach((doc) => {
         batch.update(doc.ref, { show: true });
       });
+      
       await batch.commit();
 
       setSelectedMessages((prevMessages) =>
         prevMessages.map((msg) => (msg.show ? msg : { ...msg, show: true }))
       );
+      
       setNewMessageCounts((prev) => ({
         ...prev,
-        [selectedOwnerEmail]: 0,
+        [ownerEmail]: 0,
       }));
-      toast.success("All messages marked as read!", { position: "bottom-right", autoClose: 2000, theme });
+
+      if (toastIdRef.current) {
+        toast.dismiss(toastIdRef.current);
+      }
+      toastIdRef.current = toast.success("Messages marked as read!", { 
+        position: "bottom-right", 
+        autoClose: 2000, 
+        theme 
+      });
     } catch (error) {
       console.error("Error marking messages as read:", error);
-      toast.error("Failed to mark messages as read.", { position: "bottom-right", autoClose: 3000, theme });
+      if (toastIdRef.current) {
+        toast.dismiss(toastIdRef.current);
+      }
+      toastIdRef.current = toast.error("Failed to mark messages as read.", { 
+        position: "bottom-right", 
+        autoClose: 3000, 
+        theme 
+      });
     }
-  };
+  }, [theme]);
 
-  // Observe the last message for visibility
+  // Observe last message
   useEffect(() => {
     if (!messageEndRef.current || selectedMessages.length === 0 || !selectedOwnerEmail) return;
 
@@ -231,7 +250,7 @@ export default function ChatApp() {
         if (entries[0].isIntersecting) {
           const lastMessage = selectedMessages[selectedMessages.length - 1];
           if (lastMessage.sender === "owner" && !lastMessage.show) {
-            markMessagesAsRead();
+            markMessagesAsRead(selectedOwnerEmail);
           }
         }
       },
@@ -240,30 +259,39 @@ export default function ChatApp() {
 
     observer.observe(messageEndRef.current);
     return () => observer.disconnect();
-  }, [selectedMessages, selectedOwnerEmail]);
+  }, [selectedMessages, selectedOwnerEmail, markMessagesAsRead]);
 
   // Handle file change
-  const handleFileChange = (e) => {
+  const handleFileChange = useCallback((e) => {
     const selectedFile = e.target.files[0];
     if (!selectedFile) return;
 
     const allowedTypes = ["image/jpeg", "image/png", "video/mp4", "video/mpeg", "application/pdf"];
     if (!allowedTypes.includes(selectedFile.type)) {
-      toast.error("Only images, videos, or PDFs are allowed.", { position: "bottom-right", autoClose: 3000, theme });
+      if (toastIdRef.current) {
+        toast.dismiss(toastIdRef.current);
+      }
+      toastIdRef.current = toast.error("Only images, videos, or PDFs are allowed.", { position: "bottom-right", autoClose: 3000, theme });
       return;
     }
 
     if (selectedFile.size > 10 * 1024 * 1024) {
-      toast.error("File size must be less than 10MB.", { position: "bottom-right", autoClose: 3000, theme });
+      if (toastIdRef.current) {
+        toast.dismiss(toastIdRef.current);
+      }
+      toastIdRef.current = toast.error("File size must be less than 10MB.", { position: "bottom-right", autoClose: 3000, theme });
       return;
     }
 
     setFile(selectedFile);
-    toast.info(`File selected: ${selectedFile.name}`, { position: "bottom-right", autoClose: 3000, theme });
-  };
+    if (toastIdRef.current) {
+      toast.dismiss(toastIdRef.current);
+    }
+    toastIdRef.current = toast.info(`File selected: ${selectedFile.name}`, { position: "bottom-right", autoClose: 3000, theme });
+  }, [theme]);
 
-  // Upload file to Cloudinary with retry
-  const uploadFileToCloudinary = async (file, retries = 2) => {
+  // Upload file to Cloudinary
+  const uploadFileToCloudinary = useCallback(async (file, retries = 2) => {
     setUploading(true);
     const formData = new FormData();
     formData.append("file", file);
@@ -283,7 +311,10 @@ export default function ChatApp() {
         return { url: data.secure_url, type: file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "pdf" };
       } catch (error) {
         if (attempt === retries) {
-          toast.error(`Failed to upload ${file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "PDF"} after ${retries} attempts.`, {
+          if (toastIdRef.current) {
+            toast.dismiss(toastIdRef.current);
+          }
+          toastIdRef.current = toast.error(`Failed to upload ${file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "PDF"} after ${retries} attempts.`, {
             position: "bottom-right",
             autoClose: 3000,
             theme,
@@ -293,17 +324,17 @@ export default function ChatApp() {
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
-  };
+  }, [theme]);
 
   // Handle emoji selection
-  const handleEmojiClick = (emojiObject) => {
+  const handleEmojiClick = useCallback((emojiObject) => {
     setMessage((prev) => prev + emojiObject.emoji);
     setShowEmojiPicker(false);
     inputRef.current?.focus();
-  };
+  }, []);
 
   // Handle owner click
-  const handleOwnerClick = async (email) => {
+  const handleOwnerClick = useCallback(async (email) => {
     setSelectedOwnerEmail(email);
     setReplyingTo(null);
     setFile(null);
@@ -317,13 +348,18 @@ export default function ChatApp() {
 
     const ownerInfo = await fetchOwnerData(email);
     setSelectedOwnerInfo(ownerInfo);
-  };
+
+    await markMessagesAsRead(email);
+  }, [groupedMessages, fetchOwnerData, markMessagesAsRead]);
 
   // Send message
-  const handleSendMessage = async () => {
+  const handleSendMessage = useCallback(async () => {
     if (message.trim() === "" && !file) return;
     if (!selectedOwnerEmail) {
-      toast.error("Select a chat to send a message.", { position: "bottom-right", autoClose: 3000, theme });
+      if (toastIdRef.current) {
+        toast.dismiss(toastIdRef.current);
+      }
+      toastIdRef.current = toast.error("Select a chat to send a message.", { position: "bottom-right", autoClose: 3000, theme });
       return;
     }
 
@@ -372,17 +408,23 @@ export default function ChatApp() {
         }
       }, 1000);
 
-      toast.success("Message sent successfully!", { position: "bottom-right", autoClose: 2000, theme });
+      if (toastIdRef.current) {
+        toast.dismiss(toastIdRef.current);
+      }
+      toastIdRef.current = toast.success("Message sent successfully!", { position: "bottom-right", autoClose: 2000, theme });
     } catch (error) {
       console.error("Error sending message: ", error);
-      toast.error("Failed to send message.", { position: "bottom-right", autoClose: 3000, theme });
+      if (toastIdRef.current) {
+        toast.dismiss(toastIdRef.current);
+      }
+      toastIdRef.current = toast.error("Failed to send message.", { position: "bottom-right", autoClose: 3000, theme });
     } finally {
       setUploading(false);
     }
-  };
+  }, [message, file, selectedOwnerEmail, replyingTo, theme, uploadFileToCloudinary]);
 
   // Handle message action
-  const handleMessageAction = (message, e) => {
+  const handleMessageAction = useCallback((message, e) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -408,10 +450,10 @@ export default function ChatApp() {
     }
 
     setActionCardPosition({ top, left });
-  };
+  }, []);
 
   // Delete message
-  const handleDeleteMessage = async () => {
+  const handleDeleteMessage = useCallback(async () => {
     if (selectedMessage) {
       const confirmDelete = window.confirm("Are you sure you want to delete this message?");
       if (confirmDelete) {
@@ -419,54 +461,63 @@ export default function ChatApp() {
           await deleteDoc(doc(db, "messages", selectedMessage.id));
           setSelectedMessages((prevMessages) => prevMessages.filter((msg) => msg.id !== selectedMessage.id));
           setShowActionCard(false);
-          toast.success("Message deleted successfully!", { position: "bottom-right", autoClose: 2000, theme });
+          if (toastIdRef.current) {
+            toast.dismiss(toastIdRef.current);
+          }
+          toastIdRef.current = toast.success("Message deleted successfully!", { position: "bottom-right", autoClose: 2000, theme });
         } catch (error) {
           console.error("Error deleting message:", error);
-          toast.error("Failed to delete message.", { position: "bottom-right", autoClose: 3000, theme });
+          if (toastIdRef.current) {
+            toast.dismiss(toastIdRef.current);
+          }
+          toastIdRef.current = toast.error("Failed to delete message.", { position: "bottom-right", autoClose: 3000, theme });
         }
       }
     }
-  };
+  }, [selectedMessage, theme]);
 
   // Edit message
-  const handleEditMessage = () => {
+  const handleEditMessage = useCallback(() => {
     if (selectedMessage) {
       setMessage(selectedMessage.text);
       setShowActionCard(false);
       inputRef.current?.focus();
     }
-  };
+  }, [selectedMessage]);
 
   // Copy message
-  const handleCopyMessage = () => {
+  const handleCopyMessage = useCallback(() => {
     if (selectedMessage) {
       navigator.clipboard.writeText(selectedMessage.text).then(() => {
-        toast.success("Message copied to clipboard!", { position: "bottom-right", autoClose: 2000, theme });
+        if (toastIdRef.current) {
+          toast.dismiss(toastIdRef.current);
+        }
+        toastIdRef.current = toast.success("Message copied to clipboard!", { position: "bottom-right", autoClose: 2000, theme });
       });
       setShowActionCard(false);
     }
-  };
+  }, [selectedMessage, theme]);
 
   // Reply to message
-  const handleReplyMessage = () => {
+  const handleReplyMessage = useCallback(() => {
     if (selectedMessage) {
       setReplyingTo(selectedMessage);
       setShowActionCard(false);
       inputRef.current?.focus();
     }
-  };
+  }, [selectedMessage]);
 
   // Forward message
-  const handleForwardMessage = () => {
+  const handleForwardMessage = useCallback(() => {
     if (selectedMessage) {
       setForwardingMessage(selectedMessage);
       setShowForwardModal(true);
       setShowActionCard(false);
     }
-  };
+  }, [selectedMessage]);
 
   // Execute forward
-  const executeForwardMessage = async (recipientEmail) => {
+  const executeForwardMessage = useCallback(async (recipientEmail) => {
     if (!forwardingMessage || !recipientEmail) return;
 
     let fileUrl = forwardingMessage.fileUrl || null;
@@ -487,47 +538,53 @@ export default function ChatApp() {
       await addDoc(collection(db, "messages"), newMessage);
       setShowForwardModal(false);
       setForwardingMessage(null);
-      toast.success(`Message forwarded to ${ownerData[recipientEmail]?.fullName || recipientEmail}`, {
+      if (toastIdRef.current) {
+        toast.dismiss(toastIdRef.current);
+      }
+      toastIdRef.current = toast.success(`Message forwarded to ${ownerData[recipientEmail]?.fullName || recipientEmail}`, {
         position: "bottom-right",
         autoClose: 2000,
         theme,
       });
     } catch (error) {
       console.error("Error forwarding message:", error);
-      toast.error("Failed to forward message.", { position: "bottom-right", autoClose: 3000, theme });
+      if (toastIdRef.current) {
+        toast.dismiss(toastIdRef.current);
+      }
+      toastIdRef.current = toast.error("Failed to forward message.", { position: "bottom-right", autoClose: 3000, theme });
     }
-  };
+  }, [forwardingMessage, ownerData, theme]);
 
   // Cancel reply
-  const cancelReply = () => {
+  const cancelReply = useCallback(() => {
     setReplyingTo(null);
-  };
+  }, []);
 
   // Cancel forward
-  const cancelForward = () => {
+  const cancelForward = useCallback(() => {
     setForwardingMessage(null);
     setShowForwardModal(false);
-  };
+  }, []);
 
   // Handle PDF modal
-  const openPdfModal = (url) => {
+  const openPdfModal = useCallback((url) => {
     setPdfUrl(url);
     setShowPdfModal(true);
     setPageNumber(1);
     setScale(1.0);
-  };
+  }, []);
 
-  const closePdfModal = () => {
+  const closePdfModal = useCallback(() => {
     setShowPdfModal(false);
     setPdfUrl(null);
     setNumPages(null);
     setPageNumber(1);
     setScale(1.0);
-  };
+  }, []);
 
-  const onDocumentLoadSuccess = ({ numPages }) => {
+  const onDocumentLoadSuccess = useCallback(({ numPages }) => {
     setNumPages(numPages);
-  };
+  }, []);
 
   // Close action card, emoji picker, and PDF modal on outside click
   useEffect(() => {
@@ -588,12 +645,14 @@ export default function ChatApp() {
   }, []);
 
   // Filter grouped messages for search
-  const filteredGroupedMessages = Object.entries(groupedMessages).filter(([ownerEmail, _]) =>
-    (ownerData[ownerEmail]?.fullName || ownerEmail).toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredGroupedMessages = useMemo(() => {
+    return Object.entries(groupedMessages).filter(([ownerEmail, _]) =>
+      (ownerData[ownerEmail]?.fullName || ownerEmail).toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [groupedMessages, ownerData, searchQuery]);
 
   // Get last message preview
-  const getLastMessage = (messages) => {
+  const getLastMessage = useCallback((messages) => {
     if (messages.length === 0) return "No messages";
     const lastMessage = messages[messages.length - 1];
     const text = lastMessage.fileUrl
@@ -604,12 +663,26 @@ export default function ChatApp() {
         : "PDF"
       : lastMessage.text;
     return text.length > 30 ? `${text.substring(0, 30)}...` : text;
-  };
+  }, []);
 
   // Get display name
-  const getDisplayName = (email) => {
+  const getDisplayName = useCallback((email) => {
     return ownerData[email]?.fullName || email;
-  };
+  }, [ownerData]);
+
+  // Message status component
+  const MessageStatus = useCallback(({ status }) => {
+    if (status === "sending") {
+      return <span className="text-xs text-yellow-500">Sending...</span>;
+    } else if (status === "delivered") {
+      return <FaCheck className="text-xs text-blue-500" />;
+    } else if (status === "read") {
+      return <FaCheckDouble className="text-xs text-green-500" />;
+    } else if (status === "failed") {
+      return <span className="text-xs text-red-500">✗ Failed</span>;
+    }
+    return null;
+  }, []);
 
   // Loading state
   if (loading) {
@@ -708,7 +781,7 @@ export default function ChatApp() {
               {selectedMessages.length > 0 ? (
                 selectedMessages.map((msg, index) => (
                   <motion.div
-                    key={msg.id || index}
+                    key={`${msg.id}-${index}`}
                     className={`flex flex-col ${msg.sender === "admin" ? "items-end" : "items-start"} hover:bg-opacity-10 hover:bg-gray-500 transition-colors rounded-lg p-1 ${!msg.show && msg.sender === "owner" ? "bg-blue-100/50" : ""}`}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -749,9 +822,14 @@ export default function ChatApp() {
                         {msg.fileUrl && (
                           <div className="mb-2">
                             {msg.fileType === "image" ? (
-                              <img src={msg.fileUrl} alt="Uploaded image" className="max-w-full h-auto rounded-lg shadow-sm object-cover" />
+                              <img 
+                                src={msg.fileUrl} 
+                                alt="Uploaded content" 
+                                className="max-w-full h-auto rounded-lg shadow-sm object-cover max-h-64"
+                                loading="lazy"
+                              />
                             ) : msg.fileType === "video" ? (
-                              <video controls className="max-w-full h-auto rounded-lg shadow-sm">
+                              <video controls className="max-w-full h-auto rounded-lg shadow-sm max-h-64">
                                 <source src={msg.fileUrl} type="video/mp4" />
                                 Your browser does not support the video tag.
                               </video>
@@ -771,23 +849,7 @@ export default function ChatApp() {
                         className={`flex items-center mt-1 space-x-2 ${msg.sender === "admin" ? "justify-end" : "justify-start"}`}
                       >
                         <p className={`text-xs ${theme === "light" ? "text-gray-500" : "text-gray-400"}`}>{formatTimestamp(msg.timestamp)}</p>
-                        {msg.sender === "admin" && msg.status && (
-                          <span
-                            className={`text-xs ${
-                              msg.status === "sending"
-                                ? "text-yellow-500"
-                                : msg.status === "delivered"
-                                ? "text-green-500"
-                                : msg.status === "failed"
-                                ? "text-red-500"
-                                : ""
-                            }`}
-                          >
-                            {msg.status === "sending" && "Sending..."}
-                            {msg.status === "delivered" && "✓ Delivered"}
-                            {msg.status === "failed" && "✗ Failed"}
-                          </span>
-                        )}
+                        {msg.sender === "admin" && msg.status && <MessageStatus status={msg.status} />}
                       </div>
                     </div>
                   </motion.div>
@@ -1074,9 +1136,14 @@ export default function ChatApp() {
                 {forwardingMessage?.fileUrl && (
                   <div className="my-2">
                     {forwardingMessage.fileType === "image" ? (
-                      <img src={forwardingMessage.fileUrl} alt="Forwarded image" className="max-w-full h-auto rounded-lg shadow-sm object-cover" />
+                      <img 
+                        src={forwardingMessage.fileUrl} 
+                        alt="Forwarded content" 
+                        className="max-w-full h-auto rounded-lg shadow-sm object-cover max-h-64"
+                        loading="lazy"
+                      />
                     ) : forwardingMessage.fileType === "video" ? (
-                      <video controls className="max-w-full h-auto rounded-lg shadow-sm">
+                      <video controls className="max-w-full h-auto rounded-lg shadow-sm max-h-64">
                         <source src={forwardingMessage.fileUrl} type="video/mp4" />
                         Your browser does not support the video tag.
                       </video>
@@ -1184,7 +1251,10 @@ export default function ChatApp() {
                   onLoadSuccess={onDocumentLoadSuccess}
                   onLoadError={(error) => {
                     console.error("PDF load error:", error);
-                    toast.error("Failed to load PDF.", { position: "bottom-right", autoClose: 3000, theme });
+                    if (toastIdRef.current) {
+                      toast.dismiss(toastIdRef.current);
+                    }
+                    toastIdRef.current = toast.error("Failed to load PDF.", { position: "bottom-right", autoClose: 3000, theme });
                     closePdfModal();
                   }}
                 >

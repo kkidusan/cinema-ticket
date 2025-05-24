@@ -2,7 +2,7 @@
 import { useState, useEffect, useContext } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
-import { collection, query, where, getDocs, doc, updateDoc, addDoc, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, addDoc, onSnapshot, runTransaction } from 'firebase/firestore';
 import { db } from '../../firebaseconfig';
 import { ThemeContext } from '../../context/ThemeContext';
 import { PuffLoader } from 'react-spinners';
@@ -23,6 +23,186 @@ const generateReference = () => {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 8).toUpperCase();
   return `txn-${timestamp}-${random}`;
+};
+
+// Utility function to check saleTicket and withdrawal amount against totalAmount
+const checkSaleTicket = async (userEmail, withdrawalAmount, theme) => {
+  try {
+    // Query paymentHistory where ownerEmail equals userEmail and new is true
+    const paymentQuery = query(
+      collection(db, 'paymentHistory'),
+      where('ownerEmail', '==', userEmail),
+      where('new', '==', true)
+    );
+    const paymentSnapshot = await getDocs(paymentQuery);
+
+    // Calculate sum of ticketPrice
+    let sum = 0;
+    paymentSnapshot.forEach((doc) => {
+      const data = doc.data();
+      sum += Number(data.ticketPrice) || 0;
+    });
+
+    // Calculate saleTicket (sum + 3% of sum)
+    const saleTicket = sum + 0.03 * sum;
+
+    // Query ownerAmount to get totalAmount
+    const ownerQuery = query(collection(db, 'ownerAmount'), where('movieEmail', '==', userEmail));
+    const ownerSnapshot = await getDocs(ownerQuery);
+
+    if (ownerSnapshot.empty) {
+      toast.error('Balance record not found for this user.', {
+        position: 'bottom-right',
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === 'light' ? 'light' : 'dark',
+      });
+      console.error('No ownerAmount document found for user:', userEmail);
+      return false;
+    }
+
+    if (ownerSnapshot.docs.length > 1) {
+      console.error('Multiple ownerAmount documents found for user:', userEmail);
+      toast.error('Multiple balance records found. Contact support.', {
+        position: 'bottom-right',
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === 'light' ? 'light' : 'dark',
+      });
+      return false;
+    }
+
+    const totalAmount = Number(ownerSnapshot.docs[0].data().totalAmount) || 0;
+
+    // Check if totalAmount >= saleTicket
+    if (totalAmount < saleTicket) {
+      toast.error(
+        `Insufficient balance to cover ticket sales. Required: ${saleTicket.toLocaleString('en-US', {
+          minimumFractionDigits: 2,
+        })} ETB, Available: ${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })} ETB.`,
+        {
+          position: 'bottom-right',
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: theme === 'light' ? 'light' : 'dark',
+        }
+      );
+      return false;
+    }
+
+    // Check if withdrawalAmount <= (totalAmount - saleTicket)
+    const maxWithdrawal = totalAmount - saleTicket;
+    if (withdrawalAmount > maxWithdrawal) {
+      toast.error(
+        `Withdrawal amount exceeds available balance after ticket sales. Maximum: ${maxWithdrawal.toLocaleString('en-US', {
+          minimumFractionDigits: 2,
+        })} ETB.`,
+        {
+          position: 'bottom-right',
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: theme === 'light' ? 'light' : 'dark',
+        }
+      );
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Error checking saleTicket:', err.message);
+    toast.error('Failed to validate ticket sales balance.', {
+      position: 'bottom-right',
+      autoClose: 3000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+      theme: theme === 'light' ? 'light' : 'dark',
+    });
+    return false;
+  }
+};
+
+// Utility function to update balance in Firestore using a transaction
+const updateBalanceInFirestore = async (userEmail, withdrawalAmount, theme) => {
+  try {
+    const q = query(collection(db, 'ownerAmount'), where('movieEmail', '==', userEmail));
+    const querySnapshot = await getDocs(q);
+
+    if (querySnapshot.empty) {
+      toast.error('Balance record not found for this user.', {
+        position: 'bottom-right',
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === 'light' ? 'light' : 'dark',
+      });
+      console.error('No ownerAmount document found for user:', userEmail);
+      return false;
+    }
+
+    if (querySnapshot.docs.length > 1) {
+      console.error('Multiple ownerAmount documents found for user:', userEmail);
+      toast.error('Multiple balance records found. Contact support.', {
+        position: 'bottom-right',
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === 'light' ? 'light' : 'dark',
+      });
+      return false;
+    }
+
+    const docRef = doc(db, 'ownerAmount', querySnapshot.docs[0].id);
+
+    // Use a transaction to ensure atomic updates
+    const newBalance = await runTransaction(db, async (transaction) => {
+      const docSnapshot = await transaction.get(docRef);
+      if (!docSnapshot.exists()) {
+        throw new Error('Document does not exist.');
+      }
+
+      const currentBalance = docSnapshot.data().totalAmount || 0;
+      if (currentBalance < withdrawalAmount) {
+        throw new Error('Insufficient balance.');
+      }
+
+      const updatedBalance = currentBalance - withdrawalAmount;
+      transaction.update(docRef, { totalAmount: updatedBalance });
+      return updatedBalance;
+    });
+
+    console.log(`Balance updated successfully. New balance: ${newBalance}`);
+    return newBalance;
+  } catch (err) {
+    console.error('Error updating balance:', err.message);
+    toast.error(`Failed to update balance: ${err.message}`, {
+      position: 'bottom-right',
+      autoClose: 3000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+      theme: theme === 'light' ? 'light' : 'dark',
+    });
+    return false;
+  }
 };
 
 export default function FinancePage() {
@@ -90,7 +270,7 @@ export default function FinancePage() {
       } catch (error) {
         setTimeout(() => {
           router.replace('/login');
-        }, 3500); // Delay redirect to show toast
+        }, 3000);
       } finally {
         setLoading(false);
       }
@@ -115,15 +295,43 @@ export default function FinancePage() {
     try {
       const q = query(collection(db, 'ownerAmount'), where('movieEmail', '==', userEmail));
       const querySnapshot = await getDocs(q);
-      let total = 0;
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        if (data.totalAmount) {
-          total += Number(data.totalAmount);
-        }
-      });
+
+      if (querySnapshot.empty) {
+        console.error('No ownerAmount document found for user:', userEmail);
+        toast.error('No balance record found for this user.', {
+          position: 'bottom-right',
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: theme === 'light' ? 'light' : 'dark',
+        });
+        setTotalBalance(0);
+        return;
+      }
+
+      if (querySnapshot.docs.length > 1) {
+        console.error('Multiple ownerAmount documents found for user:', userEmail);
+        toast.error('Multiple balance records found. Contact support.', {
+          position: 'bottom-right',
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: theme === 'light' ? 'light' : 'dark',
+        });
+        setTotalBalance(0);
+        return;
+      }
+
+      const docData = querySnapshot.docs[0].data();
+      const total = Number(docData.totalAmount) || 0;
       setTotalBalance(total);
+      console.log(`Fetched balance: ${total} for user: ${userEmail}`);
     } catch (err) {
+      console.error('Error fetching balance:', err.message);
       toast.error('Failed to fetch balance.', {
         position: 'bottom-right',
         autoClose: 3000,
@@ -133,6 +341,7 @@ export default function FinancePage() {
         draggable: true,
         theme: theme === 'light' ? 'light' : 'dark',
       });
+      setTotalBalance(0);
     }
   };
 
@@ -172,43 +381,6 @@ export default function FinancePage() {
       fetchTotalBalance();
     }
   }, [isAuthenticated, userEmail]);
-
-  // Update balance in Firestore
-  const updateBalanceInFirestore = async (withdrawalAmount) => {
-    try {
-      const q = query(collection(db, 'ownerAmount'), where('movieEmail', '==', userEmail));
-      const querySnapshot = await getDocs(q);
-      if (!querySnapshot.empty) {
-        const docRef = doc(db, 'ownerAmount', querySnapshot.docs[0].id);
-        const newBalance = totalBalance - withdrawalAmount;
-        await updateDoc(docRef, { totalAmount: newBalance });
-        setTotalBalance(newBalance);
-        return true;
-      } else {
-        toast.error('Balance record not found.', {
-          position: 'bottom-right',
-          autoClose: 3000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          theme: theme === 'light' ? 'light' : 'dark',
-        });
-        return false;
-      }
-    } catch (err) {
-      toast.error('Failed to update balance.', {
-        position: 'bottom-right',
-        autoClose: 3000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        theme: theme === 'light' ? 'light' : 'dark',
-      });
-      return false;
-    }
-  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -328,7 +500,7 @@ export default function FinancePage() {
     }
     toast.success('Form validated successfully. Processing your request...', {
       position: 'bottom-right',
-      autoClose: 2000,
+      autoClose: 3000,
       hideProgressBar: false,
       closeOnClick: true,
       pauseOnHover: true,
@@ -356,82 +528,96 @@ export default function FinancePage() {
         ...(formData.isMobileMoney ? {} : { bank_code: formData.bank_code }),
       };
 
-      const endpoint = activeTab === 'withdraw' ? '/api/payout' : '/api/deposit';
-      const response = await axios.post(endpoint, payload, {
-        headers: {
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_API_SECRET}`,
-          'x-user-id': userEmail || 'test-user',
-        },
-      });
+      if (activeTab === 'withdraw') {
+        // Check saleTicket and withdrawal amount
+        const canWithdraw = await checkSaleTicket(userEmail, Number(formData.amount), theme);
+        if (!canWithdraw) {
+          setLoading(false);
+          return;
+        }
 
-      if (response.data.success) {
-        if (activeTab === 'withdraw') {
-          const updateSuccess = await updateBalanceInFirestore(Number(formData.amount));
-          if (!updateSuccess) {
-            throw new Error('Balance update failed');
-          }
+        // Update balance using the transaction-based function
+        const newBalance = await updateBalanceInFirestore(userEmail, Number(formData.amount), theme);
+        if (newBalance === false) {
+          throw new Error('Balance update failed');
+        }
+        setTotalBalance(newBalance);
 
-          try {
-            await addDoc(collection(db, 'transactions'), {
-              type: 'withdrawal',
-              amount: Number(formData.amount),
-              currency: formData.currency,
-              account_number: formData.account_number,
-              account_name: formData.account_name,
-              bank_code: formData.isMobileMoney ? null : formData.bank_code,
-              reference,
-              userEmail,
-              date: new Date().toISOString(),
-              isMobileMoney: formData.isMobileMoney,
-              payment_method: formData.isMobileMoney ? 'telebirr' : 'bank',
-            });
+        try {
+          await addDoc(collection(db, 'transactions'), {
+            type: 'withdrawal',
+            amount: Number(formData.amount),
+            currency: formData.currency,
+            account_number: formData.account_number,
+            account_name: formData.account_name,
+            bank_code: formData.isMobileMoney ? null : formData.bank_code,
+            reference,
+            userEmail,
+            date: new Date().toISOString(),
+            isMobileMoney: formData.isMobileMoney,
+            payment_method: formData.isMobileMoney ? 'telebirr' : 'bank',
+          });
 
-            const successMessage = formData.isMobileMoney
-              ? `Withdrawal of ${formData.amount} ETB to Telebirr (${formData.account_number}) successful! New balance: ${(
-                  totalBalance - Number(formData.amount)
-                ).toLocaleString('en-US', { minimumFractionDigits: 2 })} ETB.`
-              : `Withdrawal of ${formData.amount} ETB to bank account successful! New balance: ${(
-                  totalBalance - Number(formData.amount)
-                ).toLocaleString('en-US', { minimumFractionDigits: 2 })} ETB.`;
+          // Show success message only via toast
+          toast.success(
+            <div className="flex items-center gap-2">
+              <CheckCircle size={24} className="text-green-600" />
+              <span>
+                {formData.isMobileMoney
+                  ? `Withdrawal of ${formData.amount} ETB to Telebirr (${formData.account_number}) successful! New balance: ${newBalance.toLocaleString(
+                      'en-US',
+                      { minimumFractionDigits: 2 }
+                    )} ETB.`
+                  : `Withdrawal of ${formData.amount} ETB to bank account successful! New balance: ${newBalance.toLocaleString(
+                      'en-US',
+                      { minimumFractionDigits: 2 }
+                    )} ETB.`}
+              </span>
+            </div>,
+            {
+              position: 'top-right',
+              autoClose: 3000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+              theme: theme === 'light' ? 'light' : 'dark',
+              className: `${
+                theme === 'light'
+                  ? 'bg-gradient-to-r from-green-100 to-green-200 text-green-800'
+                  : 'bg-gradient-to-r from-green-700 to-green-800 text-green-100'
+              } font-semibold rounded-xl shadow-xl border ${
+                theme === 'light' ? 'border-green-300' : 'border-green-600'
+              } p-4`,
+              style: { minWidth: '300px', animation: 'slideIn 0.3s ease-in-out' },
+            }
+          );
+        } catch (firestoreError) {
+          console.error('Error recording transaction:', firestoreError.message);
+          toast.warn(
+            `Withdrawal of ${formData.amount} ETB successful, but failed to record in history. Contact support.`,
+            {
+              position: 'bottom-right',
+              autoClose: 3000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+              theme: theme === 'light' ? 'light' : 'dark',
+            }
+          );
+        }
+      } else {
+        // Handle deposit
+        const endpoint = '/api/deposit';
+        const response = await axios.post(endpoint, payload, {
+          headers: {
+            Authorization: `Bearer ${process.env.NEXT_PUBLIC_API_SECRET}`,
+            'x-user-id': userEmail || 'test-user',
+          },
+        });
 
-            toast.success(
-              <div className="flex items-center gap-2">
-                <CheckCircle size={24} className="text-green-600" />
-                <span>{successMessage}</span>
-              </div>,
-              {
-                position: 'top-right',
-                autoClose: 3000, // Changed from 4000 to 3000
-                hideProgressBar: false,
-                closeOnClick: true,
-                pauseOnHover: true,
-                draggable: true,
-                theme: theme === 'light' ? 'light' : 'dark',
-                className: `${
-                  theme === 'light'
-                    ? 'bg-gradient-to-r from-green-100 to-green-200 text-green-800'
-                    : 'bg-gradient-to-r from-green-700 to-green-800 text-green-100'
-                } font-semibold rounded-xl shadow-xl border ${
-                  theme === 'light' ? 'border-green-300' : 'border-green-600'
-                } p-4`,
-                style: { minWidth: '300px', animation: 'slideIn 0.3s ease-in-out' },
-              }
-            );
-          } catch (firestoreError) {
-            toast.warn(
-              `Withdrawal of ${formData.amount} ETB successful, but failed to record in history. Contact support.`,
-              {
-                position: 'bottom-right',
-                autoClose: 3000,
-                hideProgressBar: false,
-                closeOnClick: true,
-                pauseOnHover: true,
-                draggable: true,
-                theme: theme === 'light' ? 'light' : 'dark',
-              }
-            );
-          }
-        } else {
+        if (response.data.success) {
           try {
             await addDoc(collection(db, 'transactions'), {
               type: 'deposit',
@@ -447,19 +633,20 @@ export default function FinancePage() {
               payment_method: formData.isMobileMoney ? 'telebirr' : 'bank',
             });
 
-            const successMessage = formData.isMobileMoney
-              ? `Deposit of ${formData.amount} ETB via Telebirr initiated successfully!`
-              : `Deposit of ${formData.amount} ETB via bank transfer initiated successfully!`;
-
-            toast.success(successMessage, {
-              position: 'bottom-right',
-              autoClose: 3000,
-              hideProgressBar: false,
-              closeOnClick: true,
-              pauseOnHover: true,
-              draggable: true,
-              theme: theme === 'light' ? 'light' : 'dark',
-            });
+            toast.success(
+              formData.isMobileMoney
+                ? `Deposit of ${formData.amount} ETB via Telebirr initiated successfully!`
+                : `Deposit of ${formData.amount} ETB via bank transfer initiated successfully!`,
+              {
+                position: 'bottom-right',
+                autoClose: 3000,
+                hideProgressBar: false,
+                closeOnClick: true,
+                pauseOnHover: true,
+                draggable: true,
+                theme: theme === 'light' ? 'light' : 'dark',
+              }
+            );
             await fetchTotalBalance();
           } catch (firestoreError) {
             toast.warn(
@@ -475,27 +662,27 @@ export default function FinancePage() {
               }
             );
           }
+        } else {
+          toast.error(response.data.message || 'Deposit failed.', {
+            position: 'bottom-right',
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === 'light' ? 'light' : 'dark',
+          });
         }
-
-        setFormData({
-          amount: '',
-          currency: 'ETB',
-          account_number: '',
-          account_name: '',
-          bank_code: '',
-          isMobileMoney: false,
-        });
-      } else {
-        toast.error(response.data.message || `${activeTab} failed.`, {
-          position: 'bottom-right',
-          autoClose: 3000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          theme: theme === 'light' ? 'light' : 'dark',
-        });
       }
+
+      setFormData({
+        amount: '',
+        currency: 'ETB',
+        account_number: '',
+        account_name: '',
+        bank_code: '',
+        isMobileMoney: false,
+      });
     } catch (err) {
       const errorMessage = isTestMode
         ? `Test mode: Simulated ${activeTab} failure.`

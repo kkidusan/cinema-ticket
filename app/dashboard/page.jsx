@@ -24,7 +24,7 @@ export default function Dashboard() {
   const [isCancelledMoviesOpen, setIsCancelledMoviesOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isApproved, setIsApproved] = useState(null);
+  const [isPending, setIsPending] = useState(null); // Changed from isApproved to isPending
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -131,7 +131,7 @@ export default function Dashboard() {
       } catch (error) {
         setTimeout(() => {
           router.replace("/login");
-        }, 3500); // Delay redirect to show toast
+        }, 3500);
       } finally {
         setLoading(false);
       }
@@ -147,8 +147,7 @@ export default function Dashboard() {
       collection(db, "Movies"),
       where("email", "==", userEmail),
       where("cancellation", "==", true),
-      where("showStatus", "==", 1),
-
+      where("showStatus", "==", 1)
     );
     const unsubscribe = onSnapshot(
       q,
@@ -268,7 +267,7 @@ export default function Dashboard() {
     };
   }, [isAuthenticated, userEmail, userRole, theme]);
 
-  // Real-time listener for user approval status
+  // Real-time listener for user pending status
   useEffect(() => {
     if (!isAuthenticated || !userEmail) return;
     const q = query(collection(db, "owner"), where("email", "==", userEmail));
@@ -277,13 +276,13 @@ export default function Dashboard() {
       (querySnapshot) => {
         if (!querySnapshot.empty) {
           const userDoc = querySnapshot.docs[0].data();
-          setIsApproved(userDoc.approved !== false);
+          setIsPending(userDoc.pending === true); // Check for pending === true
         } else {
-          setIsApproved(false);
+          setIsPending(false); // Default to false if no user document found
         }
       },
       (error) => {
-        toast.error("Failed to fetch approval status.", {
+        toast.error("Failed to fetch pending status.", {
           position: "top-right",
           autoClose: 3000,
           theme: theme === "light" ? "light" : "dark",
@@ -790,7 +789,7 @@ export default function Dashboard() {
         </AnimatePresence>
       </nav>
       <div ref={mainContentRef}>
-        {isApproved === false ? (
+        {isPending === true ? ( // Changed condition to check isPending === true
           <div
             className={`min-h-screen flex items-center justify-center ${
               theme === "light" ? "bg-zinc-50" : "bg-gray-900"
@@ -821,7 +820,7 @@ export default function Dashboard() {
                 Your request is being processed. Please wait a few days.
               </motion.p>
               <motion.div
-                className="mt-8"
+                classTypclassName="mt-8"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 1.5, duration: 0.8 }}

@@ -158,6 +158,7 @@ export default function VideoDetail({ params: paramsPromise }) {
   const [newScreeningDate, setNewScreeningDate] = useState('');
   const [dateError, setDateError] = useState('');
   const [tickets, setTickets] = useState([]);
+  const [isPending, setIsPending] = useState(null);
 
   const fetchUserProfile = async (userId) => {
     try {
@@ -240,6 +241,7 @@ export default function VideoDetail({ params: paramsPromise }) {
   useEffect(() => {
     const fetchUser = async () => {
       try {
+        setLoading(true);
         const response = await fetch('/api/validate', {
           method: 'GET',
           credentials: 'include',
@@ -247,8 +249,7 @@ export default function VideoDetail({ params: paramsPromise }) {
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          const errorMessage = errorData.error || 'Unauthorized access. Please log in.';
-          toast.error(errorMessage, {
+          toast.error('Unauthorized access. Please log in.', {
             position: 'bottom-right',
             autoClose: 3000,
             hideProgressBar: false,
@@ -257,14 +258,14 @@ export default function VideoDetail({ params: paramsPromise }) {
             draggable: true,
             theme,
           });
-          throw new Error(errorMessage);
+          setTimeout(() => {
+            router.replace('/login');
+          }, 3500);
+          throw new Error('Unauthorized');
         }
 
         const data = await response.json();
         if (data.email && data.role) {
-          setUserEmail(data.email);
-          setUserRole(data.role);
-
           if (data.role !== 'owner') {
             toast.error('User is not an owner.', {
               position: 'bottom-right',
@@ -275,8 +276,59 @@ export default function VideoDetail({ params: paramsPromise }) {
               draggable: true,
               theme,
             });
-            throw new Error('User is not an owner.');
+            setTimeout(() => {
+              router.replace('/login');
+            }, 3500);
+            throw new Error('User is not an owner');
           }
+          setUserEmail(data.email);
+          setUserRole(data.role);
+
+          const ownerQuery = query(
+            collection(db, 'owner'),
+            where('email', '==', data.email)
+          );
+          const ownerSnapshot = await getDocs(ownerQuery);
+          if (!ownerSnapshot.empty) {
+            const ownerData = ownerSnapshot.docs[0].data();
+            setIsPending(ownerData.pending === true);
+          } else {
+            toast.error('Owner details not found.', {
+              position: 'bottom-right',
+              autoClose: 3000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+              theme,
+            });
+            throw new Error('Owner details not found');
+          }
+
+          const unsubscribePending = onSnapshot(
+            ownerQuery,
+            (querySnapshot) => {
+              if (!querySnapshot.empty) {
+                const userDoc = querySnapshot.docs[0].data();
+                setIsPending(userDoc.pending === true);
+              } else {
+                setIsPending(false);
+              }
+            },
+            (error) => {
+              toast.error('Failed to fetch pending status.', {
+                position: 'bottom-right',
+                autoClose: 3000,
+                hideProgressBar: false,
+                closeOnClick: true,
+                pauseOnHover: true,
+                draggable: true,
+                theme,
+              });
+            }
+          );
+
+          return () => unsubscribePending();
         } else {
           toast.error('No email or role found.', {
             position: 'bottom-right',
@@ -289,11 +341,11 @@ export default function VideoDetail({ params: paramsPromise }) {
           });
           setTimeout(() => {
             router.replace('/login');
-          }, 2000);
+          }, 3500);
           throw new Error('No email or role found');
         }
       } catch (error) {
-        console.error('Error fetching user:', error);
+        // Handled via toast and redirect
       } finally {
         setLoading(false);
       }
@@ -303,7 +355,7 @@ export default function VideoDetail({ params: paramsPromise }) {
   }, [router, theme]);
 
   useEffect(() => {
-    if (userEmail) {
+    if (userEmail && isPending === false) {
       const q = query(collection(db, 'ownerAmount'), where('movieEmail', '==', userEmail));
       const unsubscribe = onSnapshot(
         q,
@@ -330,10 +382,10 @@ export default function VideoDetail({ params: paramsPromise }) {
       );
       return () => unsubscribe();
     }
-  }, [userEmail, theme]);
+  }, [userEmail, theme, isPending]);
 
   useEffect(() => {
-    if (id && userRole === 'owner') {
+    if (id && userRole === 'owner' && isPending === false) {
       const q = query(collection(db, 'Movies'), where('movieID', '==', id));
       const unsubscribe = onSnapshot(
         q,
@@ -407,7 +459,7 @@ export default function VideoDetail({ params: paramsPromise }) {
         unsubscribe();
       };
     }
-  }, [id, userRole, theme]);
+  }, [id, userRole, theme, isPending]);
 
   const handleBack = () => {
     if (window.history.length > 1) {
@@ -543,7 +595,7 @@ export default function VideoDetail({ params: paramsPromise }) {
           cancelled: updates.cancelled,
           status: 1,
           purchaseDateEthiopian: ethDate,
-          screeningDate: video.screeningDate || 'Unknown',
+          screeningDate: video?.screeningDate || 'Unknown',
           seatNumber: '1',
           ticketId,
           lastUpdated: Timestamp.now(),
@@ -552,7 +604,7 @@ export default function VideoDetail({ params: paramsPromise }) {
         };
 
         if (isPostponement) {
-          newDocData.oldScreeningDate = oldScreeningDate || video.screeningDate || 'Unknown';
+          newDocData.oldScreeningDate = oldScreeningDate || video?.screeningDate || 'Unknown';
           newDocData.newScreeningDate = newScreeningDate || 'Unknown';
         }
 
@@ -803,18 +855,97 @@ export default function VideoDetail({ params: paramsPromise }) {
     }
   };
 
-  if (loading) {
+  // Conditional rendering for loading, auth, pending status, and video data
+  if (loading || userRole !== 'owner' || isPending === null) {
     return (
       <div
-        className={`min-h-screen ${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'} flex items-center justify-center`}
+        className={`min-h-screen p-4 sm:p-6 ${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'} flex items-center justify-center`}
       >
         <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
+          className="flex flex-col items-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <PuffLoader color={theme === 'light' ? '#3b82f6' : '#a5b4fc'} size={120} />
+          <PuffLoader color={theme === 'light' ? '#3b82f6' : '#FFFFFF'} size={100} />
+          <motion.p
+            className={`mt-4 text-2xl font-bold ${theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5, duration: 0.5 }}
+          >
+            {isPending === null ? 'Checking status...' : 'Loading movie details...'}
+          </motion.p>
         </motion.div>
+        <ToastContainer
+          position="bottom-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme={theme}
+        />
+      </div>
+    );
+  }
+
+  if (isPending === true) {
+    return (
+      <div
+        className={`min-h-screen p-4 sm:p-6 ${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'} flex items-center justify-center`}
+      >
+        <motion.div
+          className="text-center px-4"
+          initial={{ opacity: 0, y: -50 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: 'easeOut' }}
+        >
+          <motion.h1
+            className="text-3xl sm:text-4xl font-extrabold bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 bg-clip-text text-transparent"
+            initial={{ scale: 0.9 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.5, duration: 0.5 }}
+          >
+            Request Pending
+          </motion.h1>
+          <motion.p
+            className={`mt-4 text-lg sm:text-xl ${theme === 'light' ? 'text-gray-700' : 'text-gray-300'}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1, duration: 0.8 }}
+          >
+            Your request is being processed. Please wait a few days.
+          </motion.p>
+          <motion.div
+            className="mt-8"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.5, duration: 0.8 }}
+          >
+            <div className="flex justify-center">
+              <div className="w-16 h-16 sm:w-24 sm:h-24 border-4 border-purple-500 rounded-full animate-spin border-t-transparent"></div>
+            </div>
+            <p className={`mt-4 ${theme === 'light' ? 'text-gray-600' : 'text-gray-400'} text-sm sm:text-base`}>
+              We appreciate your patience!
+            </p>
+          </motion.div>
+        </motion.div>
+        <ToastContainer
+          position="bottom-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme={theme}
+        />
       </div>
     );
   }
@@ -822,7 +953,7 @@ export default function VideoDetail({ params: paramsPromise }) {
   if (!video) {
     return (
       <div
-        className={`min-h-screen ${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'} flex items-center justify-center`}
+        className={`min-h-screen p-4 sm:p-6 ${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'} flex items-center justify-center`}
       >
         <motion.div
           className="text-center"
@@ -837,10 +968,23 @@ export default function VideoDetail({ params: paramsPromise }) {
             Movie not found!
           </p>
         </motion.div>
+        <ToastContainer
+          position="bottom-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme={theme}
+        />
       </div>
     );
   }
 
+  // Main UI when video is available
   const totalTickets = soldTickets + availableSite;
   const soldPercentage = totalTickets > 0 ? (soldTickets / totalTickets) * 100 : 0;
   const availablePercentage = totalTickets > 0 ? (availableSite / totalTickets) * 100 : 0;
@@ -855,7 +999,6 @@ export default function VideoDetail({ params: paramsPromise }) {
     { label: 'Ticket Price', value: `$${video.ticketPrice}` },
     { label: 'Description', value: video.description },
     { label: 'Screening Date', value: video.screeningDate },
-    { label: 'Owner Total Amount', value: `$${ownerTotalAmount.toFixed(2)}` },
   ];
 
   const hiddenFields = [
@@ -933,7 +1076,7 @@ export default function VideoDetail({ params: paramsPromise }) {
 
   return (
     <div
-      className={`min-h-screen font-sans ${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'} relative`}
+      className={`min-h-screen font-sans p-4 sm:p-6 ${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'} relative`}
     >
       <style jsx global>{`
         @keyframes slideIn {
@@ -1028,7 +1171,7 @@ export default function VideoDetail({ params: paramsPromise }) {
             <div className="flex flex-col lg:flex-row gap-8">
               <div className="lg:w-3/4 space-y-8">
                 <motion.section
-                  className={`p-6 rounded-2xl shadow-xl ${
+                  className={`p-6 sm:p-8 rounded-2xl shadow-xl ${
                     theme === 'light'
                       ? 'bg-gradient-to-br from-blue-50 to-purple-50'
                       : 'bg-gradient-to-br from-gray-800 to-gray-900'
@@ -1136,7 +1279,7 @@ export default function VideoDetail({ params: paramsPromise }) {
                 </motion.section>
 
                 <motion.section
-                  className={`p-6 rounded-2xl shadow-xl ${
+                  className={`p-6 sm:p-8 rounded-2xl shadow-xl ${
                     theme === 'light'
                       ? 'bg-gradient-to-br from-blue-50 to-purple-50'
                       : 'bg-gradient-to-br from-gray-800 to-gray-900'
@@ -1187,7 +1330,7 @@ export default function VideoDetail({ params: paramsPromise }) {
                 </motion.section>
 
                 <motion.section
-                  className={`p-6 rounded-2xl shadow-xl ${
+                  className={`p-6 sm:p-8 rounded-2xl shadow-xl ${
                     theme === 'light'
                       ? 'bg-gradient-to-br from-blue-50 to-purple-50'
                       : 'bg-gradient-to-br from-gray-800 to-gray-900'
@@ -1289,7 +1432,7 @@ export default function VideoDetail({ params: paramsPromise }) {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <motion.div
-            className={`relative w-full max-w-md p-6 rounded-2xl shadow-xl ${
+            className={`relative w-full max-w-md p-6 sm:p-8 rounded-2xl shadow-xl ${
               theme === 'light'
                 ? 'bg-gradient-to-br from-blue-50 to-purple-50'
                 : 'bg-gradient-to-br from-gray-800 to-gray-900'
@@ -1419,7 +1562,7 @@ export default function VideoDetail({ params: paramsPromise }) {
       {isDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <motion.div
-            className={`relative w-full max-w-md p-6 rounded-2xl shadow-xl ${
+            className={`relative w-full max-w-md p-6 sm:p-8 rounded-2xl shadow-xl ${
               theme === 'light'
                 ? 'bg-gradient-to-br from-blue-50 to-purple-50'
                 : 'bg-gradient-to-br from-gray-800 to-gray-900'

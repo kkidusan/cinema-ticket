@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useContext } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db, collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, deleteDoc, updateDoc, getDocs, writeBatch } from "../../firebaseconfig";
-import { ArrowLeft, Send, Paperclip, Trash2, Edit, Copy, Reply, Pin, X, Smile } from "lucide-react";
+import { ArrowLeft, Send, Paperclip, Trash2, Edit, Copy, Reply, Pin, X, Smile, FileText, Download } from "lucide-react";
 import { PacmanLoader, ClipLoader } from "react-spinners";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -27,6 +27,7 @@ export default function Messages() {
   const [visibleStatuses, setVisibleStatuses] = useState({});
   const [uploading, setUploading] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const router = useRouter();
@@ -184,6 +185,22 @@ export default function Messages() {
     }
 
     setFile(selectedFile);
+    
+    // Generate preview for PDF
+    if (selectedFile.type === "application/pdf") {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPdfPreview({
+          name: selectedFile.name,
+          size: (selectedFile.size / (1024 * 1024)).toFixed(2) + " MB",
+          url: e.target.result
+        });
+      };
+      reader.readAsDataURL(selectedFile);
+    } else {
+      setPdfPreview(null);
+    }
+    
     toast.info(`File selected: ${selectedFile.name}`, { position: "bottom-right", autoClose: 3000, theme: theme });
   };
 
@@ -266,12 +283,15 @@ export default function Messages() {
         replyTo: replyingToMessage ? replyingToMessage.id : null,
         fileUrl,
         fileType,
+        fileName: file?.name || null,
+        fileSize: file?.size ? (file.size / (1024 * 1024)).toFixed(2) + " MB" : null,
         tempId,
       };
 
       setMessages((prevMessages) => [...prevMessages, newMessageObj]);
       setNewMessage("");
       setFile(null);
+      setPdfPreview(null);
       setReplyingToMessage(null);
       scrollToBottom();
 
@@ -292,6 +312,8 @@ export default function Messages() {
           replyTo: replyingToMessage ? replyingToMessage.id : null,
           fileUrl,
           fileType,
+          fileName: file?.name || null,
+          fileSize: file?.size ? (file.size / (1024 * 1024)).toFixed(2) + " MB" : null,
         });
 
         setMessages((prevMessages) =>
@@ -442,6 +464,65 @@ export default function Messages() {
     );
   }
 
+  // Render PDF preview component
+  const renderPdfPreview = () => (
+    <motion.div 
+      className={`mt-2 p-3 ${theme === "light" ? "bg-gray-100" : "bg-gray-700"} rounded-lg flex items-start space-x-3 w-full`}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      <div className={`p-2 rounded-lg ${theme === "light" ? "bg-blue-100" : "bg-blue-900/30"}`}>
+        <FileText size={24} className={theme === "light" ? "text-blue-600" : "text-blue-400"} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-medium truncate ${theme === "light" ? "text-gray-800" : "text-gray-200"}`}>
+          {pdfPreview.name}
+        </p>
+        <p className={`text-xs ${theme === "light" ? "text-gray-500" : "text-gray-400"}`}>
+          {pdfPreview.size}
+        </p>
+      </div>
+      <button 
+        onClick={() => {
+          setFile(null);
+          setPdfPreview(null);
+        }} 
+        className={`p-1 rounded-full ${theme === "light" ? "text-gray-500 hover:bg-gray-200" : "text-gray-300 hover:bg-gray-600"} transition-colors`}
+        aria-label="Remove file"
+      >
+        <X size={16} />
+      </button>
+    </motion.div>
+  );
+
+  // Render PDF message component
+  const renderPdfMessage = (msg) => (
+    <div className={`p-3 rounded-lg ${theme === "light" ? "bg-gray-100" : "bg-gray-700"} flex items-start space-x-3 w-full`}>
+      <div className={`p-2 rounded-lg ${theme === "light" ? "bg-blue-100" : "bg-blue-900/30"}`}>
+        <FileText size={24} className={theme === "light" ? "text-blue-600" : "text-blue-400"} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-medium truncate ${theme === "light" ? "text-gray-800" : "text-gray-200"}`}>
+          {msg.fileName}
+        </p>
+        <p className={`text-xs ${theme === "light" ? "text-gray-500" : "text-gray-400"}`}>
+          {msg.fileSize}
+        </p>
+        <a 
+          href={msg.fileUrl} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className={`inline-flex items-center mt-2 text-sm ${theme === "light" ? "text-blue-600 hover:text-blue-800" : "text-blue-400 hover:text-blue-300"}`}
+          download
+        >
+          <Download size={16} className="mr-1" />
+          Download PDF
+        </a>
+      </div>
+    </div>
+  );
+
   return (
     <div className={`flex flex-col h-screen w-full max-w-full overflow-x-hidden ${theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-900 to-indigo-900"} font-sans`}>
       <ToastContainer position="bottom-right" autoClose={3000} hideProgressBar={false} newestOnTop closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover theme={theme} toastClassName={`rounded-xl shadow-lg ${theme === "light" ? "bg-white" : "bg-gray-800"}`} />
@@ -483,7 +564,9 @@ export default function Messages() {
                         Replying to: {messages.find((m) => m.id === msg.replyTo)?.text?.slice(0, 50) || "Message"}...
                       </div>
                     )}
-                    {msg.fileUrl && (
+                    {msg.fileUrl && msg.fileType === "pdf" ? (
+                      renderPdfMessage(msg)
+                    ) : msg.fileUrl && (
                       <div className="mb-2">
                         {msg.fileType === "image" ? (
                           <img src={msg.fileUrl} alt="Uploaded image" className="max-w-full h-auto rounded-lg shadow-sm" />
@@ -492,11 +575,7 @@ export default function Messages() {
                             <source src={msg.fileUrl} type="video/mp4" />
                             Your browser does not support the video tag.
                           </video>
-                        ) : (
-                          <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer" className={`text-sm underline ${theme === "light" ? "text-blue-600" : "text-blue-400"} hover:underline`}>
-                            View PDF
-                          </a>
-                        )}
+                        ) : null}
                       </div>
                     )}
                     {msg.text && <p className="text-sm sm:text-base leading-relaxed">{msg.text}</p>}
@@ -642,7 +721,8 @@ export default function Messages() {
             <span className="hidden sm:inline text-sm">{editingMessageId ? "Save" : "Send"}</span>
           </motion.button>
         </div>
-        {file && (
+        {pdfPreview && renderPdfPreview()}
+        {file && !pdfPreview && (
           <motion.div className={`mt-2 p-2 ${theme === "light" ? "bg-gray-100" : "bg-gray-700"} rounded-lg flex items-center justify-between w-full`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
             <span className={`text-xs sm:text-sm ${theme === "light" ? "text-gray-600" : "text-gray-300"} truncate max-w-[70%]`}>{file.name}</span>
             <button onClick={() => setFile(null)} className={`p-1 rounded-full ${theme === "light" ? "text-gray-500 hover:bg-gray-200" : "text-gray-300 hover:bg-gray-600"} transition-colors`} aria-label="Remove file">

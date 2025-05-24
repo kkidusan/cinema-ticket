@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext, useCallback } from "react";
 import { db, auth } from "../firebaseconfig";
 import { createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword } from "firebase/auth";
 import { collection, addDoc } from "firebase/firestore";
@@ -8,7 +8,7 @@ import PhoneInput from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
 import { Loader2, Mail, User, Lock, MapPin, FileText, Eye, EyeOff, CheckCircle, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import Link from "next/link";
 import { ThemeContext } from "../context/ThemeContext";
 
@@ -67,6 +67,43 @@ export default function RegisterForm() {
   }
   const { theme } = context;
 
+  // Memoize completeRegistration to prevent unnecessary re-renders
+  const completeRegistration = useCallback(
+    async (userId: string) => {
+      try {
+        await addDoc(collection(db, "owner"), {
+          uid: userId,
+          ...formData,
+          phoneNumber: formData.countryCode + formData.phoneNumber,
+          role: "owner",
+          approvedDate: new Date().toISOString(),
+          approved: false,
+        });
+
+        setFormData({
+          firstName: "",
+          lastName: "",
+          email: "",
+          password: "",
+          location: "",
+          phoneNumber: "",
+          tradeCertificate: "",
+          countryCode: "+251",
+        });
+        setErrors({});
+        setPasswordValidation({ minLength: false, uppercase: false, number: false, specialChar: false });
+        setShowPasswordErrors(false);
+        setVerificationSent(false);
+        setVerificationStatus(null);
+        router.push("/login");
+      } catch (error: any) {
+        setErrors({ general: "Failed to save registration data. Please try again or contact support." });
+        setIsLoading(false);
+      }
+    },
+    [formData, router]
+  );
+
   // Check email verification status
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -85,7 +122,7 @@ export default function RegisterForm() {
       }, 10000);
     }
     return () => clearInterval(interval);
-  }, [verificationSent]);
+  }, [verificationSent, completeRegistration]);
 
   // Handle resend cooldown
   useEffect(() => {
@@ -98,13 +135,13 @@ export default function RegisterForm() {
     return () => clearInterval(timer);
   }, [resendCooldown]);
 
-  // Email validation (from LoginPage)
+  // Email validation
   const validateEmail = (email: string): boolean => {
     const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return regex.test(email);
   };
 
-  // Password validation (from LoginPage)
+  // Password validation
   const validatePassword = (password: string): PasswordValidation => {
     return {
       minLength: password.length >= 8,
@@ -191,39 +228,6 @@ export default function RegisterForm() {
       countryCode: `+${country.dialCode}`,
     });
     setErrors({ ...errors, phoneNumber: "", general: "" });
-  };
-
-  const completeRegistration = async (userId: string) => {
-    try {
-      await addDoc(collection(db, "owner"), {
-        uid: userId,
-        ...formData,
-        phoneNumber: formData.countryCode + formData.phoneNumber,
-        role: "owner",
-        approvedDate: new Date().toISOString(),
-        approved: false,
-      });
-
-      setFormData({
-        firstName: "",
-        lastName: "",
-        email: "",
-        password: "",
-        location: "",
-        phoneNumber: "",
-        tradeCertificate: "",
-        countryCode: "+251",
-      });
-      setErrors({});
-      setPasswordValidation({ minLength: false, uppercase: false, number: false, specialChar: false });
-      setShowPasswordErrors(false);
-      setVerificationSent(false);
-      setVerificationStatus(null);
-      router.push("/login");
-    } catch (error: any) {
-      setErrors({ general: "Failed to save registration data. Please try again or contact support." });
-      setIsLoading(false);
-    }
   };
 
   const resendVerificationEmail = async () => {

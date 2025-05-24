@@ -13,7 +13,9 @@ export default function PortfolioPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [userCount, setUserCount] = useState(0);
   const [ownerCount, setOwnerCount] = useState(0);
-  const [showContactCard, setShowContactCard] = useState(false); // State for contact card
+  const [transactionCount, setTransactionCount] = useState(0);
+  const [soldTicketsCount, setSoldTicketsCount] = useState(0); // New state for sold tickets
+  const [showContactCard, setShowContactCard] = useState(false);
   const context = useContext(ThemeContext);
 
   if (!context) {
@@ -22,9 +24,9 @@ export default function PortfolioPage() {
   const { theme, toggleTheme } = context;
 
   useEffect(() => {
-    // Fetch User Count
-    const usersRef = collection(db, "users");
-    const unsubscribeUsers = onSnapshot(usersRef, (snapshot) => {
+    // Fetch App User Count
+    const appUsersRef = collection(db, "appuser");
+    const unsubscribeAppUsers = onSnapshot(appUsersRef, (snapshot) => {
       setUserCount(snapshot.size);
     });
 
@@ -34,9 +36,23 @@ export default function PortfolioPage() {
       setOwnerCount(snapshot.size);
     });
 
+    // Fetch Transaction Count
+    const transactionsRef = collection(db, "transactions");
+    const unsubscribeTransactions = onSnapshot(transactionsRef, (snapshot) => {
+      setTransactionCount(snapshot.size);
+    });
+
+    // Fetch Sold Tickets Count
+    const paymentHistoryRef = collection(db, "paymentHistory");
+    const unsubscribePaymentHistory = onSnapshot(paymentHistoryRef, (snapshot) => {
+      setSoldTicketsCount(snapshot.size);
+    });
+
     return () => {
-      unsubscribeUsers();
+      unsubscribeAppUsers();
       unsubscribeOwners();
+      unsubscribeTransactions();
+      unsubscribePaymentHistory();
     };
   }, []);
 
@@ -216,7 +232,7 @@ export default function PortfolioPage() {
               </button>
             </Link>
             <button
-              onClick={() => setShowContactCard(true)} // Show contact card
+              onClick={() => setShowContactCard(true)}
               className={`flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg transition-all text-lg shadow-md`}
             >
               Contact Us <Phone className="w-5 h-5" />
@@ -366,7 +382,7 @@ export default function PortfolioPage() {
         >
           Key Statistics
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
           {/* Registered Users */}
           <div
             className={`p-6 rounded-xl shadow-lg text-center transition-all duration-300 ${
@@ -447,7 +463,7 @@ export default function PortfolioPage() {
                 theme === "light" ? "text-zinc-800" : "text-zinc-100"
               }`}
             >
-              100M+ Transactions
+              {transactionCount}+ Transactions
             </h3>
             <p
               className={`text-sm mt-2 ${
@@ -455,6 +471,36 @@ export default function PortfolioPage() {
               }`}
             >
               Total number of successful transactions.
+            </p>
+          </div>
+          {/* Sold Tickets */}
+          <div
+            className={`p-6 rounded-xl shadow-lg text-center transition-all duration-300 ${
+              theme === "light"
+                ? "bg-gradient-to-br from-blue-100 to-purple-100"
+                : "bg-gradient-to-br from-gray-700 to-gray-800"
+            }`}
+          >
+            <div
+              className={`mb-6 text-6xl flex justify-center ${
+                theme === "light" ? "text-yellow-500" : "text-yellow-400"
+              }`}
+            >
+              <Ticket className="w-16 h-16" />
+            </div>
+            <h3
+              className={`text-xl font-semibold ${
+                theme === "light" ? "text-zinc-800" : "text-zinc-100"
+              }`}
+            >
+              {soldTicketsCount}+ Sold Tickets
+            </h3>
+            <p
+              className={`text-sm mt-2 ${
+                theme === "light" ? "text-zinc-700" : "text-zinc-300"
+              }`}
+            >
+              Total number of tickets sold on the platform.
             </p>
           </div>
         </div>

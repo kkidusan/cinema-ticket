@@ -51,6 +51,39 @@ const CreateAccountPage = () => {
   const router = useRouter();
   const { theme } = useContext(ThemeContext) || { theme: "light" };
 
+  // Complete registration after verification
+  const completeRegistration = useCallback(async (userId: string) => {
+    try {
+      const { email, firstName, lastName } = formData;
+      const adminDocRef = doc(db, "admin", userId);
+      await setDoc(adminDocRef, {
+        email,
+        firstName,
+        lastName,
+        role: "admin",
+        status: 1,
+        createdAt: new Date().toISOString(),
+      });
+
+      toast.success("Account created successfully!");
+      setFormData({
+        email: "",
+        password: "",
+        confirmPassword: "",
+        firstName: "",
+        lastName: "",
+      });
+      setVerificationSent(false);
+      setVerificationStatus(null);
+      router.push("/login");
+    } catch (error: any) {
+      setFormError("Failed to save account data. Please try again or contact support.");
+      toast.error("Failed to save account data.");
+      setIsSubmitting(false);
+      setLoading(false);
+    }
+  }, [formData, router]);
+
   // Check email verification status
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -70,7 +103,7 @@ const CreateAccountPage = () => {
       }, 5000);
     }
     return () => clearInterval(interval);
-  }, [verificationSent]);
+  }, [verificationSent, completeRegistration]);
 
   // Handle resend cooldown
   useEffect(() => {
@@ -144,39 +177,6 @@ const CreateAccountPage = () => {
       errorMessages.push("Password must contain at least one special character");
     return errorMessages;
   }, []);
-
-  // Complete registration after verification
-  const completeRegistration = async (userId: string) => {
-    try {
-      const { email, firstName, lastName } = formData;
-      const adminDocRef = doc(db, "admin", userId);
-      await setDoc(adminDocRef, {
-        email,
-        firstName,
-        lastName,
-        role: "admin",
-        status: 1,
-        createdAt: new Date().toISOString(),
-      });
-
-      toast.success("Account created successfully!");
-      setFormData({
-        email: "",
-        password: "",
-        confirmPassword: "",
-        firstName: "",
-        lastName: "",
-      });
-      setVerificationSent(false);
-      setVerificationStatus(null);
-      router.push("/login");
-    } catch (error: any) {
-      setFormError("Failed to save account data. Please try again or contact support.");
-      toast.error("Failed to save account data.");
-      setIsSubmitting(false);
-      setLoading(false);
-    }
-  };
 
   // Resend verification email
   const resendVerificationEmail = async () => {

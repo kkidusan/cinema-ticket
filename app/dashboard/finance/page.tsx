@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
 import { collection, query, where, getDocs, doc, addDoc, onSnapshot, runTransaction } from 'firebase/firestore';
@@ -12,23 +12,52 @@ import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { motion } from 'framer-motion';
 
-const bankCodes = [
+// Define interfaces for type safety
+interface Bank {
+  code: string;
+  name: string;
+}
+
+interface Transaction {
+  id: string;
+  type: 'withdrawal' | 'deposit';
+  amount: number;
+  currency: string;
+  account_number: string;
+  account_name: string;
+  bank_code: string | null;
+  reference: string;
+  userEmail: string;
+  date: string;
+  isMobileMoney: boolean;
+  payment_method: string;
+}
+
+interface FormData {
+  amount: string;
+  currency: string;
+  account_number: string;
+  account_name: string;
+  bank_code: string;
+  isMobileMoney: boolean;
+}
+
+const bankCodes: Bank[] = [
   { code: '001', name: 'Commercial Bank of Ethiopia (CBE)' },
   { code: '002', name: 'Dashen Bank' },
   { code: '003', name: 'Awash Bank' },
 ];
 
 // Utility function to generate a unique transaction reference
-const generateReference = () => {
+const generateReference = (): string => {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 8).toUpperCase();
   return `txn-${timestamp}-${random}`;
 };
 
 // Utility function to check saleTicket and withdrawal amount against totalAmount
-const checkSaleTicket = async (userEmail, withdrawalAmount, theme) => {
+const checkSaleTicket = async (userEmail: string, withdrawalAmount: number, theme: string): Promise<boolean> => {
   try {
-    // Query paymentHistory where ownerEmail equals userEmail and new is true
     const paymentQuery = query(
       collection(db, 'paymentHistory'),
       where('ownerEmail', '==', userEmail),
@@ -36,17 +65,14 @@ const checkSaleTicket = async (userEmail, withdrawalAmount, theme) => {
     );
     const paymentSnapshot = await getDocs(paymentQuery);
 
-    // Calculate sum of ticketPrice
     let sum = 0;
     paymentSnapshot.forEach((doc) => {
       const data = doc.data();
       sum += Number(data.ticketPrice) || 0;
     });
 
-    // Calculate saleTicket (sum + 3% of sum)
     const saleTicket = sum + 0.03 * sum;
 
-    // Query ownerAmount to get totalAmount
     const ownerQuery = query(collection(db, 'ownerAmount'), where('movieEmail', '==', userEmail));
     const ownerSnapshot = await getDocs(ownerQuery);
 
@@ -80,7 +106,6 @@ const checkSaleTicket = async (userEmail, withdrawalAmount, theme) => {
 
     const totalAmount = Number(ownerSnapshot.docs[0].data().totalAmount) || 0;
 
-    // Check if totalAmount >= saleTicket
     if (totalAmount < saleTicket) {
       toast.error(
         `Insufficient balance to cover ticket sales. Required: ${saleTicket.toLocaleString('en-US', {
@@ -99,7 +124,6 @@ const checkSaleTicket = async (userEmail, withdrawalAmount, theme) => {
       return false;
     }
 
-    // Check if withdrawalAmount <= (totalAmount - saleTicket)
     const maxWithdrawal = totalAmount - saleTicket;
     if (withdrawalAmount > maxWithdrawal) {
       toast.error(
@@ -121,7 +145,7 @@ const checkSaleTicket = async (userEmail, withdrawalAmount, theme) => {
 
     return true;
   } catch (err) {
-    console.error('Error checking saleTicket:', err.message);
+    console.error('Error checking saleTicket:', (err as Error).message);
     toast.error('Failed to validate ticket sales balance.', {
       position: 'bottom-right',
       autoClose: 3000,
@@ -136,7 +160,7 @@ const checkSaleTicket = async (userEmail, withdrawalAmount, theme) => {
 };
 
 // Utility function to update balance in Firestore using a transaction
-const updateBalanceInFirestore = async (userEmail, withdrawalAmount, theme) => {
+const updateBalanceInFirestore = async (userEmail: string, withdrawalAmount: number, theme: string): Promise<number | false> => {
   try {
     const q = query(collection(db, 'ownerAmount'), where('movieEmail', '==', userEmail));
     const querySnapshot = await getDocs(q);
@@ -171,7 +195,6 @@ const updateBalanceInFirestore = async (userEmail, withdrawalAmount, theme) => {
 
     const docRef = doc(db, 'ownerAmount', querySnapshot.docs[0].id);
 
-    // Use a transaction to ensure atomic updates
     const newBalance = await runTransaction(db, async (transaction) => {
       const docSnapshot = await transaction.get(docRef);
       if (!docSnapshot.exists()) {
@@ -191,8 +214,8 @@ const updateBalanceInFirestore = async (userEmail, withdrawalAmount, theme) => {
     console.log(`Balance updated successfully. New balance: ${newBalance}`);
     return newBalance;
   } catch (err) {
-    console.error('Error updating balance:', err.message);
-    toast.error(`Failed to update balance: ${err.message}`, {
+    console.error('Error updating balance:', (err as Error).message);
+    toast.error(`Failed to update balance: ${(err as Error).message}`, {
       position: 'bottom-right',
       autoClose: 3000,
       hideProgressBar: false,
@@ -210,12 +233,12 @@ export default function FinancePage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const initialTab = searchParams.get('tab') || 'withdraw';
-  const [activeTab, setActiveTab] = useState(initialTab);
-  const [loading, setLoading] = useState(true);
-  const [transactions, setTransactions] = useState([]);
-  const [totalBalance, setTotalBalance] = useState(0);
-  const [showBalance, setShowBalance] = useState(false);
-  const [formData, setFormData] = useState({
+  const [activeTab, setActiveTab] = useState<string>(initialTab);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [totalBalance, setTotalBalance] = useState<number>(0);
+  const [showBalance, setShowBalance] = useState<boolean>(false);
+  const [formData, setFormData] = useState<FormData>({
     amount: '',
     currency: 'ETB',
     account_number: '',
@@ -223,9 +246,9 @@ export default function FinancePage() {
     bank_code: '',
     isMobileMoney: false,
   });
-  const [userEmail, setUserEmail] = useState('');
-  const [userRole, setUserRole] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userEmail, setUserEmail] = useState<string>('');
+  const [userRole, setUserRole] = useState<string>('');
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const isTestMode = process.env.NEXT_PUBLIC_CHAPA_TEST_MODE === 'true';
 
   // Fetch user authentication
@@ -290,7 +313,7 @@ export default function FinancePage() {
   }, [searchParams, router]);
 
   // Fetch total balance
-  const fetchTotalBalance = async () => {
+  const fetchTotalBalance = useCallback(async () => {
     if (!userEmail) return;
     try {
       const q = query(collection(db, 'ownerAmount'), where('movieEmail', '==', userEmail));
@@ -331,7 +354,7 @@ export default function FinancePage() {
       setTotalBalance(total);
       console.log(`Fetched balance: ${total} for user: ${userEmail}`);
     } catch (err) {
-      console.error('Error fetching balance:', err.message);
+      console.error('Error fetching balance:', (err as Error).message);
       toast.error('Failed to fetch balance.', {
         position: 'bottom-right',
         autoClose: 3000,
@@ -343,7 +366,7 @@ export default function FinancePage() {
       });
       setTotalBalance(0);
     }
-  };
+  }, [userEmail, theme]);
 
   // Real-time transaction listener
   useEffect(() => {
@@ -353,8 +376,8 @@ export default function FinancePage() {
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const txns = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        txns.sort((a, b) => new Date(b.date) - new Date(a.date));
+        const txns = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Transaction));
+        txns.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         setTransactions(txns);
         setLoading(false);
       },
@@ -380,9 +403,9 @@ export default function FinancePage() {
     if (isAuthenticated && userEmail) {
       fetchTotalBalance();
     }
-  }, [isAuthenticated, userEmail]);
+  }, [isAuthenticated, userEmail, fetchTotalBalance]);
 
-  const handleChange = (e) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
@@ -396,7 +419,7 @@ export default function FinancePage() {
     }));
   };
 
-  const validateForm = () => {
+  const validateForm = (): boolean => {
     const amount = Number(formData.amount);
     if (!amount || amount <= 0) {
       toast.error('Please enter a valid amount greater than zero.', {
@@ -511,7 +534,7 @@ export default function FinancePage() {
     return true;
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!validateForm()) return;
 
@@ -529,14 +552,12 @@ export default function FinancePage() {
       };
 
       if (activeTab === 'withdraw') {
-        // Check saleTicket and withdrawal amount
         const canWithdraw = await checkSaleTicket(userEmail, Number(formData.amount), theme);
         if (!canWithdraw) {
           setLoading(false);
           return;
         }
 
-        // Update balance using the transaction-based function
         const newBalance = await updateBalanceInFirestore(userEmail, Number(formData.amount), theme);
         if (newBalance === false) {
           throw new Error('Balance update failed');
@@ -558,7 +579,6 @@ export default function FinancePage() {
             payment_method: formData.isMobileMoney ? 'telebirr' : 'bank',
           });
 
-          // Show success message only via toast
           toast.success(
             <div className="flex items-center gap-2">
               <CheckCircle size={24} className="text-green-600" />
@@ -593,7 +613,7 @@ export default function FinancePage() {
             }
           );
         } catch (firestoreError) {
-          console.error('Error recording transaction:', firestoreError.message);
+          console.error('Error recording transaction:', (firestoreError as Error).message);
           toast.warn(
             `Withdrawal of ${formData.amount} ETB successful, but failed to record in history. Contact support.`,
             {
@@ -608,7 +628,6 @@ export default function FinancePage() {
           );
         }
       } else {
-        // Handle deposit
         const endpoint = '/api/deposit';
         const response = await axios.post(endpoint, payload, {
           headers: {
@@ -703,7 +722,7 @@ export default function FinancePage() {
     }
   };
 
-  const handleTabChange = (tab) => {
+  const handleTabChange = (tab: string) => {
     setActiveTab(tab);
     router.push(`/dashboard/finance?tab=${tab}`);
   };

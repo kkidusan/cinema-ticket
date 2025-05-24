@@ -65,7 +65,6 @@ export default function ChatApp() {
   const chatAreaRef = useRef(null);
   const inputRef = useRef(null);
   const pdfContainerRef = useRef(null);
-  const toastIdRef = useRef(null);
   const router = useRouter();
 
   // Format timestamp
@@ -220,23 +219,17 @@ export default function ChatApp() {
         [ownerEmail]: 0,
       }));
 
-      if (toastIdRef.current) {
-        toast.dismiss(toastIdRef.current);
-      }
-      toastIdRef.current = toast.success("Messages marked as read!", { 
+      toast.success("Messages marked as read!", { 
         position: "bottom-right", 
         autoClose: 2000, 
-        theme 
+        theme,
       });
     } catch (error) {
       console.error("Error marking messages as read:", error);
-      if (toastIdRef.current) {
-        toast.dismiss(toastIdRef.current);
-      }
-      toastIdRef.current = toast.error("Failed to mark messages as read.", { 
+      toast.error("Failed to mark messages as read.", { 
         position: "bottom-right", 
         autoClose: 3000, 
-        theme 
+        theme,
       });
     }
   }, [theme]);
@@ -268,26 +261,29 @@ export default function ChatApp() {
 
     const allowedTypes = ["image/jpeg", "image/png", "video/mp4", "video/mpeg", "application/pdf"];
     if (!allowedTypes.includes(selectedFile.type)) {
-      if (toastIdRef.current) {
-        toast.dismiss(toastIdRef.current);
-      }
-      toastIdRef.current = toast.error("Only images, videos, or PDFs are allowed.", { position: "bottom-right", autoClose: 3000, theme });
+      toast.error("Only images, videos, or PDFs are allowed.", { 
+        position: "bottom-right", 
+        autoClose: 3000, 
+        theme,
+      });
       return;
     }
 
     if (selectedFile.size > 10 * 1024 * 1024) {
-      if (toastIdRef.current) {
-        toast.dismiss(toastIdRef.current);
-      }
-      toastIdRef.current = toast.error("File size must be less than 10MB.", { position: "bottom-right", autoClose: 3000, theme });
+      toast.error("File size must be less than 10MB.", { 
+        position: "bottom-right", 
+        autoClose: 3000, 
+        theme,
+      });
       return;
     }
 
     setFile(selectedFile);
-    if (toastIdRef.current) {
-      toast.dismiss(toastIdRef.current);
-    }
-    toastIdRef.current = toast.info(`File selected: ${selectedFile.name}`, { position: "bottom-right", autoClose: 3000, theme });
+    toast.info(`File selected: ${selectedFile.name}`, { 
+      position: "bottom-right", 
+      autoClose: 3000, 
+      theme,
+    });
   }, [theme]);
 
   // Upload file to Cloudinary
@@ -311,10 +307,7 @@ export default function ChatApp() {
         return { url: data.secure_url, type: file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "pdf" };
       } catch (error) {
         if (attempt === retries) {
-          if (toastIdRef.current) {
-            toast.dismiss(toastIdRef.current);
-          }
-          toastIdRef.current = toast.error(`Failed to upload ${file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "PDF"} after ${retries} attempts.`, {
+          toast.error(`Failed to upload ${file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "PDF"} after ${retries} attempts.`, {
             position: "bottom-right",
             autoClose: 3000,
             theme,
@@ -356,10 +349,11 @@ export default function ChatApp() {
   const handleSendMessage = useCallback(async () => {
     if (message.trim() === "" && !file) return;
     if (!selectedOwnerEmail) {
-      if (toastIdRef.current) {
-        toast.dismiss(toastIdRef.current);
-      }
-      toastIdRef.current = toast.error("Select a chat to send a message.", { position: "bottom-right", autoClose: 3000, theme });
+      toast.error("Select a chat to send a message.", { 
+        position: "bottom-right", 
+        autoClose: 3000, 
+        theme,
+      });
       return;
     }
 
@@ -408,16 +402,18 @@ export default function ChatApp() {
         }
       }, 1000);
 
-      if (toastIdRef.current) {
-        toast.dismiss(toastIdRef.current);
-      }
-      toastIdRef.current = toast.success("Message sent successfully!", { position: "bottom-right", autoClose: 2000, theme });
+      toast.success("Message sent successfully!", { 
+        position: "bottom-right", 
+        autoClose: 2000, 
+        theme,
+      });
     } catch (error) {
       console.error("Error sending message: ", error);
-      if (toastIdRef.current) {
-        toast.dismiss(toastIdRef.current);
-      }
-      toastIdRef.current = toast.error("Failed to send message.", { position: "bottom-right", autoClose: 3000, theme });
+      toast.error("Failed to send message.", { 
+        position: "bottom-right", 
+        autoClose: 3000, 
+        theme,
+      });
     } finally {
       setUploading(false);
     }
@@ -461,16 +457,18 @@ export default function ChatApp() {
           await deleteDoc(doc(db, "messages", selectedMessage.id));
           setSelectedMessages((prevMessages) => prevMessages.filter((msg) => msg.id !== selectedMessage.id));
           setShowActionCard(false);
-          if (toastIdRef.current) {
-            toast.dismiss(toastIdRef.current);
-          }
-          toastIdRef.current = toast.success("Message deleted successfully!", { position: "bottom-right", autoClose: 2000, theme });
+          toast.success("Message deleted successfully!", { 
+            position: "bottom-right", 
+            autoClose: 2000, 
+            theme,
+          });
         } catch (error) {
           console.error("Error deleting message:", error);
-          if (toastIdRef.current) {
-            toast.dismiss(toastIdRef.current);
-          }
-          toastIdRef.current = toast.error("Failed to delete message.", { position: "bottom-right", autoClose: 3000, theme });
+          toast.error("Failed to delete message.", { 
+            position: "bottom-right", 
+            autoClose: 3000, 
+            theme,
+          });
         }
       }
     }
@@ -489,10 +487,11 @@ export default function ChatApp() {
   const handleCopyMessage = useCallback(() => {
     if (selectedMessage) {
       navigator.clipboard.writeText(selectedMessage.text).then(() => {
-        if (toastIdRef.current) {
-          toast.dismiss(toastIdRef.current);
-        }
-        toastIdRef.current = toast.success("Message copied to clipboard!", { position: "bottom-right", autoClose: 2000, theme });
+        toast.success("Message copied to clipboard!", { 
+          position: "bottom-right", 
+          autoClose: 2000, 
+          theme,
+        });
       });
       setShowActionCard(false);
     }
@@ -538,20 +537,18 @@ export default function ChatApp() {
       await addDoc(collection(db, "messages"), newMessage);
       setShowForwardModal(false);
       setForwardingMessage(null);
-      if (toastIdRef.current) {
-        toast.dismiss(toastIdRef.current);
-      }
-      toastIdRef.current = toast.success(`Message forwarded to ${ownerData[recipientEmail]?.fullName || recipientEmail}`, {
+      toast.success(`Message forwarded to ${ownerData[recipientEmail]?.fullName || recipientEmail}`, {
         position: "bottom-right",
         autoClose: 2000,
         theme,
       });
     } catch (error) {
       console.error("Error forwarding message:", error);
-      if (toastIdRef.current) {
-        toast.dismiss(toastIdRef.current);
-      }
-      toastIdRef.current = toast.error("Failed to forward message.", { position: "bottom-right", autoClose: 3000, theme });
+      toast.error("Failed to forward message.", { 
+        position: "bottom-right", 
+        autoClose: 3000, 
+        theme,
+      });
     }
   }, [forwardingMessage, ownerData, theme]);
 
@@ -1251,10 +1248,11 @@ export default function ChatApp() {
                   onLoadSuccess={onDocumentLoadSuccess}
                   onLoadError={(error) => {
                     console.error("PDF load error:", error);
-                    if (toastIdRef.current) {
-                      toast.dismiss(toastIdRef.current);
-                    }
-                    toastIdRef.current = toast.error("Failed to load PDF.", { position: "bottom-right", autoClose: 3000, theme });
+                    toast.error("Failed to load PDF.", { 
+                      position: "bottom-right", 
+                      autoClose: 3000, 
+                      theme,
+                    });
                     closePdfModal();
                   }}
                 >

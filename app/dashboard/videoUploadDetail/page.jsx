@@ -307,7 +307,7 @@ const steps = [
       },
       {
         name: "promotionVideo",
-        label: "Promotion Video (Video Only)",
+        label: " Video (Video Only)",
         type: "file",
         accept: "video/*",
       },

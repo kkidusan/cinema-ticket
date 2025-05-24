@@ -55,7 +55,7 @@ export default function CinemaSeatArrangement() {
   const [userEmail, setUserEmail] = useState<string>("");
   const [userRole, setUserRole] = useState<string>("");
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [isPending, setIsPending] = useState<boolean | null>(null); // New state for pending status
+  const [isPending, setIsPending] = useState<boolean | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
   const context = useContext(ThemeContext);
@@ -181,8 +181,6 @@ export default function CinemaSeatArrangement() {
         // Verify reservedSeatsCount
         const calculatedReservedCount = arrangement.seats.filter(seat => seat.reserved).length;
         arrangement.reservedSeatsCount = arrangement.reservedSeatsCount ?? calculatedReservedCount;
-        console.log("Fetched arrangement:", arrangement);
-        console.log("Seats with reserved status:", arrangement.seats.map(s => ({ id: s.id, reserved: s.reserved })));
         setSavedArrangement(arrangement);
         // Automatically load the fetched arrangement
         loadArrangement(arrangement);
@@ -201,11 +199,35 @@ export default function CinemaSeatArrangement() {
     }
   }, [userEmail, theme]);
 
+  // Load arrangement
+  const loadArrangement = useCallback((arrangement: Arrangement) => {
+    const normalizedSeats = arrangement.seats.map(seat => ({
+      ...seat,
+      reserved: seat.reserved ?? false,
+    }));
+    setTotalSeats(arrangement.totalSeats);
+    setLayoutType(arrangement.layoutType);
+    setSeats(normalizedSeats);
+    setInputRows(arrangement.rows || 0);
+    setInputCols(arrangement.cols || 0);
+    setRows(Math.max(...normalizedSeats.map((s) => s.row)) + 1 || 0);
+    setCols(Math.max(...normalizedSeats.map((s) => s.col)) + 1 || 0);
+    toast.success("Arrangement loaded successfully!", {
+      position: "bottom-right",
+      autoClose: 3000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+      theme: theme === "light" ? "light" : "dark",
+    });
+  }, [theme]);
+
   useEffect(() => {
     if (isAuthenticated && userEmail && isPending === false) {
       fetchArrangements();
     }
-  }, [isAuthenticated, userEmail, fetchArrangements, isPending]);
+  }, [isAuthenticated, userEmail, isPending, fetchArrangements]);
 
   // Generate seats
   const generateSeats = useMemo(() => {
@@ -268,7 +290,7 @@ export default function CinemaSeatArrangement() {
   }, [totalSeats, layoutType, inputRows, inputCols, generateSeats]);
 
   // Validate form
-  const validateForm = () => {
+  const validateForm = useCallback(() => {
     const newErrors: Errors = {};
     if (totalSeats <= 0) newErrors.totalSeats = "Total seats must be greater than 0.";
     if (totalSeats > 500) newErrors.totalSeats = "Total seats cannot exceed 500.";
@@ -280,10 +302,10 @@ export default function CinemaSeatArrangement() {
     if (!userEmail) newErrors.general = "User email not available.";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
+  }, [totalSeats, layoutType, inputRows, inputCols, userEmail]);
 
   // Collision detection for seats
-  const isCollidingWithOtherSeats = (seatId: string, newX: number, newY: number) => {
+  const isCollidingWithOtherSeats = useCallback((seatId: string, newX: number, newY: number) => {
     const seatSize = 60;
     for (const otherSeat of seats) {
       if (otherSeat.id === seatId) continue;
@@ -299,10 +321,10 @@ export default function CinemaSeatArrangement() {
       }
     }
     return false;
-  };
+  }, [seats]);
 
   // Update reserved seats count in database
-  const updateReservedSeatsCount = async (updatedSeats: Seat[]) => {
+  const updateReservedSeatsCount = useCallback(async (updatedSeats: Seat[]) => {
     if (!userEmail || !savedArrangement?.id) return;
     
     try {
@@ -324,10 +346,10 @@ export default function CinemaSeatArrangement() {
         theme: theme === "light" ? "light" : "dark",
       });
     }
-  };
+  }, [userEmail, savedArrangement, theme]);
 
   // Handle seat reservation
-  const handleSeatClick = async (seatId: string) => {
+  const handleSeatClick = useCallback(async (seatId: string) => {
     const updatedSeats = seats.map(seat =>
       seat.id === seatId ? { ...seat, reserved: !seat.reserved } : seat
     );
@@ -337,14 +359,14 @@ export default function CinemaSeatArrangement() {
     if (savedArrangement) {
       await updateReservedSeatsCount(updatedSeats);
     }
-  };
+  }, [seats, savedArrangement, updateReservedSeatsCount]);
 
   // Drag-and-drop handlers
-  const handleMouseDown = (id: string, e: React.MouseEvent) => {
+  const handleMouseDown = useCallback((id: string, e: React.MouseEvent) => {
     if (layoutType !== "custom") return;
     setDraggingId(id);
     e.preventDefault();
-  };
+  }, [layoutType]);
 
   const handleMouseMove = useCallback(
     (e: MouseEvent) => {
@@ -366,15 +388,15 @@ export default function CinemaSeatArrangement() {
         );
       }
     },
-    [draggingId, layoutType, seats]
+    [draggingId, layoutType, isCollidingWithOtherSeats]
   );
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     setDraggingId(null);
-  };
+  }, []);
 
   // Keyboard navigation
-  const handleKeyDown = (id: string, e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((id: string, e: React.KeyboardEvent) => {
     if (layoutType !== "custom" || !containerRef.current) return;
     const gridSize = 80;
     setSeats((prevSeats) =>
@@ -395,7 +417,7 @@ export default function CinemaSeatArrangement() {
         return seat;
       })
     );
-  };
+  }, [layoutType, isCollidingWithOtherSeats]);
 
   useEffect(() => {
     if (draggingId) {
@@ -406,10 +428,10 @@ export default function CinemaSeatArrangement() {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [draggingId, handleMouseMove]);
+  }, [draggingId, handleMouseMove, handleMouseUp]);
 
   // Save arrangement
-  const saveArrangement = async () => {
+  const saveArrangement = useCallback(async () => {
     if (!validateForm()) return;
     setIsLoading(true);
     try {
@@ -481,10 +503,10 @@ export default function CinemaSeatArrangement() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [validateForm, totalSeats, layoutType, seats, userEmail, inputRows, inputCols, searchParams, router, theme]);
 
   // Export to JSON
-  const exportToJson = () => {
+  const exportToJson = useCallback(() => {
     const reservedCount = seats.filter(seat => seat.reserved).length;
     const data = { totalSeats, layoutType, seats, rows: inputRows, cols: inputCols, reservedSeatsCount: reservedCount };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -494,10 +516,10 @@ export default function CinemaSeatArrangement() {
     a.download = "seat_arrangement.json";
     a.click();
     URL.revokeObjectURL(url);
-  };
+  }, [totalSeats, layoutType, seats, inputRows, inputCols]);
 
   // Handle input changes
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     if (name === "totalSeats") {
       const numValue = parseInt(value);
@@ -534,10 +556,10 @@ export default function CinemaSeatArrangement() {
         setErrors((prev) => ({ ...prev, cols: undefined }));
       }
     }
-  };
+  }, []);
 
   // Reset custom layout
-  const resetLayout = () => {
+  const resetLayout = useCallback(() => {
     const { seats, rows, cols } = generateSeats(totalSeats, "custom", inputRows, inputCols);
     setSeats(seats);
     setRows(rows);
@@ -551,36 +573,10 @@ export default function CinemaSeatArrangement() {
       draggable: true,
       theme: theme === "light" ? "light" : "dark",
     });
-  };
-
-  // Load arrangement
-  const loadArrangement = (arrangement: Arrangement) => {
-    const normalizedSeats = arrangement.seats.map(seat => ({
-      ...seat,
-      reserved: seat.reserved ?? false,
-    }));
-    setTotalSeats(arrangement.totalSeats);
-    setLayoutType(arrangement.layoutType);
-    setSeats(normalizedSeats);
-    setInputRows(arrangement.rows || 0);
-    setInputCols(arrangement.cols || 0);
-    setRows(Math.max(...normalizedSeats.map((s) => s.row)) + 1 || 0);
-    setCols(Math.max(...normalizedSeats.map((s) => s.col)) + 1 || 0);
-    console.log("Loaded arrangement:", arrangement);
-    console.log("Loaded seats with reserved status:", normalizedSeats.map(s => ({ id: s.id, reserved: s.reserved })));
-    toast.success("Arrangement loaded successfully!", {
-      position: "bottom-right",
-      autoClose: 3000,
-      hideProgressBar: false,
-      closeOnClick: true,
-      pauseOnHover: true,
-      draggable: true,
-      theme: theme === "light" ? "light" : "dark",
-    });
-  };
+  }, [totalSeats, inputRows, inputCols, generateSeats, theme]);
 
   // Handle back navigation
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     const from = searchParams.get("from");
     if (from === "videoUploadDetail") {
       const savedFormData = localStorage.getItem("videoUploadFormData");
@@ -591,7 +587,7 @@ export default function CinemaSeatArrangement() {
     } else {
       router.push("/dashboard");
     }
-  };
+  }, [searchParams, router]);
 
   // Loading or authentication failure state
   if (isLoadingAuth || !isAuthenticated || userRole !== "owner") {

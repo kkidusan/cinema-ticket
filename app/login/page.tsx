@@ -14,11 +14,11 @@ const validateEmail = (email: string): boolean => {
 };
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
+  const [error, setError] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
+  const [showPassword, setShowPassword] = useState<boolean>(false);
   const router = useRouter();
   const context = useContext(ThemeContext);
 
@@ -27,7 +27,7 @@ export default function LoginPage() {
   }
   const { theme } = context;
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
 
@@ -50,17 +50,8 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        if (data.role === "owner") {
-          router.push("/dashboard");
-        } else if (data.role === "admin") {
-          router.push("/admin");
-        } else {
-          setError("Invalid user role");
-        }
-      } else {
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
         if (response.status === 401) {
           setError("Invalid email or password");
         } else if (response.status === 500) {
@@ -68,6 +59,17 @@ export default function LoginPage() {
         } else {
           setError(data.error || "Login failed");
         }
+        return;
+      }
+
+      const data = await response.json();
+
+      if (data.role === "owner") {
+        router.push("/dashboard");
+      } else if (data.role === "admin") {
+        router.push("/admin");
+      } else {
+        setError("Invalid user role");
       }
     } catch (err) {
       setError("An error occurred. Please try again.");
@@ -161,21 +163,23 @@ export default function LoginPage() {
                     theme === "light" ? "text-zinc-500" : "text-zinc-400"
                   } w-5 h-5`}
                 />
-                {email && (
-                  <motion.div
-                    className="absolute inset-y-0 right-3 flex items-center"
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    {validateEmail(email) ? (
-                      <CheckCircle className="w-5 h-5 text-green-500" />
-                    ) : (
-                      <XCircle className="w-5 h-5 text-red-500" />
-                    )}
-                  </motion.div>
-                )}
+                <AnimatePresence>
+                  {email && (
+                    <motion.div
+                      className="absolute inset-y-0 right-3 flex items-center"
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      {validateEmail(email) ? (
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                      ) : (
+                        <XCircle className="w-5 h-5 text-red-500" />
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
               {error && !validateEmail(email) && (
                 <p id="email-error" className="text-red-500 text-sm mt-1">
@@ -254,8 +258,8 @@ export default function LoginPage() {
                   ? "opacity-50 cursor-not-allowed"
                   : "hover:from-blue-700 hover:to-purple-700"
               } transition-all flex items-center justify-center`}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+              whileHover={{ scale: loading || !validateEmail(email) ? 1 : 1.02 }}
+              whileTap={{ scale: loading || !validateEmail(email) ? 1 : 0.98 }}
             >
               {loading ? (
                 <>
@@ -278,7 +282,7 @@ export default function LoginPage() {
               Forgot Password?
             </Link>
             <p className={`text-sm ${theme === "light" ? "text-zinc-600" : "text-zinc-400"}`}>
-              Don't have an account?{" "}
+              Don&apos;t have an account?{" "}
               <Link
                 href="/signup"
                 className={`underline ${
@@ -294,3 +298,5 @@ export default function LoginPage() {
     </main>
   );
 }
+
+

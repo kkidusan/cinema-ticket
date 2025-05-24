@@ -28,7 +28,7 @@
     ".next/types/**/*.ts",
     "**/*.ts",
     "**/*.tsx"
-, "app/dashboard/profile/page.tsx", "app/admin/managetransaction/page.jsx", "app/admin/manageuser/page.jsx", "app/login/page.tsx", "app/dashboard/designseat/page.tsx", "app/admin/message/page.jsx", "app/dashboard/videoUploadDetail/page.jsx"  ],
+, "app/dashboard/profile/page.tsx", "app/admin/managetransaction/page.jsx", "app/admin/manageuser/page.jsx", "app/login/page.tsx", "app/dashboard/designseat/page.tsx", "app/admin/message/page.jsx", "app/dashboard/videoUploadDetail/page.tsx"  ],
   "exclude": [
     "node_modules"
   ]

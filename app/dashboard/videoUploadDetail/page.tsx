@@ -1,6 +1,7 @@
+// File: app/dashboard/videoUploadDetail/page.tsx
 "use client";
 
-import React, { useEffect, useState, useContext, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useContext, useCallback, useMemo, ReactNode } from "react";
 import { db } from "../../firebaseconfig";
 import { collection, addDoc, Timestamp, query, where, getDocs, onSnapshot } from "firebase/firestore";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -74,8 +75,54 @@ interface Seat {
   reserved: boolean;
 }
 
+// Interface for FormData
+interface FormData {
+  title: string;
+  category: string;
+  description: string;
+  duration: string;
+  mainCast: Array<{ name: string; image: string }>;
+  cinemaName: string;
+  cinemaLocation: string;
+  availableSite: string;
+  ticketPrice: string;
+  screeningDate: string;
+  poster: string;
+  promotionVideo: string;
+  movieID: string;
+  seats: Seat[];
+}
+
+// Interface for Errors
+interface Errors {
+  [key: string]: string | JSX.Element | undefined;
+}
+
+// Interface for Touched
+interface Touched {
+  poster: boolean;
+  promotionVideo: boolean;
+  mainCast: boolean;
+}
+
+// Interface for Tooltip props
+interface TooltipProps {
+  children: ReactNode;
+  text: string;
+  theme: string;
+}
+
+// Interface for EthiopianDatePicker props
+interface EthiopianDatePickerProps {
+  name: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  error?: string;
+  theme: string;
+}
+
 // Memoized initial form data
-const getInitialFormData = () => ({
+const getInitialFormData = (): FormData => ({
   title: "",
   category: "",
   description: "",
@@ -89,11 +136,11 @@ const getInitialFormData = () => ({
   poster: "",
   promotionVideo: "",
   movieID: "",
-  seats: [] as Seat[],
+  seats: [],
 });
 
 // Tooltip Component
-function Tooltip({ children, text, theme }) {
+function Tooltip({ children, text, theme }: TooltipProps) {
   const [isVisible, setIsVisible] = useState(false);
 
   return (
@@ -134,7 +181,7 @@ function Tooltip({ children, text, theme }) {
 }
 
 // EthiopianDatePicker Component
-function EthiopianDatePicker({ name, value, onChange, error, theme }) {
+function EthiopianDatePicker({ name, value, onChange, error, theme }: EthiopianDatePickerProps) {
   const getCurrentEthiopianDate = () => {
     const today = new Date();
     const [ethYear, ethMonth, ethDay] = toEthiopian(
@@ -142,9 +189,7 @@ function EthiopianDatePicker({ name, value, onChange, error, theme }) {
       today.getMonth() + 1,
       today.getDate()
     );
-    return `${ethYear}-${String(ethMonth).padStart(2, "0")}-${String(
-      ethDay
-    ).padStart(2, "0")}`;
+    return `${ethYear}-${String(ethMonth).padStart(2, "0")}-${String(ethDay).padStart(2, "0")}`;
   };
 
   const initialDate = value ? value.split("T")[0] : getCurrentEthiopianDate();
@@ -165,17 +210,17 @@ function EthiopianDatePicker({ name, value, onChange, error, theme }) {
     }
   }, [value]);
 
-  const handleDateChange = (e) => {
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { value } = e.target;
     setEthiopianDate(value);
-    onChange({ target: { name, value: `${value}T${time}` } });
+    onChange({ target: { name, value: `${value}T${time}` } } as React.ChangeEvent<HTMLInputElement>);
   };
 
-  const handleTimeChange = (e) => {
+  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { value } = e.target;
     setTime(value);
     if (ethiopianDate) {
-      onChange({ target: { name, value: `${ethiopianDate}T${value}` } });
+      onChange({ target: { name, value: `${ethiopianDate}T${value}` } } as React.ChangeEvent<HTMLInputElement>);
     }
   };
 
@@ -213,7 +258,7 @@ function EthiopianDatePicker({ name, value, onChange, error, theme }) {
 }
 
 // Function to format date in Ethiopian Calendar
-const formatEthiopianDate = (dateString) => {
+const formatEthiopianDate = (dateString: string): string => {
   const [datePart, timePart] = dateString.split("T");
   const [year, month, day] = datePart.split("-").map(Number);
   const [gregYear, gregMonth, gregDay] = toGregorian(year, month, day);
@@ -234,7 +279,7 @@ const formatEthiopianDate = (dateString) => {
 };
 
 // Encryption and Decryption Functions
-const encryptData = (data) => {
+const encryptData = (data: FormData): string | null => {
   try {
     const dataToEncrypt = JSON.parse(JSON.stringify(data));
     const dataString = JSON.stringify(dataToEncrypt);
@@ -248,7 +293,7 @@ const encryptData = (data) => {
   }
 };
 
-const decryptData = (encryptedData) => {
+const decryptData = (encryptedData: string): FormData | null => {
   try {
     if (!encryptedData || typeof encryptedData !== "string") {
       console.warn("Invalid encrypted data:", encryptedData);
@@ -307,7 +352,7 @@ const steps = [
       },
       {
         name: "promotionVideo",
-        label: " Video (Video Only)",
+        label: "Video (Video Only)",
         type: "file",
         accept: "video/*",
       },
@@ -317,32 +362,35 @@ const steps = [
 
 export default function VideoUploadForm() {
   const initialFormData = useMemo(getInitialFormData, []);
-  const [formData, setFormData] = useState(initialFormData);
-  const [loading, setLoading] = useState(true);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [videoUploading, setVideoUploading] = useState(false);
-  const [imageUploading, setImageUploading] = useState(false);
-  const [castImageUploading, setCastImageUploading] = useState({});
-  const [errors, setErrors] = useState({});
+  const [formData, setFormData] = useState<FormData>(initialFormData);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
+  const [videoUploading, setVideoUploading] = useState<boolean>(false);
+  const [imageUploading, setImageUploading] = useState<boolean>(false);
+  const [castImageUploading, setCastImageUploading] = useState<{ [key: number]: boolean }>({});
+  const [errors, setErrors] = useState<Errors>({});
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [userEmail, setUserEmail] = useState("");
-  const [userRole, setUserRole] = useState("");
-  const [ownerDetails, setOwnerDetails] = useState({ firstName: "", lastName: "" });
+  const [userEmail, setUserEmail] = useState<string>("");
+  const [userRole, setUserRole] = useState<string>("");
+  const [ownerDetails, setOwnerDetails] = useState<{ firstName: string; lastName: string }>({
+    firstName: "",
+    lastName: "",
+  });
   const { theme } = useContext(ThemeContext);
-  const [currentStep, setCurrentStep] = useState(1);
-  const [totalSeats, setTotalSeats] = useState(null);
-  const [seatArrangement, setSeatArrangement] = useState(null);
+  const [currentStep, setCurrentStep] = useState<number>(1);
+  const [totalSeats, setTotalSeats] = useState<number | null>(null);
+  const [seatArrangement, setSeatArrangement] = useState<Seat[] | null>(null);
   const totalSteps = 4;
-  const [touched, setTouched] = useState({
+  const [touched, setTouched] = useState<Touched>({
     poster: false,
     promotionVideo: false,
     mainCast: false,
   });
-  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
+  const [isCategoryOpen, setIsCategoryOpen] = useState<boolean>(false);
   const [isPending, setIsPending] = useState<boolean | null>(null);
 
-  const generateMovieID = useCallback(() => {
+  const generateMovieID = useCallback((): string => {
     const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     return Array.from({ length: 8 }, () => characters.charAt(Math.floor(Math.random() * characters.length))).join("");
   }, []);
@@ -369,7 +417,7 @@ export default function VideoUploadForm() {
     }
   }, [formData, router, theme]);
 
-  const handleChange = useCallback((e) => {
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     setErrors((prev) => ({ ...prev, [name]: "" }));
@@ -399,8 +447,8 @@ export default function VideoUploadForm() {
     }
   }, [totalSeats, seatArrangement]);
 
-  const handleFileChange = useCallback(async (e) => {
-    const file = e.target.files[0];
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (!file) return;
 
     setImageUploading(true);
@@ -408,7 +456,7 @@ export default function VideoUploadForm() {
 
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET);
+    formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!);
 
     try {
       const response = await fetch(
@@ -445,8 +493,8 @@ export default function VideoUploadForm() {
     }
   }, [theme, generateMovieID]);
 
-  const handleVideoUpload = useCallback(async (e) => {
-    const file = e.target.files[0];
+  const handleVideoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (!file) return;
 
     setTouched((prev) => ({ ...prev, promotionVideo: true }));
@@ -454,7 +502,7 @@ export default function VideoUploadForm() {
 
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET);
+    formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!);
 
     try {
       const response = await fetch(
@@ -490,7 +538,7 @@ export default function VideoUploadForm() {
     }
   }, [theme]);
 
-  const handleCastChange = useCallback((index, field, value) => {
+  const handleCastChange = useCallback((index: number, field: string, value: string) => {
     setFormData((prev) => {
       const newCast = [...prev.mainCast];
       newCast[index] = { ...newCast[index], [field]: value };
@@ -500,14 +548,14 @@ export default function VideoUploadForm() {
     setTouched((prev) => ({ ...prev, mainCast: true }));
   }, []);
 
-  const handleCastImage = useCallback(async (index, file) => {
+  const handleCastImage = useCallback(async (index: number, file: File | null) => {
     if (!file) return;
 
     setCastImageUploading((prev) => ({ ...prev, [index]: true }));
 
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET);
+    formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!);
 
     try {
       const response = await fetch(
@@ -547,15 +595,15 @@ export default function VideoUploadForm() {
     setTouched((prev) => ({ ...prev, mainCast: true }));
   }, []);
 
-  const removeCastMember = useCallback((index) => {
+  const removeCastMember = useCallback((index: number) => {
     setFormData((prev) => ({
       ...prev,
       mainCast: prev.mainCast.filter((_, i) => i !== index),
     }));
   }, []);
 
-  const validateStep = useCallback((step) => {
-    const newErrors = {};
+  const validateStep = useCallback((step: number): boolean => {
+    const newErrors: Errors = {};
 
     switch (step) {
       case 1:
@@ -689,7 +737,7 @@ export default function VideoUploadForm() {
     setCurrentStep((prev) => prev - 1);
   }, []);
 
-  const handleSubmit = useCallback(async (e) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
 
@@ -803,8 +851,8 @@ export default function VideoUploadForm() {
   }, [searchParams, theme, initialFormData]);
 
   useEffect(() => {
-    let unsubscribeSeatArrangements = null;
-    let unsubscribePending = null;
+    let unsubscribeSeatArrangements: (() => void) | null = null;
+    let unsubscribePending: (() => void) | null = null;
 
     const fetchUserAndOwner = async () => {
       try {
@@ -988,7 +1036,8 @@ export default function VideoUploadForm() {
                 ...prev,
                 availableSite: (
                   <>
-                    Failed to load seat arrangement.{" "}
+                    Failed to load seat arrangement.{" "
+                    }
                     <a
                       onClick={handleDesignSeats}
                       className={`text-sm font-medium cursor-pointer ${
@@ -1112,7 +1161,9 @@ export default function VideoUploadForm() {
             className="flex flex-col items-center"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
+            transition={{
+              duration: 0.5
+            }}
           >
             <PuffLoader color={theme === "light" ? "#3b82f6" : "#FFFFFF"} size={100} />
             <motion.p
@@ -1491,7 +1542,7 @@ export default function VideoUploadForm() {
                                       type="file"
                                       accept="image/*"
                                       onChange={(e) =>
-                                        handleCastImage(idx, e.target.files[0])
+                                        handleCastImage(idx, e.target.files?.[0] || null)
                                       }
                                       className="hidden"
                                       id={`cast-image-${idx}`}
@@ -1604,7 +1655,7 @@ export default function VideoUploadForm() {
                                   onClick={() =>
                                     handleChange({
                                       target: { name: field.name, value: category },
-                                    })
+                                    } as React.ChangeEvent<HTMLSelectElement>)
                                   }
                                 >
                                   {category}
@@ -1640,9 +1691,9 @@ export default function VideoUploadForm() {
                           className={`mt-1 block w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
                             errors[field.name]
                               ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
-                            : theme === "light"
-                            ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
-                            : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
+                              : theme === "light"
+                              ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
+                              : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
                           } ${theme === "light" ? "bg-white" : "bg-gray-600"} transition-all duration-200`}
                           step={field.type === "number" ? "1" : undefined}
                           autoComplete="off"
@@ -1665,7 +1716,7 @@ export default function VideoUploadForm() {
                               theme === "light"
                                 ? "text-indigo-600 hover:text-indigo-800"
                                 : "text-indigo-400 hover:text-indigo-300"
-                              } underline transition-colors`}
+                            } underline transition-colors`}
                           >
                             Make Seat Arrangement
                           </a>
@@ -1743,7 +1794,7 @@ export default function VideoUploadForm() {
                           className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
                           xmlns="http://www.w3.org/2000/svg"
                           fill="none"
-                          viewBox="0 24 24"
+                          viewBox="0 0 24 24"
                         >
                           <circle
                             className="opacity-25"
@@ -1756,7 +1807,7 @@ export default function VideoUploadForm() {
                           <path
                             className="opacity-75"
                             fill="currentColor"
-                            d="M4 12a8 8 0 018-8VFILLM4 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                           ></path>
                         </svg>
                         Uploading...

@@ -16,10 +16,13 @@ interface ChapaVerificationResponse {
   };
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { txRef: string } }
-) {
+interface Params {
+  params: {
+    txRef: string;
+  };
+}
+
+export async function GET(request: NextRequest, { params }: Params) {
   if (!params.txRef || typeof params.txRef !== 'string') {
     return NextResponse.json(
       { error: 'Invalid transaction reference' },

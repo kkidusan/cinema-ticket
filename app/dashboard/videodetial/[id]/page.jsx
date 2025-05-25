@@ -1195,10 +1195,9 @@ export default function VideoDetail({ params: paramsPromise }) {
                           theme === 'light' ? 'bg-gray-50' : 'bg-gray-800'
                         } hover:bg-opacity-80 transition-colors`}
                         whileHover={{ scale: 1.02 }}
-                        transition={{ type: 'spring', stiffness: 300 }}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.4 + index * 0.1, duration: 0.3 }}
+                        transition={{ type: 'spring', stiffness: 300, delay: 0.4 + index * 0.1, duration: 0.3 }}
                       >
                         <h3
                           className={`text-sm font-medium ${
@@ -1254,10 +1253,9 @@ export default function VideoDetail({ params: paramsPromise }) {
                               theme === 'light' ? 'bg-gray-50' : 'bg-gray-800'
                             } hover:bg-opacity-80 transition-colors`}
                             whileHover={{ scale: 1.02 }}
-                            transition={{ type: 'spring', stiffness: 300 }}
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.6 + index * 0.1, duration: 0.3 }}
+                            transition={{ type: 'spring', stiffness: 300, delay: 0.6 + index * 0.1, duration: 0.3 }}
                           >
                             <h3
                               className={`text-sm font-medium ${

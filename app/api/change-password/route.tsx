@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
-import { auth, signInWithEmailAndPassword, updatePassword } from "../../firebaseconfig"; // Updated path
+import { auth, signInWithEmailAndPassword, updatePassword } from "../../firebaseconfig";
 import { cookies } from "next/headers";
 
 export async function POST(request: Request) {
   try {
-    const cookieStore = cookies();
+    // Await the cookies() function to get the cookie store
+    const cookieStore = await cookies();
     const token = cookieStore.get("token")?.value;
 
     if (!token) {

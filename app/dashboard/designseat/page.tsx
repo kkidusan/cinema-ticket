@@ -227,7 +227,7 @@ export default function CinemaSeatArrangement() {
         theme: theme === "light" ? "light" : "dark",
       });
     }
-  }, [userEmail, theme, loadArrangement]); // Added loadArrangement to dependency array
+  }, [userEmail, theme, loadArrangement]);
 
   useEffect(() => {
     if (isAuthenticated && userEmail && isPending === false) {
@@ -461,7 +461,8 @@ export default function CinemaSeatArrangement() {
         const existingData = querySnapshot.docs[0].data();
         arrangement.createdAt = existingData.createdAt || Timestamp.now();
         const docRef = doc(db, "seatArrangements", docId);
-        await updateDoc(docRef, arrangement);
+        // Type assertion to satisfy Firestore's updateDoc
+        await updateDoc(docRef, arrangement as { [key: string]: any });
         setSavedArrangement({ id: docId, ...arrangement });
         toast.success("Arrangement updated successfully!", {
           position: "bottom-right",
@@ -740,7 +741,7 @@ export default function CinemaSeatArrangement() {
               </div>
 
               <div>
-                <label className={`block text-sa font-medium mb-2 ${theme === "light" ? "text-indigo-700" : "text-indigo-300"}`}>
+                <label className={`block text-sm font-medium mb-2 ${theme === "light" ? "text-indigo-700" : "text-indigo-300"}`}>
                   Layout Type
                 </label>
                 <select

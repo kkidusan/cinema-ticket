@@ -3,9 +3,8 @@ import jwt from "jsonwebtoken";
 import { auth, signInWithEmailAndPassword, updatePassword } from "../../firebaseconfig";
 import { cookies } from "next/headers";
 
-export async function POST(request: Request) {
+export async function POST(request) {
   try {
-    // Await the cookies() function to get the cookie store
     const cookieStore = await cookies();
     const token = cookieStore.get("token")?.value;
 
@@ -14,7 +13,18 @@ export async function POST(request: Request) {
     }
 
     // Verify JWT token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (error) {
+      if (error.name === "JsonWebTokenError") {
+        return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+      }
+      if (error.name === "TokenExpiredError") {
+        return NextResponse.json({ error: "Session expired" }, { status: 401 });
+      }
+      throw error;
+    }
 
     const { email, currentPassword, newPassword } = await request.json();
 
@@ -25,24 +35,25 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify the token's email matches the request email
     if (decoded.email !== email) {
       return NextResponse.json({ error: "Invalid user" }, { status: 403 });
     }
 
-    // Re-authenticate the user
     let user;
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, currentPassword);
       user = userCredential.user;
     } catch (error) {
-      return NextResponse.json(
-        { error: "Current password is incorrect" },
-        { status: 401 }
-      );
+      if (error.code === "auth/wrong-password") {
+        return NextResponse.json({ error: "Current password is incorrect" }, { status: 401 });
+      }
+      if (error.code === "auth/invalid-api-key") {
+        console.error("Firebase API key is invalid. Check firebaseconfig.js and environment variables.");
+        return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
+      }
+      throw error;
     }
 
-    // Validate new password
     if (newPassword.length < 8) {
       return NextResponse.json(
         { error: "New password must be at least 8 characters" },
@@ -68,18 +79,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // Update the password
     await updatePassword(user, newPassword);
 
     return NextResponse.json({ message: "Password updated successfully" }, { status: 200 });
   } catch (error) {
     console.error("Change password error:", error);
-    if (error.name === "JsonWebTokenError") {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    }
-    if (error.name === "TokenExpiredError") {
-      return NextResponse.json({ error: "Session expired" }, { status: 401 });
-    }
     return NextResponse.json(
       { error: "An error occurred while updating the password" },
       { status: 500 }

@@ -1,3 +1,4 @@
+// app/api/change-password/route.js
 import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { auth, signInWithEmailAndPassword, updatePassword } from "../../firebaseconfig";
@@ -9,13 +10,13 @@ export async function POST(request) {
     const token = cookieStore.get("token")?.value;
 
     if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized: No token provided" }, { status: 401 });
     }
 
     // Verify JWT token
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
+      decoded = jwt.verify(token, process.env.JWT_SECRET_OWNER);
     } catch (error) {
       if (error.name === "JsonWebTokenError") {
         return NextResponse.json({ error: "Invalid token" }, { status: 401 });
@@ -23,7 +24,8 @@ export async function POST(request) {
       if (error.name === "TokenExpiredError") {
         return NextResponse.json({ error: "Session expired" }, { status: 401 });
       }
-      throw error;
+      console.error("JWT verification error:", error);
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
 
     const { email, currentPassword, newPassword } = await request.json();
@@ -44,14 +46,14 @@ export async function POST(request) {
       const userCredential = await signInWithEmailAndPassword(auth, email, currentPassword);
       user = userCredential.user;
     } catch (error) {
+      console.error("Authentication error:", error);
       if (error.code === "auth/wrong-password") {
         return NextResponse.json({ error: "Current password is incorrect" }, { status: 401 });
       }
       if (error.code === "auth/invalid-api-key") {
-        console.error("Firebase API key is invalid. Check environment variables and firebaseconfig.js.");
+        console.error("Firebase API key is invalid. Check environment variables in firebaseconfig.js.");
         return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
       }
-      console.error("Authentication error:", error);
       return NextResponse.json({ error: "Authentication failed" }, { status: 401 });
     }
 

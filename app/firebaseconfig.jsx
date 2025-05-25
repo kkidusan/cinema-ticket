@@ -1,3 +1,4 @@
+// firebaseconfig.js
 import { initializeApp } from "firebase/app";
 import {
   getFirestore,
@@ -49,13 +50,12 @@ try {
   throw new Error("Failed to initialize Firebase");
 }
 
-// Set Firestore log level to silent to suppress connectivity errors
-setLogLevel("silent");
+// Set Firestore log level to debug for better error tracking during development
+setLogLevel("debug");
 
 // Initialize Firestore with memory cache
 const db = initializeFirestore(app, {
   localCache: memoryLocalCache(),
-  experimentalForceOwningTab: true,
 });
 
 // Initialize Auth and Storage

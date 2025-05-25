@@ -21,6 +21,7 @@
     "emoji-picker-react": "^4.12.2",
     "ethiopian-date": "^0.0.6",
     "firebase": "^11.6.1",
+    "firebase-admin": "^13.4.0",
     "framer-motion": "^12.9.4",
     "image-compression": "^0.0.6",
     "iron-session": "^8.0.4",

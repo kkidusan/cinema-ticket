@@ -39,6 +39,12 @@ interface Errors {
   general?: string;
 }
 
+interface GenerateSeatsResult {
+  seats: Seat[];
+  rows: number;
+  cols: number;
+}
+
 export default function CinemaSeatArrangement() {
   const [totalSeats, setTotalSeats] = useState<number>(0);
   const [layoutType, setLayoutType] = useState<"rows" | "grid" | "custom">("custom");
@@ -142,6 +148,30 @@ export default function CinemaSeatArrangement() {
     return () => unsubscribe();
   }, [isAuthenticated, userEmail, theme]);
 
+  // Load arrangement
+  const loadArrangement = useCallback((arrangement: Arrangement) => {
+    const normalizedSeats = arrangement.seats.map(seat => ({
+      ...seat,
+      reserved: seat.reserved ?? false,
+    }));
+    setTotalSeats(arrangement.totalSeats);
+    setLayoutType(arrangement.layoutType);
+    setSeats(normalizedSeats);
+    setInputRows(arrangement.rows || 0);
+    setInputCols(arrangement.cols || 0);
+    setRows(Math.max(...normalizedSeats.map((s) => s.row)) + 1 || 0);
+    setCols(Math.max(...normalizedSeats.map((s) => s.col)) + 1 || 0);
+    toast.success("Arrangement loaded successfully!", {
+      position: "bottom-right",
+      autoClose: 3000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+      theme: theme === "light" ? "light" : "dark",
+    });
+  }, [theme]);
+
   // Fetch arrangements
   const fetchArrangements = useCallback(async () => {
     if (!userEmail) {
@@ -197,31 +227,7 @@ export default function CinemaSeatArrangement() {
         theme: theme === "light" ? "light" : "dark",
       });
     }
-  }, [userEmail, theme]);
-
-  // Load arrangement
-  const loadArrangement = useCallback((arrangement: Arrangement) => {
-    const normalizedSeats = arrangement.seats.map(seat => ({
-      ...seat,
-      reserved: seat.reserved ?? false,
-    }));
-    setTotalSeats(arrangement.totalSeats);
-    setLayoutType(arrangement.layoutType);
-    setSeats(normalizedSeats);
-    setInputRows(arrangement.rows || 0);
-    setInputCols(arrangement.cols || 0);
-    setRows(Math.max(...normalizedSeats.map((s) => s.row)) + 1 || 0);
-    setCols(Math.max(...normalizedSeats.map((s) => s.col)) + 1 || 0);
-    toast.success("Arrangement loaded successfully!", {
-      position: "bottom-right",
-      autoClose: 3000,
-      hideProgressBar: false,
-      closeOnClick: true,
-      pauseOnHover: true,
-      draggable: true,
-      theme: theme === "light" ? "light" : "dark",
-    });
-  }, [theme]);
+  }, [userEmail, theme, loadArrangement]); // Added loadArrangement to dependency array
 
   useEffect(() => {
     if (isAuthenticated && userEmail && isPending === false) {
@@ -231,7 +237,7 @@ export default function CinemaSeatArrangement() {
 
   // Generate seats
   const generateSeats = useMemo(() => {
-    return (totalSeats: number, layoutType: "rows" | "grid" | "custom", rows: number, cols: number) => {
+    return (totalSeats: number, layoutType: "rows" | "grid" | "custom", rows: number, cols: number): GenerateSeatsResult => {
       if (totalSeats <= 0) return { seats: [], rows: 0, cols: 0 };
 
       let newRows = rows;
@@ -734,7 +740,7 @@ export default function CinemaSeatArrangement() {
               </div>
 
               <div>
-                <label className={`block text-sm font-medium mb-2 ${theme === "light" ? "text-indigo-700" : "text-indigo-300"}`}>
+                <label className={`block text-sa font-medium mb-2 ${theme === "light" ? "text-indigo-700" : "text-indigo-300"}`}>
                   Layout Type
                 </label>
                 <select

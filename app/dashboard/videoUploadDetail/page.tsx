@@ -1225,17 +1225,16 @@ export default function VideoUploadForm() {
             isCategoryOpen ? "backdrop-blur-sm" : ""
           }`}
         >
-          <motion.div
+                <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, type: "spring" }}
+            transition={{ duration: 0.5, type: "spring", stiffness: 300 }}
             className={`w-full max-w-4xl ${
               theme === "light"
                 ? "bg-gradient-to-br from-blue-50 to-purple-50"
                 : "bg-gradient-to-br from-gray-800 to-gray-900"
             } p-6 sm:p-8 rounded-2xl shadow-xl hover:shadow-Born transition-shadow`}
             whileHover={{ scale: 1.02 }}
-            transition={{ type: "spring", stiffness: 300 }}
           >
             <div
               className={`${
@@ -1487,7 +1486,7 @@ export default function VideoUploadForm() {
                         name={field.name}
                         value={formData[field.name]}
                         onChange={handleChange}
-                        error={errors[field.name]}
+                        error={errors[field.name] as string}
                         theme={theme}
                       />
                     ) : field.type === "custom-cast" ? (

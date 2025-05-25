@@ -40,8 +40,14 @@ const firebaseConfig = {
   measurementId: process.env.FIREBASE_MEASUREMENT_ID,
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase with error handling
+let app;
+try {
+  app = initializeApp(firebaseConfig);
+} catch (error) {
+  console.error("Error initializing Firebase:", error);
+  throw new Error("Failed to initialize Firebase");
+}
 
 // Set Firestore log level to silent to suppress connectivity errors
 setLogLevel("silent");
@@ -56,7 +62,7 @@ const db = initializeFirestore(app, {
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 
-// Enable session persistence
+// Enable session persistence with error handling
 setPersistence(auth, browserSessionPersistence).catch((error) => {
   console.error("Error setting auth persistence:", error);
 });

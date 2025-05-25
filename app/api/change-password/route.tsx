@@ -48,12 +48,14 @@ export async function POST(request) {
         return NextResponse.json({ error: "Current password is incorrect" }, { status: 401 });
       }
       if (error.code === "auth/invalid-api-key") {
-        console.error("Firebase API key is invalid. Check firebaseconfig.js and environment variables.");
+        console.error("Firebase API key is invalid. Check environment variables and firebaseconfig.js.");
         return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
       }
-      throw error;
+      console.error("Authentication error:", error);
+      return NextResponse.json({ error: "Authentication failed" }, { status: 401 });
     }
 
+    // Validate new password
     if (newPassword.length < 8) {
       return NextResponse.json(
         { error: "New password must be at least 8 characters" },
@@ -79,7 +81,12 @@ export async function POST(request) {
       );
     }
 
-    await updatePassword(user, newPassword);
+    try {
+      await updatePassword(user, newPassword);
+    } catch (error) {
+      console.error("Password update error:", error);
+      return NextResponse.json({ error: "Failed to update password" }, { status: 500 });
+    }
 
     return NextResponse.json({ message: "Password updated successfully" }, { status: 200 });
   } catch (error) {

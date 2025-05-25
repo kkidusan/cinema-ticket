@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import axios from 'axios';
 import { db } from '../../../firebaseconfig';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -17,7 +17,7 @@ interface ChapaVerificationResponse {
 }
 
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { txRef: string } }
 ) {
   if (!params.txRef || typeof params.txRef !== 'string') {
@@ -59,8 +59,12 @@ export async function GET(
         // Update transaction status
         const updatedTransaction = {
           ...transaction,
-          status: chapaStatus === 'success' ? 'success' :
-                  chapaStatus === 'failed' ? 'failed' : transaction.status,
+          status:
+            chapaStatus === 'success'
+              ? 'success'
+              : chapaStatus === 'failed'
+              ? 'failed'
+              : transaction.status,
           last_verified: currentTime,
           verification_response: verificationResponse.data,
           chapa_transaction_id: verificationResponse.data.data.transaction_id,

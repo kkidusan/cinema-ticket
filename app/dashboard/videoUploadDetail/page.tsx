@@ -22,6 +22,7 @@ import {
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import CryptoJS from "crypto-js";
+import Image from "next/image";
 
 // Secret key for encryption (in production, store this securely, e.g., in environment variables)
 const ENCRYPTION_KEY = "my-secret-key-123456";
@@ -371,6 +372,7 @@ export default function VideoUploadForm() {
   const [errors, setErrors] = useState<Errors>({});
   const router = useRouter();
   const searchParams = useSearchParams();
+  const from = searchParams.get("from"); // Extract 'from' parameter for stable dependency
   const [userEmail, setUserEmail] = useState<string>("");
   const [userRole, setUserRole] = useState<string>("");
   const [ownerDetails, setOwnerDetails] = useState<{ firstName: string; lastName: string }>({
@@ -809,7 +811,7 @@ export default function VideoUploadForm() {
   }, [formData, userEmail, ownerDetails, currentStep, validateStep, router, theme, initialFormData]);
 
   useEffect(() => {
-    const from = searchParams.get("from");
+    // Restore form data from localStorage if navigating from specific routes
     const encryptedFormData = localStorage.getItem("videoUploadFormData");
 
     if (encryptedFormData && (from === "designseat" || from === "videoUploadDetail")) {
@@ -848,7 +850,7 @@ export default function VideoUploadForm() {
       setFormData((prev) => (JSON.stringify(prev) !== JSON.stringify(initialFormData) ? initialFormData : prev));
     }
     setLoading(false);
-  }, [searchParams, theme, initialFormData]);
+  }, [from, theme, initialFormData]); // Stable dependencies: from (string), theme (context), initialFormData (memoized)
 
   useEffect(() => {
     let unsubscribeSeatArrangements: (() => void) | null = null;
@@ -1084,7 +1086,7 @@ export default function VideoUploadForm() {
         unsubscribePending();
       }
     };
-  }, [router, theme, isPending]);
+  }, [router, theme, isPending, handleDesignSeats]);
 
   if (authLoading || userRole !== "owner") {
     return (
@@ -1225,7 +1227,7 @@ export default function VideoUploadForm() {
             isCategoryOpen ? "backdrop-blur-sm" : ""
           }`}
         >
-                <motion.div
+          <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5, type: "spring", stiffness: 300 }}
@@ -1508,10 +1510,13 @@ export default function VideoUploadForm() {
                                   animate={{ opacity: 1, scale: 1 }}
                                   className="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden border-2 border-indigo-200"
                                 >
-                                  <img
+                                  <Image
                                     src={cast.image}
                                     alt="Cast preview"
+                                    width={96}
+                                    height={96}
                                     className="w-full h-full object-cover"
+                                    unoptimized
                                   />
                                 </motion.div>
                               )}

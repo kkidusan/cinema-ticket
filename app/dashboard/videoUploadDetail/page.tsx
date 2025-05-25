@@ -1,8 +1,7 @@
-// File: app/dashboard/videoUploadDetail/page.tsx
 "use client";
 
-import React, { useEffect, useState, useContext, useCallback, useMemo, ReactNode } from "react";
-import { db } from "../../firebaseconfig";
+import React, { useEffect, useState, useContext, useCallback, useMemo } from "react";
+import { db } from "../../lib/firebase-client";
 import { collection, addDoc, Timestamp, query, where, getDocs, onSnapshot } from "firebase/firestore";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toGregorian, toEthiopian } from "ethiopian-date";
@@ -22,7 +21,6 @@ import {
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import CryptoJS from "crypto-js";
-import Image from "next/image";
 
 // Secret key for encryption (in production, store this securely, e.g., in environment variables)
 const ENCRYPTION_KEY = "my-secret-key-123456";
@@ -76,54 +74,8 @@ interface Seat {
   reserved: boolean;
 }
 
-// Interface for FormData
-interface FormData {
-  title: string;
-  category: string;
-  description: string;
-  duration: string;
-  mainCast: Array<{ name: string; image: string }>;
-  cinemaName: string;
-  cinemaLocation: string;
-  availableSite: string;
-  ticketPrice: string;
-  screeningDate: string;
-  poster: string;
-  promotionVideo: string;
-  movieID: string;
-  seats: Seat[];
-}
-
-// Interface for Errors
-interface Errors {
-  [key: string]: string | JSX.Element | undefined;
-}
-
-// Interface for Touched
-interface Touched {
-  poster: boolean;
-  promotionVideo: boolean;
-  mainCast: boolean;
-}
-
-// Interface for Tooltip props
-interface TooltipProps {
-  children: ReactNode;
-  text: string;
-  theme: string;
-}
-
-// Interface for EthiopianDatePicker props
-interface EthiopianDatePickerProps {
-  name: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  error?: string;
-  theme: string;
-}
-
 // Memoized initial form data
-const getInitialFormData = (): FormData => ({
+const getInitialFormData = () => ({
   title: "",
   category: "",
   description: "",
@@ -137,11 +89,11 @@ const getInitialFormData = (): FormData => ({
   poster: "",
   promotionVideo: "",
   movieID: "",
-  seats: [],
+  seats: [] as Seat[],
 });
 
 // Tooltip Component
-function Tooltip({ children, text, theme }: TooltipProps) {
+function Tooltip({ children, text, theme }) {
   const [isVisible, setIsVisible] = useState(false);
 
   return (
@@ -182,7 +134,7 @@ function Tooltip({ children, text, theme }: TooltipProps) {
 }
 
 // EthiopianDatePicker Component
-function EthiopianDatePicker({ name, value, onChange, error, theme }: EthiopianDatePickerProps) {
+function EthiopianDatePicker({ name, value, onChange, error, theme }) {
   const getCurrentEthiopianDate = () => {
     const today = new Date();
     const [ethYear, ethMonth, ethDay] = toEthiopian(
@@ -190,7 +142,9 @@ function EthiopianDatePicker({ name, value, onChange, error, theme }: EthiopianD
       today.getMonth() + 1,
       today.getDate()
     );
-    return `${ethYear}-${String(ethMonth).padStart(2, "0")}-${String(ethDay).padStart(2, "0")}`;
+    return `${ethYear}-${String(ethMonth).padStart(2, "0")}-${String(
+      ethDay
+    ).padStart(2, "0")}`;
   };
 
   const initialDate = value ? value.split("T")[0] : getCurrentEthiopianDate();
@@ -211,17 +165,17 @@ function EthiopianDatePicker({ name, value, onChange, error, theme }: EthiopianD
     }
   }, [value]);
 
-  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDateChange = (e) => {
     const { value } = e.target;
     setEthiopianDate(value);
-    onChange({ target: { name, value: `${value}T${time}` } } as React.ChangeEvent<HTMLInputElement>);
+    onChange({ target: { name, value: `${value}T${time}` } });
   };
 
-  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTimeChange = (e) => {
     const { value } = e.target;
     setTime(value);
     if (ethiopianDate) {
-      onChange({ target: { name, value: `${ethiopianDate}T${value}` } } as React.ChangeEvent<HTMLInputElement>);
+      onChange({ target: { name, value: `${ethiopianDate}T${value}` } });
     }
   };
 
@@ -259,7 +213,7 @@ function EthiopianDatePicker({ name, value, onChange, error, theme }: EthiopianD
 }
 
 // Function to format date in Ethiopian Calendar
-const formatEthiopianDate = (dateString: string): string => {
+const formatEthiopianDate = (dateString) => {
   const [datePart, timePart] = dateString.split("T");
   const [year, month, day] = datePart.split("-").map(Number);
   const [gregYear, gregMonth, gregDay] = toGregorian(year, month, day);
@@ -280,7 +234,7 @@ const formatEthiopianDate = (dateString: string): string => {
 };
 
 // Encryption and Decryption Functions
-const encryptData = (data: FormData): string | null => {
+const encryptData = (data) => {
   try {
     const dataToEncrypt = JSON.parse(JSON.stringify(data));
     const dataString = JSON.stringify(dataToEncrypt);
@@ -294,7 +248,7 @@ const encryptData = (data: FormData): string | null => {
   }
 };
 
-const decryptData = (encryptedData: string): FormData | null => {
+const decryptData = (encryptedData) => {
   try {
     if (!encryptedData || typeof encryptedData !== "string") {
       console.warn("Invalid encrypted data:", encryptedData);
@@ -353,7 +307,7 @@ const steps = [
       },
       {
         name: "promotionVideo",
-        label: "Video (Video Only)",
+        label: "Promotion Video (Video Only)",
         type: "file",
         accept: "video/*",
       },
@@ -363,36 +317,32 @@ const steps = [
 
 export default function VideoUploadForm() {
   const initialFormData = useMemo(getInitialFormData, []);
-  const [formData, setFormData] = useState<FormData>(initialFormData);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [authLoading, setAuthLoading] = useState<boolean>(true);
-  const [videoUploading, setVideoUploading] = useState<boolean>(false);
-  const [imageUploading, setImageUploading] = useState<boolean>(false);
-  const [castImageUploading, setCastImageUploading] = useState<{ [key: number]: boolean }>({});
-  const [errors, setErrors] = useState<Errors>({});
+  const [formData, setFormData] = useState(initialFormData);
+  const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [videoUploading, setVideoUploading] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [castImageUploading, setCastImageUploading] = useState({});
+  const [errors, setErrors] = useState({});
   const router = useRouter();
   const searchParams = useSearchParams();
-  const from = searchParams.get("from"); // Extract 'from' parameter for stable dependency
-  const [userEmail, setUserEmail] = useState<string>("");
-  const [userRole, setUserRole] = useState<string>("");
-  const [ownerDetails, setOwnerDetails] = useState<{ firstName: string; lastName: string }>({
-    firstName: "",
-    lastName: "",
-  });
+  const [userEmail, setUserEmail] = useState("");
+  const [userRole, setUserRole] = useState("");
+  const [ownerDetails, setOwnerDetails] = useState({ firstName: "", lastName: "" });
   const { theme } = useContext(ThemeContext);
-  const [currentStep, setCurrentStep] = useState<number>(1);
-  const [totalSeats, setTotalSeats] = useState<number | null>(null);
-  const [seatArrangement, setSeatArrangement] = useState<Seat[] | null>(null);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [totalSeats, setTotalSeats] = useState(null);
+  const [seatArrangement, setSeatArrangement] = useState(null);
   const totalSteps = 4;
-  const [touched, setTouched] = useState<Touched>({
+  const [touched, setTouched] = useState({
     poster: false,
     promotionVideo: false,
     mainCast: false,
   });
-  const [isCategoryOpen, setIsCategoryOpen] = useState<boolean>(false);
+  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [isPending, setIsPending] = useState<boolean | null>(null);
 
-  const generateMovieID = useCallback((): string => {
+  const generateMovieID = useCallback(() => {
     const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     return Array.from({ length: 8 }, () => characters.charAt(Math.floor(Math.random() * characters.length))).join("");
   }, []);
@@ -419,7 +369,7 @@ export default function VideoUploadForm() {
     }
   }, [formData, router, theme]);
 
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleChange = useCallback((e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     setErrors((prev) => ({ ...prev, [name]: "" }));
@@ -449,8 +399,8 @@ export default function VideoUploadForm() {
     }
   }, [totalSeats, seatArrangement]);
 
-  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleFileChange = useCallback(async (e) => {
+    const file = e.target.files[0];
     if (!file) return;
 
     setImageUploading(true);
@@ -458,7 +408,7 @@ export default function VideoUploadForm() {
 
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!);
+    formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET);
 
     try {
       const response = await fetch(
@@ -495,8 +445,8 @@ export default function VideoUploadForm() {
     }
   }, [theme, generateMovieID]);
 
-  const handleVideoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleVideoUpload = useCallback(async (e) => {
+    const file = e.target.files[0];
     if (!file) return;
 
     setTouched((prev) => ({ ...prev, promotionVideo: true }));
@@ -504,7 +454,7 @@ export default function VideoUploadForm() {
 
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!);
+    formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET);
 
     try {
       const response = await fetch(
@@ -540,7 +490,7 @@ export default function VideoUploadForm() {
     }
   }, [theme]);
 
-  const handleCastChange = useCallback((index: number, field: string, value: string) => {
+  const handleCastChange = useCallback((index, field, value) => {
     setFormData((prev) => {
       const newCast = [...prev.mainCast];
       newCast[index] = { ...newCast[index], [field]: value };
@@ -550,14 +500,14 @@ export default function VideoUploadForm() {
     setTouched((prev) => ({ ...prev, mainCast: true }));
   }, []);
 
-  const handleCastImage = useCallback(async (index: number, file: File | null) => {
+  const handleCastImage = useCallback(async (index, file) => {
     if (!file) return;
 
     setCastImageUploading((prev) => ({ ...prev, [index]: true }));
 
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!);
+    formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET);
 
     try {
       const response = await fetch(
@@ -597,15 +547,15 @@ export default function VideoUploadForm() {
     setTouched((prev) => ({ ...prev, mainCast: true }));
   }, []);
 
-  const removeCastMember = useCallback((index: number) => {
+  const removeCastMember = useCallback((index) => {
     setFormData((prev) => ({
       ...prev,
       mainCast: prev.mainCast.filter((_, i) => i !== index),
     }));
   }, []);
 
-  const validateStep = useCallback((step: number): boolean => {
-    const newErrors: Errors = {};
+  const validateStep = useCallback((step) => {
+    const newErrors = {};
 
     switch (step) {
       case 1:
@@ -739,7 +689,7 @@ export default function VideoUploadForm() {
     setCurrentStep((prev) => prev - 1);
   }, []);
 
-  const handleSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     setLoading(true);
 
@@ -811,7 +761,7 @@ export default function VideoUploadForm() {
   }, [formData, userEmail, ownerDetails, currentStep, validateStep, router, theme, initialFormData]);
 
   useEffect(() => {
-    // Restore form data from localStorage if navigating from specific routes
+    const from = searchParams.get("from");
     const encryptedFormData = localStorage.getItem("videoUploadFormData");
 
     if (encryptedFormData && (from === "designseat" || from === "videoUploadDetail")) {
@@ -850,11 +800,11 @@ export default function VideoUploadForm() {
       setFormData((prev) => (JSON.stringify(prev) !== JSON.stringify(initialFormData) ? initialFormData : prev));
     }
     setLoading(false);
-  }, [from, theme, initialFormData]); // Stable dependencies: from (string), theme (context), initialFormData (memoized)
+  }, [searchParams, theme, initialFormData]);
 
   useEffect(() => {
-    let unsubscribeSeatArrangements: (() => void) | null = null;
-    let unsubscribePending: (() => void) | null = null;
+    let unsubscribeSeatArrangements = null;
+    let unsubscribePending = null;
 
     const fetchUserAndOwner = async () => {
       try {
@@ -1038,8 +988,7 @@ export default function VideoUploadForm() {
                 ...prev,
                 availableSite: (
                   <>
-                    Failed to load seat arrangement.{" "
-                    }
+                    Failed to load seat arrangement.{" "}
                     <a
                       onClick={handleDesignSeats}
                       className={`text-sm font-medium cursor-pointer ${
@@ -1086,7 +1035,7 @@ export default function VideoUploadForm() {
         unsubscribePending();
       }
     };
-  }, [router, theme, isPending, handleDesignSeats]);
+  }, [router, theme, isPending]);
 
   if (authLoading || userRole !== "owner") {
     return (
@@ -1163,9 +1112,7 @@ export default function VideoUploadForm() {
             className="flex flex-col items-center"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{
-              duration: 0.5
-            }}
+            transition={{ duration: 0.5 }}
           >
             <PuffLoader color={theme === "light" ? "#3b82f6" : "#FFFFFF"} size={100} />
             <motion.p
@@ -1230,13 +1177,14 @@ export default function VideoUploadForm() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, type: "spring", stiffness: 300 }}
+            transition={{ duration: 0.5, type: "spring" }}
             className={`w-full max-w-4xl ${
               theme === "light"
                 ? "bg-gradient-to-br from-blue-50 to-purple-50"
                 : "bg-gradient-to-br from-gray-800 to-gray-900"
             } p-6 sm:p-8 rounded-2xl shadow-xl hover:shadow-Born transition-shadow`}
             whileHover={{ scale: 1.02 }}
+            transition={{ type: "spring", stiffness: 300 }}
           >
             <div
               className={`${
@@ -1488,7 +1436,7 @@ export default function VideoUploadForm() {
                         name={field.name}
                         value={formData[field.name]}
                         onChange={handleChange}
-                        error={errors[field.name] as string}
+                        error={errors[field.name]}
                         theme={theme}
                       />
                     ) : field.type === "custom-cast" ? (
@@ -1510,13 +1458,10 @@ export default function VideoUploadForm() {
                                   animate={{ opacity: 1, scale: 1 }}
                                   className="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden border-2 border-indigo-200"
                                 >
-                                  <Image
+                                  <img
                                     src={cast.image}
                                     alt="Cast preview"
-                                    width={96}
-                                    height={96}
                                     className="w-full h-full object-cover"
-                                    unoptimized
                                   />
                                 </motion.div>
                               )}
@@ -1546,7 +1491,7 @@ export default function VideoUploadForm() {
                                       type="file"
                                       accept="image/*"
                                       onChange={(e) =>
-                                        handleCastImage(idx, e.target.files?.[0] || null)
+                                        handleCastImage(idx, e.target.files[0])
                                       }
                                       className="hidden"
                                       id={`cast-image-${idx}`}
@@ -1659,7 +1604,7 @@ export default function VideoUploadForm() {
                                   onClick={() =>
                                     handleChange({
                                       target: { name: field.name, value: category },
-                                    } as React.ChangeEvent<HTMLSelectElement>)
+                                    })
                                   }
                                 >
                                   {category}
@@ -1695,9 +1640,9 @@ export default function VideoUploadForm() {
                           className={`mt-1 block w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
                             errors[field.name]
                               ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
-                              : theme === "light"
-                              ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
-                              : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
+                            : theme === "light"
+                            ? "border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500"
+                            : "border border-indigo-700 focus:border-indigo-500 focus:ring-indigo-500"
                           } ${theme === "light" ? "bg-white" : "bg-gray-600"} transition-all duration-200`}
                           step={field.type === "number" ? "1" : undefined}
                           autoComplete="off"
@@ -1720,7 +1665,7 @@ export default function VideoUploadForm() {
                               theme === "light"
                                 ? "text-indigo-600 hover:text-indigo-800"
                                 : "text-indigo-400 hover:text-indigo-300"
-                            } underline transition-colors`}
+                              } underline transition-colors`}
                           >
                             Make Seat Arrangement
                           </a>
@@ -1798,7 +1743,7 @@ export default function VideoUploadForm() {
                           className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
                           xmlns="http://www.w3.org/2000/svg"
                           fill="none"
-                          viewBox="0 0 24 24"
+                          viewBox="0 24 24"
                         >
                           <circle
                             className="opacity-25"
@@ -1811,7 +1756,7 @@ export default function VideoUploadForm() {
                           <path
                             className="opacity-75"
                             fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            d="M4 12a8 8 0 018-8VFILLM4 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                           ></path>
                         </svg>
                         Uploading...

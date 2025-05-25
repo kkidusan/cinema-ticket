@@ -6,7 +6,8 @@ const JWT_SECRET_OWNER = "4f56a9c80b8e9d8e2f24eab3e94a3458a569fb8094538724bb9b7e
 const JWT_SECRET_ADMIN = "a7b3e9f2c1d8a4b6e5f7c9d3a2b8e4f6c7d9a1b3e5f2c8a4b6d7e9f1c3a5b7d8";
 
 export async function GET(req) {
-  const cookieStore = cookies();
+  // Await the cookies() function to get the cookie store
+  const cookieStore = await cookies();
   const ownerToken = cookieStore.get("owner_token")?.value;
   const adminToken = cookieStore.get("admin_token")?.value;
 

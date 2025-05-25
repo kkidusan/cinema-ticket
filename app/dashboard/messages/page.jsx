@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useContext } from "react";
 import { useRouter } from "next/navigation";
-import { auth, db, collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, deleteDoc, updateDoc, getDocs, writeBatch } from "../../firebaseconfig";
+import { auth, db, collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, deleteDoc, updateDoc, getDocs, writeBatch } from "../../lib/firebase-client";
 import { ArrowLeft, Send, Paperclip, Trash2, Edit, Copy, Reply, Pin, X, Smile, FileText, Download } from "lucide-react";
 import { PacmanLoader, ClipLoader } from "react-spinners";
 import { toast, ToastContainer } from "react-toastify";

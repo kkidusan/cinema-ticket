@@ -2,7 +2,7 @@
 import { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/navigation";
 import { collection, onSnapshot } from "firebase/firestore";
-import { db } from "../firebaseconfig"; // Adjust the path as needed
+import { db } from "../lib/firebase-client"; // Adjust the path as needed
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { motion } from "framer-motion"; // Import Framer Motion
 import { ThemeContext } from "../context/ThemeContext"; // Import ThemeContext

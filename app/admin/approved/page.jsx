@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/navigation";
-import { auth, db } from "../../firebaseconfig";
+import { auth, db } from "../../lib/firebase-client";
 import { collection, query, where, onSnapshot, updateDoc, doc, setDoc, getDocs } from "firebase/firestore";
 import Image from "next/image";
 import { motion } from "framer-motion";

@@ -3,7 +3,7 @@ import { useState, useEffect, useContext, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { PuffLoader } from "react-spinners";
 import { ThemeContext } from "../../context/ThemeContext";
-import { auth, db } from "../../firebaseconfig";
+import { auth, db } from "../../lib/firebase-client";
 import { doc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { User, Lock, LogOut, Eye, EyeOff, X, Edit } from "lucide-react";
 import { motion } from "framer-motion";

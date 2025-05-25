@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { db } from "../../firebaseconfig"; // Adjust path to your Firebase config
+import { db } from "../../lib/firebase-client"; // Adjust path to your Firebase config
 import { collection, addDoc, Timestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 

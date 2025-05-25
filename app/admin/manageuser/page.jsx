@@ -9,7 +9,7 @@ import {
   deleteDoc,
   updateDoc,
 } from "firebase/firestore";
-import { db } from "../../firebaseconfig"; // Adjust the path as needed
+import { db } from "../../lib/firebase-client"; // Adjust the path as needed
 import { FaTrash, FaClock } from "react-icons/fa"; // Icons for actions
 import { ToastContainer, toast } from "react-toastify"; // Import toast
 import "react-toastify/dist/ReactToastify.css"; // Import toast styles

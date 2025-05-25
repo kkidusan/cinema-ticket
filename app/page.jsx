@@ -6,7 +6,7 @@ import Link from "next/link";
 import { TypeAnimation } from "react-type-animation";
 import { ThemeContext } from "./context/ThemeContext";
 import Footer from "./componet/Footer";
-import { db } from "./firebaseconfig";
+import { db } from "./lib/firebase-client";
 import { collection, onSnapshot } from "firebase/firestore";
 
 export default function PortfolioPage() {

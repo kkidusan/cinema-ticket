@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useContext, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { db } from "../../firebaseconfig";
+import { db } from "../../lib/firebase-client";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { User, Lock, LogOut, Eye, EyeOff, X } from "lucide-react";
 import { PuffLoader } from "react-spinners";

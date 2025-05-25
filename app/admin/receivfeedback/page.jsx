@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { auth } from "../../firebaseconfig"; // Firebase Auth
+import { auth } from "../../lib/firebase-client"; // Firebase Auth
 export default function AboutPage() {
   const [userEmail, setUserEmail] = useState(null);
   const router = useRouter();

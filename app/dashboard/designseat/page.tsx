@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useContext, useRef, useCallback, useMemo } from "react";
-import { db } from "../../firebaseconfig";
+import { db } from "../../lib/firebase-client";
 import { collection, addDoc, getDocs, query, where, updateDoc, doc, Timestamp, onSnapshot } from "firebase/firestore";
 import { PuffLoader } from "react-spinners";
 import { Armchair, Save, Download, RotateCcw } from "lucide-react";

@@ -13,7 +13,7 @@ import {
   addDoc,
   getDocs,
   Timestamp,
-} from '../../../firebaseconfig';
+} from '../../../lib/firebase-client';
 import { PuffLoader } from 'react-spinners';
 import { FaArrowLeft, FaStar, FaChevronDown, FaChevronUp, FaTimes } from 'react-icons/fa';
 import { ThemeContext } from '../../../context/ThemeContext';

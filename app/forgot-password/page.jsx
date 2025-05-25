@@ -7,7 +7,7 @@ import { Volume2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Link from "next/link";
-import { auth } from "../firebaseconfig";
+import { auth } from "../lib/firebase-client";
 
 export default function ForgotPassword() {
   const [step, setStep] = useState(0); // 0: CAPTCHA, 1: Email

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useContext } from "react";
 import { collection, getDocs } from "firebase/firestore";
-import { db } from "../../firebaseconfig";
+import { db } from "../../lib/firebase-client";
 import { Search } from "lucide-react";
 import { PuffLoader } from "react-spinners";
 import { ThemeContext } from "../../context/ThemeContext";

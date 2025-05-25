@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useContext } from "react";
@@ -7,7 +8,7 @@ import { Loader2, Mail, Lock, Eye, EyeOff, CheckCircle, XCircle } from "lucide-r
 import { motion, AnimatePresence } from "framer-motion";
 import { ThemeContext } from "../context/ThemeContext";
 
-// Email validation function (consistent with RegisterForm)
+// Email validation function
 const validateEmail = (email: string): boolean => {
   const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return regex.test(email);
@@ -48,22 +49,25 @@ export default function LoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
+        credentials: "include", // Include cookies for JWT
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
         if (response.status === 401) {
-          setError("Invalid email or password");
+          setError(data.error || "Invalid email or password");
+        } else if (response.status === 403) {
+          setError(data.error || "User not authorized");
         } else if (response.status === 500) {
-          setError("Server error. Please try again later.");
+          setError(data.error || "Server error. Please try again later.");
         } else {
           setError(data.error || "Login failed");
         }
         return;
       }
 
-      const data = await response.json();
-
+      // Redirect based on role
       if (data.role === "owner") {
         router.push("/dashboard");
       } else if (data.role === "admin") {
@@ -72,7 +76,8 @@ export default function LoginPage() {
         setError("Invalid user role");
       }
     } catch (err) {
-      setError("An error occurred. Please try again.");
+      console.error("Login error:", err);
+      setError("An error occurred. Please check your connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -252,14 +257,14 @@ export default function LoginPage() {
             {/* Submit Button */}
             <motion.button
               type="submit"
-              disabled={loading || !validateEmail(email)}
+              disabled={loading || !validateEmail(email) || !password}
               className={`w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium rounded-lg shadow-md ${
-                loading || !validateEmail(email)
+                loading || !validateEmail(email) || !password
                   ? "opacity-50 cursor-not-allowed"
                   : "hover:from-blue-700 hover:to-purple-700"
               } transition-all flex items-center justify-center`}
-              whileHover={{ scale: loading || !validateEmail(email) ? 1 : 1.02 }}
-              whileTap={{ scale: loading || !validateEmail(email) ? 1 : 0.98 }}
+              whileHover={{ scale: loading || !validateEmail(email) || !password ? 1 : 1.02 }}
+              whileTap={{ scale: loading || !validateEmail(email) || !password ? 1 : 0.98 }}
             >
               {loading ? (
                 <>
@@ -298,5 +303,3 @@ export default function LoginPage() {
     </main>
   );
 }
-
-

@@ -2,7 +2,7 @@
 import { useState, useEffect, useContext } from "react";
 import Navbar1 from "../componet/Nav";
 import Sidebar from "../componet/Sidebar";
-import { db } from "../firebaseconfig";
+import { db } from "../lib/firebase-client";
 import { collection, query, where, onSnapshot, setLogLevel } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { PuffLoader } from "react-spinners";

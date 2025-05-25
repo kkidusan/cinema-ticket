@@ -4,7 +4,7 @@ import React, { useState, useContext, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PuffLoader } from "react-spinners";
 import { ThemeContext } from "../../context/ThemeContext";
-import { auth, db } from "../../firebaseconfig";
+import { auth, db } from "../../lib/firebase-client";
 import { createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword } from "firebase/auth";
 import { collection, doc, setDoc, query, where, getDocs } from "firebase/firestore";
 import { Lock, User, Mail } from "lucide-react";

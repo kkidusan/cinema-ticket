@@ -3,7 +3,7 @@ import { useState, useEffect, useContext, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
 import { collection, query, where, getDocs, doc, addDoc, onSnapshot, runTransaction } from 'firebase/firestore';
-import { db } from '../../firebaseconfig';
+import { db } from '../../lib/firebase-client';
 import { ThemeContext } from '../../context/ThemeContext';
 import { PuffLoader } from 'react-spinners';
 import { DollarSign, ArrowDownCircle, ArrowUpCircle, Eye, EyeOff, CheckCircle } from 'lucide-react';

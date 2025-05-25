@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { User, MessageCircle, LogOut, Upload, Bell, Menu } from "lucide-react";
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc } from "firebase/firestore";
-import { db } from "../firebaseconfig";
+import { db } from "../lib/firebase-client";
 import Footer from "../componet/Footer";
 import { PuffLoader } from "react-spinners";
 import ThemeToggle from "../componet/ThemeToggle";

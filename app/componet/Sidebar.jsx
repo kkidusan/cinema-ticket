@@ -1,22 +1,21 @@
 "use client";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ChevronLeft, ChevronRight } from "lucide-react"; // Keep Lucide for arrows
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   FaHome,
   FaCheckCircle,
   FaCommentDots,
   FaCreditCard,
-  FaBullhorn,
-  FaUsers, // Updated icon for "Manage User"
-} from "react-icons/fa"; // Import all React Icons
+  FaUsers,
+} from "react-icons/fa";
 import { useContext } from "react";
-import { ThemeContext } from "../context/ThemeContext"; // Import ThemeContext
+import { ThemeContext } from "../context/ThemeContext";
 
 const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const { theme } = useContext(ThemeContext); // Use ThemeContext
+  const { theme } = useContext(ThemeContext);
 
   // Mapping of paths to titles
   const pageTitles = {
@@ -24,7 +23,6 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
     "/admin/approved": "Approved Requests",
     "/admin/message": "Messages",
     "/admin/managetransaction": "Manage Transactions",
-    "/admin/promotion": "Post Promotion",
     "/admin/manageuser": "Manage User",
   };
 
@@ -36,8 +34,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
     { name: "Approved", icon: <FaCheckCircle size={24} />, path: "/admin/approved" },
     { name: "Message", icon: <FaCommentDots size={24} />, path: "/admin/message" },
     { name: "Manage Transactions", icon: <FaCreditCard size={24} />, path: "/admin/managetransaction" },
-    { name: "Manage User", icon: <FaUsers size={24} />, path: "/admin/manageuser" }, // Updated icon
-    { name: "Post Promotion", icon: <FaBullhorn size={24} />, path: "/admin/promotion" },
+    { name: "Manage User", icon: <FaUsers size={24} />, path: "/admin/manageuser" },
   ];
 
   return (

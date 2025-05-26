@@ -1,9 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { 
     getFirestore, 
-    initializeFirestore, 
-    memoryLocalCache, 
-    setLogLevel, 
     collection, 
     query, 
     where, 
@@ -18,7 +15,7 @@ import {
     deleteDoc, 
     limit,
     writeBatch,
-    getDoc // Add getDoc here
+    getDoc 
 } from "firebase/firestore";
 import { 
     getAuth, 
@@ -43,14 +40,8 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Set Firestore log level to silent to suppress connectivity errors
-setLogLevel("silent");
-
-// Initialize Firestore with memory cache and enable offline persistence
-const db = initializeFirestore(app, {
-    cache: memoryLocalCache(),
-    experimentalForceOwningTab: true
-});
+// Initialize Firestore with default settings (no need for initializeFirestore)
+const db = getFirestore(app); // Use getFirestore instead of initializeFirestore
 
 // Initialize Auth and Storage
 export const auth = getAuth(app);
@@ -69,7 +60,7 @@ export {
     getDocs, 
     updateDoc, 
     doc, 
-    deleteDoc, 
+    deleteDoc,  
     updatePassword, 
     signInWithEmailAndPassword, 
     orderBy, 
@@ -78,5 +69,5 @@ export {
     serverTimestamp,
     limit,
     writeBatch,
-    getDoc // Add getDoc here
+    getDoc 
 };

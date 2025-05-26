@@ -1,9 +1,9 @@
 "use client"
 
 import React, { useState, useEffect, useContext } from "react";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
 import { db } from "../../lib/firebase-client";
-import { Search } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 import { PuffLoader } from "react-spinners";
 import { ThemeContext } from "../../context/ThemeContext";
 import { ToastContainer, toast } from "react-toastify";
@@ -156,11 +156,44 @@ export default function TransactionManagementPage() {
     }
   };
 
-  // Handle detail button click
+  // Handle detail button click for movies
   const handleDetailClick = (movieId) => {
     setSelectedMovieId(movieId);
     setActiveTab("ticketHistory");
     setSearchQuery("");
+  };
+
+  // Handle padding action for withdrawals (toggle true/false)
+  const handlePaddingAction = async (withdrawalId, currentPadding) => {
+    setLoading(true);
+    try {
+      const withdrawalRef = doc(db, "ownerAmount", withdrawalId);
+      const newPadding = !currentPadding; // Toggle padding value
+      await updateDoc(withdrawalRef, {
+        padding: newPadding,
+      });
+      // Update local state to reflect the change
+      setWithdrawals((prev) =>
+        prev.map((withdrawal) =>
+          withdrawal.id === withdrawalId
+            ? { ...withdrawal, padding: newPadding }
+            : withdrawal
+        )
+      );
+      setFilteredWithdrawals((prev) =>
+        prev.map((withdrawal) =>
+          withdrawal.id === withdrawalId
+            ? { ...withdrawal, padding: newPadding }
+            : withdrawal
+        )
+      );
+      toast.success(`Padding ${newPadding ? "applied" : "removed"} successfully!`);
+    } catch (error) {
+      console.error("Error toggling padding:", error);
+      toast.error("Failed to toggle padding!");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Handle back to movies tab
@@ -396,32 +429,39 @@ export default function TransactionManagementPage() {
                   ) : (
                     <>
                       <th
-                        className={`px-6 py-3 text-left text-sm font-medium ${
+                        className={`px-8 py-4 text-left text-sm font-medium ${
                           theme === "light" ? "text-gray-700" : "text-gray-300"
                         } border ${theme === "light" ? "border-gray-200" : "border-gray-600"}`}
                       >
                         Created At
                       </th>
                       <th
-                        className={`px-6 py-3 text-left text-sm font-medium ${
+                        className={`px-8 py-4 text-left text-sm font-medium ${
                           theme === "light" ? "text-gray-700" : "text-gray-300"
                         } border ${theme === "light" ? "border-gray-200" : "border-gray-600"}`}
                       >
                         Last Updated
                       </th>
                       <th
-                        className={`px-6 py-3 text-left text-sm font-medium ${
+                        className={`px-8 py-4 text-left text-sm font-medium ${
                           theme === "light" ? "text-gray-700" : "text-gray-300"
                         } border ${theme === "light" ? "border-gray-200" : "border-gray-600"}`}
                       >
                         Movie Email
                       </th>
                       <th
-                        className={`px-6 py-3 text-left text-sm font-medium ${
+                        className={`px-8 py-4 text-left text-sm font-medium ${
                           theme === "light" ? "text-gray-700" : "text-gray-300"
                         } border ${theme === "light" ? "border-gray-200" : "border-gray-600"}`}
                       >
                         Total Amount
+                      </th>
+                      <th
+                        className={`px-8 py-4 text-left text-sm font-medium ${
+                          theme === "light" ? "text-gray-700" : "text-gray-300"
+                        } border ${theme === "light" ? "border-gray-200" : "border-gray-600"}`}
+                      >
+                        Actions
                       </th>
                     </>
                   )}
@@ -551,32 +591,54 @@ export default function TransactionManagementPage() {
                     ) : (
                       <>
                         <td
-                          className={`px-6 py-4 text-sm ${
+                          className={`px-8 py-5 text-sm ${
                             theme === "light" ? "text-gray-900" : "text-white"
                           } border ${theme === "light" ? "border-gray-200" : "border-gray-600"}`}
                         >
                           {formatTimestamp(item.createdAt)}
                         </td>
                         <td
-                          className={`px-6 py-4 text-sm ${
+                          className={`px-8 py-5 text-sm ${
                             theme === "light" ? "text-gray-900" : "text-white"
                           } border ${theme === "light" ? "border-gray-200" : "border-gray-600"}`}
                         >
                           {formatTimestamp(item.lastUpdated)}
                         </td>
                         <td
-                          className={`px-6 py-4 text-sm ${
+                          className={`px-8 py-5 text-sm ${
                             theme === "light" ? "text-gray-900" : "text-white"
                           } border ${theme === "light" ? "border-gray-200" : "border-gray-600"}`}
                         >
                           {item.movieEmail || "N/A"}
                         </td>
                         <td
-                          className={`px-6 py-4 text-sm ${
+                          className={`px-8 py-5 text-sm ${
                             theme === "light" ? "text-gray-900" : "text-white"
                           } border ${theme === "light" ? "border-gray-200" : "border-gray-600"}`}
                         >
                           {item.totalAmount != null ? item.totalAmount : "N/A"}
+                        </td>
+                        <td
+                          className={`px-8 py-5 text-sm ${
+                            theme === "light" ? "text-gray-900" : "text-white"
+                          } border ${theme === "light" ? "border-gray-200" : "border-gray-600"}`}
+                        >
+                          <button
+                            onClick={() => handlePaddingAction(item.id, item.padding)}
+                            className={`flex items-center justify-center px-4 py-2 rounded ${
+                              item.padding === true
+                                ? theme === "light"
+                                  ? "bg-red-600 text-white hover:bg-red-700"
+                                  : "bg-red-500 text-white hover:bg-red-600"
+                                : theme === "light"
+                                ? "bg-blue-600 text-white hover:bg-blue-700"
+                                : "bg-blue-500 text-white hover:bg-blue-600"
+                            } transition-colors`}
+                            title={item.padding === true ? "Remove Padding" : "Add Padding"}
+                          >
+                            <Plus size={16} className="mr-2" />
+                            {item.padding === true ? "Remove Padding" : "Add Padding"}
+                          </button>
                         </td>
                       </>
                     )}

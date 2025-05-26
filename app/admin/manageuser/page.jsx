@@ -117,7 +117,7 @@ export default function UserManagementPage() {
     } catch (error) {
       console.error("Error fetching admin status:", error);
       toast.error("Failed to load user permissions!");
-      setUserStatus(0); // Fallback to show Super Admin tab on error
+      setUserStatus(0); // Fallback to show Sub Admin tab on error
     } finally {
       setIsUserLoading(false);
     }
@@ -189,7 +189,7 @@ export default function UserManagementPage() {
     }
   };
 
-  // Fetch super admins from Firestore where status == 1
+  // Fetch sub admins from Firestore where status == 1
   const fetchSuperAdmins = async () => {
     setLoading(true);
     try {
@@ -207,8 +207,8 @@ export default function UserManagementPage() {
       setSuperAdmins(superAdminsData);
       setFilteredSuperAdmins(superAdminsData);
     } catch (error) {
-      console.error("Error fetching super admins:", error);
-      toast.error("Error fetching super admins!");
+      console.error("Error fetching sub admins:", error);
+      toast.error("Error fetching sub admins!");
     } finally {
       setLoading(false);
     }
@@ -346,9 +346,9 @@ export default function UserManagementPage() {
     const activeSuperAdmins = superAdmins.filter((admin) => admin.status === "Active").length;
     const passiveOwners = owners.filter((owner) => owner.status === "Passive").length;
     const passiveAppUsers = appUsers.filter((user) => user.status === "Passive").length;
-    const passiveSuperAdmins = 0; // No passive super admins since status == 1 means Active
+    const passiveSuperAdmins = 0; // No passive sub admins since status == 1 means Active
     const pendingOwners = owners.filter((owner) => owner.pending).length;
-    const pendingAppUsers = appUsers.filter((user) => user.pending).length; // Fixed: Changed 'owner' to 'user'
+    const pendingAppUsers = appUsers.filter((user) => user.pending).length;
     const pendingSuperAdmins = superAdmins.filter((admin) => admin.pending).length;
 
     return {
@@ -374,12 +374,12 @@ export default function UserManagementPage() {
     labels: [
       "Active Owners",
       "Active App Users",
-      "Active Super Admins",
+      "Active Sub Admins",
       "Passive Owners",
       "Passive App Users",
       "Pending Owners",
       "Pending App Users",
-      "Pending Super Admins",
+      "Pending Sub Admins",
     ],
     datasets: [
       {
@@ -502,7 +502,7 @@ export default function UserManagementPage() {
                   : "text-gray-400 hover:text-gray-200"
               }`}
             >
-              Super Admin
+              Sub Admin
               {activeTab === "superadmin" && (
                 <span className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600"></span>
               )}
@@ -614,7 +614,7 @@ export default function UserManagementPage() {
                       theme === "light" ? "text-gray-700" : "text-gray-300"
                     }`}
                   >
-                    Total Super Admins: {statistics.totalSuperAdmins}
+                    Total Sub Admins: {statistics.totalSuperAdmins}
                   </p>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -644,7 +644,7 @@ export default function UserManagementPage() {
                       theme === "light" ? "text-gray-700" : "text-gray-300"
                     }`}
                   >
-                    Active Super Admins: {statistics.activeSuperAdmins}
+                    Active Sub Admins: {statistics.activeSuperAdmins}
                   </p>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -694,7 +694,7 @@ export default function UserManagementPage() {
                       theme === "light" ? "text-gray-700" : "text-gray-300"
                     }`}
                   >
-                    Pending Super Admins: {statistics.pendingSuperAdmins}
+                    Pending Sub Admins: {statistics.pendingSuperAdmins}
                   </p>
                 </div>
               </div>
@@ -703,7 +703,7 @@ export default function UserManagementPage() {
         </div>
       )}
 
-      {/* Table for Owners, Users, and Super Admins */}
+      {/* Table for Owners, Users, and Sub Admins */}
       {!loading && activeTab !== "statistics" && (
         <div
           className={`${

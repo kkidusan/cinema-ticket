@@ -1,44 +1,40 @@
+// app/Cards.tsx
 "use client";
 import { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/navigation";
 import { collection, onSnapshot } from "firebase/firestore";
-import { db } from "../lib/firebase-client"; // Adjust the path as needed
+import { db } from "../lib/firebase-client"; // Update to new path
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { motion } from "framer-motion"; // Import Framer Motion
-import { ThemeContext } from "../context/ThemeContext"; // Import ThemeContext
+import { motion } from "framer-motion";
+import { ThemeContext } from "../context/ThemeContext";
 
 const Cards = () => {
   const router = useRouter();
-  const { theme } = useContext(ThemeContext); // Use ThemeContext
-  const [ownersData, setOwnersData] = useState([]); // For chart data
-  const [totalOwners, setTotalOwners] = useState(0); // For total owners count
+  const { theme } = useContext(ThemeContext);
+  const [ownersData, setOwnersData] = useState([]);
+  const [totalOwners, setTotalOwners] = useState(0);
 
-  // Fetch owners data from Firestore in real-time
   useEffect(() => {
     const ownersRef = collection(db, "owner");
 
-    // Set up a real-time listener for all owners
     const unsubscribe = onSnapshot(ownersRef, (querySnapshot) => {
       const owners = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
 
-      // Count approved and not approved owners
       const approvedCount = owners.filter((owner) => owner.approved).length;
       const notApprovedCount = owners.filter((owner) => !owner.approved).length;
 
-      // Prepare data for the bar chart
       const chartData = [
         { name: "Approved", count: approvedCount },
         { name: "Not Approved", count: notApprovedCount },
       ];
 
       setOwnersData(chartData);
-      setTotalOwners(owners.length); // Set total owners count
+      setTotalOwners(owners.length);
     });
 
-    // Clean up the listener when the component unmounts
     return () => unsubscribe();
   }, []);
 
@@ -71,7 +67,6 @@ const Cards = () => {
 
   return (
     <div className={`min-h-screen ${theme === "light" ? "bg-gray-100" : "bg-gray-900"} p-4`}>
-      {/* Cards Section */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
         {cards.map((card, index) => (
           <motion.div
@@ -98,7 +93,6 @@ const Cards = () => {
         ))}
       </div>
 
-      {/* Bar Chart Section */}
       <div className={`${theme === "light" ? "bg-white" : "bg-gray-800"} shadow-lg rounded-lg p-6`}>
         <h2 className={`text-xl font-semibold ${theme === "light" ? "text-gray-900" : "text-white"} mb-4`}>
           Owner Approval Status
@@ -124,14 +118,14 @@ const Cards = () => {
               <Legend />
               <Bar
                 dataKey="count"
-                fill="url(#colorGradient)" // Use gradient for the bar
-                radius={[5, 5, 0, 0]} // Rounded corners for bars
-                barSize={40} // Adjust bar width
+                fill="url(#colorGradient)"
+                radius={[5, 5, 0, 0]}
+                barSize={40}
               />
               <defs>
                 <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#4f46e5" /> {/* Start color */}
-                  <stop offset="100%" stopColor="#818cf8" /> {/* End color */}
+                  <stop offset="0%" stopColor="#4f46e5" />
+                  <stop offset="100%" stopColor="#818cf8" />
                 </linearGradient>
               </defs>
             </BarChart>
@@ -139,7 +133,6 @@ const Cards = () => {
         </div>
       </div>
 
-      {/* Additional Statistics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
         <div className={`${theme === "light" ? "bg-white" : "bg-gray-800"} shadow-lg rounded-lg p-4 text-center hover:shadow-xl transition-shadow`}>
           <h3 className={`text-lg font-semibold ${theme === "light" ? "text-gray-900" : "text-white"}`}>

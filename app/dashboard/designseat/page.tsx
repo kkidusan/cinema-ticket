@@ -4,7 +4,7 @@ import React, { useState, useEffect, useContext, useRef, useCallback, useMemo } 
 import { db } from "../../lib/firebase-client";
 import { collection, addDoc, getDocs, query, where, updateDoc, doc, Timestamp, onSnapshot } from "firebase/firestore";
 import { PuffLoader } from "react-spinners";
-import { Armchair, Save, Download, RotateCcw } from "lucide-react";
+import { Armchair, RotateCcw, Download, ArrowLeft } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { ThemeContext } from "../../context/ThemeContext";
@@ -203,16 +203,13 @@ export default function CinemaSeatArrangement() {
           id: querySnapshot.docs[0].id,
           ...querySnapshot.docs[0].data(),
         } as Arrangement;
-        // Ensure seats have reserved property
         arrangement.seats = arrangement.seats.map(seat => ({
           ...seat,
           reserved: seat.reserved ?? false,
         }));
-        // Verify reservedSeatsCount
         const calculatedReservedCount = arrangement.seats.filter(seat => seat.reserved).length;
         arrangement.reservedSeatsCount = arrangement.reservedSeatsCount ?? calculatedReservedCount;
         setSavedArrangement(arrangement);
-        // Automatically load the fetched arrangement
         loadArrangement(arrangement);
       }
     } catch (error: any) {
@@ -361,7 +358,6 @@ export default function CinemaSeatArrangement() {
     );
     setSeats(updatedSeats);
     
-    // Update database with new reserved status
     if (savedArrangement) {
       await updateReservedSeatsCount(updatedSeats);
     }
@@ -436,8 +432,8 @@ export default function CinemaSeatArrangement() {
     };
   }, [draggingId, handleMouseMove, handleMouseUp]);
 
-  // Save arrangement
-  const saveArrangement = useCallback(async () => {
+  // Apply arrangement
+  const applyArrangement = useCallback(async () => {
     if (!validateForm()) return;
     setIsLoading(true);
     try {
@@ -461,10 +457,9 @@ export default function CinemaSeatArrangement() {
         const existingData = querySnapshot.docs[0].data();
         arrangement.createdAt = existingData.createdAt || Timestamp.now();
         const docRef = doc(db, "seatArrangements", docId);
-        // Type assertion to satisfy Firestore's updateDoc
         await updateDoc(docRef, arrangement as { [key: string]: any });
         setSavedArrangement({ id: docId, ...arrangement });
-        toast.success("Arrangement updated successfully!", {
+        toast.success("Arrangement applied successfully!", {
           position: "bottom-right",
           autoClose: 3000,
           hideProgressBar: false,
@@ -476,7 +471,7 @@ export default function CinemaSeatArrangement() {
       } else {
         const docRef = await addDoc(collection(db, "seatArrangements"), arrangement);
         setSavedArrangement({ id: docRef.id, ...arrangement });
-        toast.success("Arrangement saved successfully!", {
+        toast.success("Arrangement applied successfully!", {
           position: "bottom-right",
           autoClose: 3000,
           hideProgressBar: false,
@@ -486,19 +481,8 @@ export default function CinemaSeatArrangement() {
           theme: theme === "light" ? "light" : "dark",
         });
       }
-
-      const from = searchParams.get("from");
-      if (from === "videoUploadDetail") {
-        const savedFormData = localStorage.getItem("videoUploadFormData");
-        if (savedFormData) {
-          localStorage.setItem("videoUploadFormData", savedFormData);
-        }
-        router.push("/dashboard/videoUploadDetail?from=designseat");
-      } else {
-        router.push("/dashboard");
-      }
     } catch (error: any) {
-      toast.error("Failed to save arrangement.", {
+      toast.error("Failed to apply arrangement.", {
         position: "bottom-right",
         autoClose: 3000,
         hideProgressBar: false,
@@ -510,20 +494,7 @@ export default function CinemaSeatArrangement() {
     } finally {
       setIsLoading(false);
     }
-  }, [validateForm, totalSeats, layoutType, seats, userEmail, inputRows, inputCols, searchParams, router, theme]);
-
-  // Export to JSON
-  const exportToJson = useCallback(() => {
-    const reservedCount = seats.filter(seat => seat.reserved).length;
-    const data = { totalSeats, layoutType, seats, rows: inputRows, cols: inputCols, reservedSeatsCount: reservedCount };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "seat_arrangement.json";
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [totalSeats, layoutType, seats, inputRows, inputCols]);
+  }, [validateForm, totalSeats, layoutType, seats, userEmail, inputRows, inputCols, theme]);
 
   // Handle input changes
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -599,7 +570,7 @@ export default function CinemaSeatArrangement() {
   // Loading or authentication failure state
   if (isLoadingAuth || !isAuthenticated || userRole !== "owner") {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${theme === "light" ? "bg-zinc-100" : "bg-zinc-900"}`}>
+      <div className={theme === "light" ? "min-h-screen flex items-center justify-center bg-zinc-100" : "min-h-screen flex items-center justify-center bg-zinc-900"}>
         <motion.div
           className="flex flex-col items-center"
           initial={{ opacity: 0, y: 20 }}
@@ -608,7 +579,7 @@ export default function CinemaSeatArrangement() {
         >
           <PuffLoader color={theme === "light" ? "#3b82f6" : "#FFFFFF"} size={100} />
           <motion.p
-            className={`mt-4 text-2xl font-bold ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}
+            className={theme === "light" ? "mt-4 text-2xl font-bold text-zinc-700" : "mt-4 text-2xl font-bold text-zinc-300"}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5, duration: 0.5 }}
@@ -634,7 +605,7 @@ export default function CinemaSeatArrangement() {
 
   // Conditional rendering based on pending status
   return (
-    <div className={`min-h-screen flex flex-col ${theme === "light" ? "bg-zinc-100" : "bg-zinc-900"}`}>
+    <div className={theme === "light" ? "min-h-screen flex flex-col bg-zinc-100" : "min-h-screen flex flex-col bg-zinc-900"}>
       <ToastContainer
         position="bottom-right"
         autoClose={3000}
@@ -648,7 +619,7 @@ export default function CinemaSeatArrangement() {
         theme={theme === "light" ? "light" : "dark"}
       />
       {isPending === null ? (
-        <div className={`min-h-screen flex items-center justify-center ${theme === "light" ? "bg-zinc-100" : "bg-zinc-900"}`}>
+        <div className={theme === "light" ? "min-h-screen flex items-center justify-center bg-zinc-100" : "min-h-screen flex items-center justify-center bg-zinc-900"}>
           <motion.div
             className="flex flex-col items-center"
             initial={{ opacity: 0, y: 20 }}
@@ -657,7 +628,7 @@ export default function CinemaSeatArrangement() {
           >
             <PuffLoader color={theme === "light" ? "#3b82f6" : "#FFFFFF"} size={100} />
             <motion.p
-              className={`mt-4 text-2xl font-bold ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}
+              className={theme === "light" ? "mt-4 text-2xl font-bold text-zinc-700" : "mt-4 text-2xl font-bold text-zinc-300"}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5, duration: 0.5 }}
@@ -667,7 +638,7 @@ export default function CinemaSeatArrangement() {
           </motion.div>
         </div>
       ) : isPending === true ? (
-        <div className={`min-h-screen flex items-center justify-center ${theme === "light" ? "bg-zinc-100" : "bg-zinc-900"}`}>
+        <div className={theme === "light" ? "min-h-screen flex items-center justify-center bg-zinc-100" : "min-h-screen flex items-center justify-center bg-zinc-900"}>
           <motion.div
             className="text-center px-4"
             initial={{ opacity: 0, y: -50 }}
@@ -683,7 +654,7 @@ export default function CinemaSeatArrangement() {
               Request Pending
             </motion.h1>
             <motion.p
-              className={`mt-4 text-lg sm:text-xl ${theme === "light" ? "text-gray-700" : "text-gray-300"}`}
+              className={theme === "light" ? "mt-4 text-lg sm:text-xl text-gray-700" : "mt-4 text-lg sm:text-xl text-gray-300"}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 1, duration: 0.8 }}
@@ -699,27 +670,66 @@ export default function CinemaSeatArrangement() {
               <div className="flex justify-center">
                 <div className="w-16 h-16 sm:w-24 sm:h-24 border-4 border-purple-500 rounded-full animate-spin border-t-transparent"></div>
               </div>
-              <p className={`mt-4 ${theme === "light" ? "text-gray-600" : "text-gray-400"} text-sm sm:text-base`}>
+              <p className={theme === "light" ? "mt-4 text-gray-600 text-sm sm:text-base" : "mt-4 text-gray-400 text-sm sm:text-base"}>
                 We appreciate your patience!
               </p>
             </motion.div>
           </motion.div>
         </div>
       ) : (
-        <div className={`min-h-screen p-4 sm:p-6 ${theme === "light" ? "bg-gradient-to-br from-indigo-50 to-purple-50" : "bg-gradient-to-br from-gray-900 to-indigo-900"} flex items-center justify-center`}>
+        <div className={theme === "light" ? "min-h-screen p-4 sm:p-6 bg-gradient-to-br from-indigo-50 to-purple-50 flex flex-col" : "min-h-screen p-4 sm:p-6 bg-gradient-to-br from-gray-900 to-indigo-900 flex flex-col"}>
+          {/* Navigation Bar */}
+          <motion.nav
+            className={theme === "light" ? "w-full max-w-5xl mx-auto mb-6 p-4 rounded-lg shadow-md bg-white" : "w-full max-w-5xl mx-auto mb-6 p-4 rounded-lg shadow-md bg-gray-800"}
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <div className="flex items-center gap-4">
+              <motion.button
+                onClick={handleBack}
+                className={theme === "light" ? "flex items-center gap-2 px-4 py-2 rounded-lg shadow-md transition-colors bg-gradient-to-r from-gray-600 to-gray-700 text-white hover:from-gray-700 hover:to-gray-800" : "flex items-center gap-2 px-4 py-2 rounded-lg shadow-md transition-colors bg-gradient-to-r from-gray-700 to-gray-800 text-white hover:from-gray-800 hover:to-gray-900"}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <ArrowLeft className="h-5 w-5" />
+                Back
+              </motion.button>
+              <motion.button
+                onClick={applyArrangement}
+                disabled={isLoading}
+                className={isLoading ? "flex items-center gap-2 px-4 py-2 rounded-lg shadow-md transition-colors bg-indigo-400 cursor-not-allowed" : theme === "light" ? "flex items-center gap-2 px-4 py-2 rounded-lg shadow-md transition-colors bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700" : "flex items-center gap-2 px-4 py-2 rounded-lg shadow-md transition-colors bg-gradient-to-r from-indigo-700 to-purple-700 text-white hover:from-indigo-800 hover:to-purple-800"}
+                whileHover={{ scale: isLoading ? 1 : 1.05 }}
+                whileTap={{ scale: isLoading ? 1 : 0.95 }}
+              >
+                {isLoading ? (
+                  <>
+                    <PuffLoader className="h-5 w-5 animate-spin" size={20} color="#FFFFFF" />
+                    Applying...
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-5 w-5" />
+                    Apply
+                  </>
+                )}
+              </motion.button>
+            </div>
+          </motion.nav>
+
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5, type: "spring" }}
-            className={`w-full max-w-5xl ${theme === "light" ? "bg-white" : "bg-gray-800"} rounded-2xl shadow-2xl p-6 sm:p-8`}
+            className={theme === "light" ? "w-full max-w-5xl mx-auto bg-white rounded-2xl shadow-2xl p-6 sm:p-8" : "w-full max-w-5xl mx-auto bg-gray-800 rounded-2xl shadow-2xl p-6 sm:p-8"}
           >
-            <h1 className={`text-3xl font-bold mb-6 ${theme === "light" ? "text-indigo-900" : "text-white"}`}>
+            <h1 className={theme === "light" ? "text-3xl font-bold mb-6 text-indigo-900" : "text-3xl font-bold mb-6 text-white"}>
               Cinema Seat Arrangement
             </h1>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               <div>
-                <label className={`block text-sm font-medium mb-2 ${theme === "light" ? "text-indigo-700" : "text-indigo-300"}`}>
+                <label className={theme === "light" ? "block text-sm font-medium mb-2 text-indigo-700" : "block text-sm font-medium mb-2 text-indigo-300"}>
                   Total Seats
                 </label>
                 <input
@@ -729,32 +739,20 @@ export default function CinemaSeatArrangement() {
                   onChange={handleInputChange}
                   min="0"
                   max="500"
-                  className={`w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 transition-all duration-200 ${
-                    errors.totalSeats
-                      ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
-                      : theme === "light"
-                      ? "border border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 bg-white"
-                      : "border border-gray-600 focus:border-indigo-500 focus:ring-indigo-500 bg-gray-700"
-                  }`}
+                  className={errors.totalSeats ? "w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 transition-all duration-200 border-2 border-red-500 focus:border-red-500 focus:ring-red-500" : theme === "light" ? "w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 transition-all duration-200 border border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 bg-white" : "w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 transition-all duration-200 border border-gray-600 focus:border-indigo-500 focus:ring-indigo-500 bg-gray-700"}
                 />
                 {errors.totalSeats && <p className="mt-2 text-sm text-red-500">{errors.totalSeats}</p>}
               </div>
 
               <div>
-                <label className={`block text-sm font-medium mb-2 ${theme === "light" ? "text-indigo-700" : "text-indigo-300"}`}>
+                <label className={theme === "light" ? "block text-sm font-medium mb-2 text-indigo-700" : "block text-sm font-medium mb-2 text-indigo-300"}>
                   Layout Type
                 </label>
                 <select
                   name="layoutType"
                   value={layoutType}
                   onChange={handleInputChange}
-                  className={`w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 transition-all duration-200 ${
-                    errors.layoutType
-                      ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
-                      : theme === "light"
-                      ? "border border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 bg-white"
-                      : "border border-gray-600 focus:border-indigo-500 focus:ring-indigo-500 bg-gray-700"
-                  }`}
+                  className={errors.layoutType ? "w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 transition-all duration-200 border-2 border-red-500 focus:border-red-500 focus:ring-red-500" : theme === "light" ? "w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 transition-all duration-200 border border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 bg-white" : "w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 transition-all duration-200 border border-gray-600 focus:border-indigo-500 focus:ring-indigo-500 bg-gray-700"}
                 >
                   <option value="custom">Custom</option>
                   <option value="rows">Rows</option>
@@ -766,7 +764,7 @@ export default function CinemaSeatArrangement() {
               {(layoutType === "rows" || layoutType === "grid") && (
                 <>
                   <div>
-                    <label className={`block text-sm font-medium mb-2 ${theme === "light" ? "text-indigo-700" : "text-indigo-300"}`}>
+                    <label className={theme === "light" ? "block text-sm font-medium mb-2 text-indigo-700" : "block text-sm font-medium mb-2 text-indigo-300"}>
                       Rows
                     </label>
                     <input
@@ -775,18 +773,12 @@ export default function CinemaSeatArrangement() {
                       value={inputRows}
                       onChange={handleInputChange}
                       min="0"
-                      className={`w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 transition-all duration-200 ${
-                        errors.rows
-                          ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
-                          : theme === "light"
-                          ? "border border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 bg-white"
-                          : "border border-gray-600 focus:border-indigo-500 focus:ring-indigo-500 bg-gray-700"
-                      }`}
+                      className={errors.rows ? "w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 transition-all duration-200 border-2 border-red-500 focus:border-red-500 focus:ring-red-500" : theme === "light" ? "w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 transition-all duration-200 border border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 bg-white" : "w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 transition-all duration-200 border border-gray-600 focus:border-indigo-500 focus:ring-indigo-500 bg-gray-700"}
                     />
                     {errors.rows && <p className="mt-2 text-sm text-red-500">{errors.rows}</p>}
                   </div>
                   <div>
-                    <label className={`block text-sm font-medium mb-2 ${theme === "light" ? "text-indigo-700" : "text-indigo-300"}`}>
+                    <label className={theme === "light" ? "block text-sm font-medium mb-2 text-indigo-700" : "block text-sm font-medium mb-2 text-indigo-300"}>
                       Columns
                     </label>
                     <input
@@ -795,60 +787,12 @@ export default function CinemaSeatArrangement() {
                       value={inputCols}
                       onChange={handleInputChange}
                       min="0"
-                      className={`w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 transition-all duration-200 ${
-                        errors.cols
-                          ? "border-2 border-red-500 focus:border-red-500 focus:ring-red-500"
-                          : theme === "light"
-                          ? "border border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 bg-white"
-                          : "border border-gray-600 focus:border-indigo-500 focus:ring-indigo-500 bg-gray-700"
-                      }`}
+                      className={errors.cols ? "w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 transition-all duration-200 border-2 border-red-500 focus:border-red-500 focus:ring-red-500" : theme === "light" ? "w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 transition-all duration-200 border border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 bg-white" : "w-full px-4 py-3 rounded-lg shadow-sm focus:outline-none focus:ring-2 transition-all duration-200 border border-gray-600 focus:border-indigo-500 focus:ring-indigo-500 bg-gray-700"}
                     />
                     {errors.cols && <p className="mt-2 text-sm text-red-500">{errors.cols}</p>}
                   </div>
                 </>
               )}
-
-              <div className="flex items-end gap-4 md:col-span-3">
-                <motion.button
-                  onClick={saveArrangement}
-                  disabled={isLoading}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg shadow-md transition-colors ${
-                    isLoading
-                      ? "bg-indigo-400 cursor-not-allowed"
-                      : theme === "light"
-                      ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700"
-                      : "bg-gradient-to-r from-indigo-700 to-purple-700 text-white hover:from-indigo-800 hover:to-purple-800"
-                  }`}
-                  whileHover={{ scale: isLoading ? 1 : 1.05 }}
-                  whileTap={{ scale: isLoading ? 1 : 0.95 }}
-                >
-                  {isLoading ? (
-                    <>
-                      <PuffLoader className="h-5 w-5 animate-spin" size={20} color="#FFFFFF" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-5 w-5" />
-                      Save
-                    </>
-                  )}
-                </motion.button>
-
-                <motion.button
-                  onClick={exportToJson}
-                  className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg shadow-md transition-colors ${
-                    theme === "light"
-                      ? "bg-gradient-to-r from-gray-600 to-gray-700 text-white hover:from-gray-700 hover:to-gray-800"
-                      : "bg-gradient-to-r from-gray-700 to-gray-800 text-white hover:from-gray-800 hover:to-gray-900"
-                  }`}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <Download className="h-5 w-5" />
-                  Export
-                </motion.button>
-              </div>
             </div>
 
             {errors.general && <p className="mb-4 text-sm text-red-500">{errors.general}</p>}
@@ -856,9 +800,7 @@ export default function CinemaSeatArrangement() {
             <div className="flex flex-col md:flex-row gap-6">
               <div
                 ref={containerRef}
-                className={`relative flex-1 border-2 rounded-lg overflow-auto ${
-                  theme === "light" ? "bg-gray-50 border-gray-300" : "bg-gray-700 border-gray-600"
-                }`}
+                className={theme === "light" ? "relative flex-1 border-2 rounded-lg overflow-auto bg-gray-50 border-gray-300" : "relative flex-1 border-2 rounded-lg overflow-auto bg-gray-700 border-gray-600"}
                 style={{
                   minHeight: `${rows * 80 + 160}px`,
                   background:
@@ -873,15 +815,7 @@ export default function CinemaSeatArrangement() {
                   seats.map((seat) => (
                     <motion.div
                       key={seat.id}
-                      className={`absolute flex items-center justify-center w-[60px] h-[60px] rounded-lg shadow-md cursor-move ${
-                        seat.reserved
-                          ? theme === "light"
-                            ? "bg-gradient-to-r from-red-400 to-red-500 text-white"
-                            : "bg-gradient-to-r from-red-600 to-red-700 text-white"
-                          : theme === "light"
-                          ? "bg-gradient-to-r from-blue-400 to-blue-500 text-white"
-                          : "bg-gradient-to-r from-blue-600 to-blue-700 text-white"
-                      }`}
+                      className={seat.reserved ? (theme === "light" ? "absolute flex items-center justify-center w-[60px] h-[60px] rounded-lg shadow-md cursor-move bg-gradient-to-r from-red-400 to-red-500 text-white" : "absolute flex items-center justify-center w-[60px] h-[60px] rounded-lg shadow-md cursor-move bg-gradient-to-r from-red-600 to-red-700 text-white") : (theme === "light" ? "absolute flex items-center justify-center w-[60px] h-[60px] rounded-lg shadow-md cursor-move bg-gradient-to-r from-blue-400 to-blue-500 text-white" : "absolute flex items-center justify-center w-[60px] h-[60px] rounded-lg shadow-md cursor-move bg-gradient-to-r from-blue-600 to-blue-700 text-white")}
                       style={{ left: seat.x, top: seat.y }}
                       onMouseDown={(e) => handleMouseDown(seat.id, e)}
                       onClick={() => handleSeatClick(seat.id)}
@@ -902,9 +836,7 @@ export default function CinemaSeatArrangement() {
                         return (
                           <motion.div
                             key={`${row}-${col}`}
-                            className={`w-[60px] h-[60px] flex flex-col items-center justify-start ${
-                              seat ? "" : "bg-transparent"
-                            }`}
+                            className="w-[60px] h-[60px] flex flex-col items-center justify-start"
                             aria-label={seat ? `Seat ${seat.number}` : "Empty space"}
                             initial={{ opacity: 0, scale: 0.8 }}
                             animate={{ opacity: 1, scale: 1 }}
@@ -912,15 +844,7 @@ export default function CinemaSeatArrangement() {
                           >
                             {seat && (
                               <motion.div
-                                className={`w-[60px] h-[60px] rounded-lg flex items-center justify-center ${
-                                  seat.reserved
-                                    ? theme === "light"
-                                      ? "bg-gradient-to-r from-red-400 to-red-500 text-white"
-                                      : "bg-gradient-to-r from-red-600 to-red-700 text-white"
-                                    : theme === "light"
-                                      ? "bg-gradient-to-r from-blue-400 to-blue-500 text-white"
-                                      : "bg-gradient-to-r from-blue-600 to-blue-700 text-white"
-                                } shadow-md`}
+                                className={seat.reserved ? (theme === "light" ? "w-[60px] h-[60px] rounded-lg flex items-center justify-center bg-gradient-to-r from-red-400 to-red-500 text-white shadow-md" : "w-[60px] h-[60px] rounded-lg flex items-center justify-center bg-gradient-to-r from-red-600 to-red-700 text-white shadow-md") : (theme === "light" ? "w-[60px] h-[60px] rounded-lg flex items-center justify-center bg-gradient-to-r from-blue-400 to-blue-500 text-white shadow-md" : "w-[60px] h-[60px] rounded-lg flex items-center justify-center bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md")}
                                 onClick={() => handleSeatClick(seat.id)}
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
@@ -939,23 +863,19 @@ export default function CinemaSeatArrangement() {
 
               {layoutType === "custom" && (
                 <div className="md:w-1/4 flex flex-col gap-4">
-                  <h2 className={`text-lg font-semibold ${theme === "light" ? "text-indigo-900" : "text-white"}`}>
+                  <h2 className={theme === "light" ? "text-lg font-semibold text-indigo-900" : "text-lg font-semibold text-white"}>
                     Seat Controls
                   </h2>
                   <motion.button
                     onClick={resetLayout}
-                    className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg shadow-md transition-colors ${
-                      theme === "light"
-                        ? "bg-gradient-to-r from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700"
-                        : "bg-gradient-to-r from-gray-700 to-gray-800 text-white hover:from-gray-800 hover:to-gray-900"
-                    }`}
+                    className={theme === "light" ? "flex items-center justify-center gap-2 px-4 py-2 rounded-lg shadow-md transition-colors bg-gradient-to-r from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700" : "flex items-center justify-center gap-2 px-4 py-2 rounded-lg shadow-md transition-colors bg-gradient-to-r from-gray-700 to-gray-800 text-white hover:from-gray-800 hover:to-gray-900"}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
                     <RotateCcw className="h-5 w-5" />
                     Reset Layout
                   </motion.button>
-                  <p className={`text-sm ${theme === "light" ? "text-indigo-600" : "text-indigo-400"}`}>
+                  <p className={theme === "light" ? "text-sm text-indigo-600" : "text-sm text-indigo-400"}>
                     Click and drag seats to reposition. Use arrow keys to move seats.
                   </p>
                 </div>
@@ -964,44 +884,40 @@ export default function CinemaSeatArrangement() {
 
             {savedArrangement && (
               <motion.div
-                className={`mt-6 p-6 rounded-lg ${theme === "light" ? "bg-white" : "bg-gray-800"} shadow-md`}
+                className={theme === "light" ? "mt-6 p-6 rounded-lg bg-white shadow-md" : "mt-6 p-6 rounded-lg bg-gray-800 shadow-md"}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5, duration: 0.4 }}
               >
-                <h3 className={`text-xl font-semibold ${theme === "light" ? "text-indigo-900" : "text-white"} mb-4`}>
+                <h3 className={theme === "light" ? "text-xl font-semibold text-indigo-900 mb-4" : "text-xl font-semibold text-white mb-4"}>
                   Your Saved Arrangement
                 </h3>
-                <div className={`p-4 rounded-lg ${theme === "light" ? "bg-gray-50" : "bg-gray-700"} flex justify-between items-center`}>
+                <div className={theme === "light" ? "p-4 rounded-lg bg-gray-50 flex justify-between items-center" : "p-4 rounded-lg bg-gray-700 flex justify-between items-center"}>
                   <div>
-                    <p className={`font-medium ${theme === "light" ? "text-indigo-900" : "text-white"}`}>
+                    <p className={theme === "light" ? "font-medium text-indigo-900" : "font-medium text-white"}>
                       {savedArrangement.totalSeats} Seats ({savedArrangement.layoutType})
                     </p>
-                    <p className={`text-sm ${theme === "light" ? "text-indigo-600" : "text-indigo-400"}`}>
+                    <p className={theme === "light" ? "text-sm text-indigo-600" : "text-sm text-indigo-400"}>
                       Reserved Seats: {savedArrangement.reservedSeatsCount || 0}
                     </p>
                     {savedArrangement.rows && savedArrangement.cols && (
-                      <p className={`text-sm ${theme === "light" ? "text-indigo-600" : "text-indigo-400"}`}>
+                      <p className={theme === "light" ? "text-sm text-indigo-600" : "text-sm text-indigo-400"}>
                         Layout: {savedArrangement.rows} Rows x {savedArrangement.cols} Columns
                       </p>
                     )}
-                    <p className={`text-sm ${theme === "light" ? "text-indigo-600" : "text-indigo-400"}`}>
+                    <p className={theme === "light" ? "text-sm text-indigo-600" : "text-sm text-indigo-400"}>
                       Created:{" "}
                       {savedArrangement.createdAt instanceof Timestamp
                         ? savedArrangement.createdAt.toDate().toLocaleString()
                         : new Date(savedArrangement.createdAt).toLocaleString()}
                     </p>
-                    <p className={`text-sm ${theme === "light" ? "text-indigo-600" : "text-indigo-400"}`}>
+                    <p className={theme === "light" ? "text-sm text-indigo-600" : "text-sm text-indigo-400"}>
                       By: {savedArrangement.userEmail}
                     </p>
                   </div>
                   <motion.button
                     onClick={() => loadArrangement(savedArrangement)}
-                    className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg shadow-md transition-colors ${
-                      theme === "light"
-                        ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700"
-                        : "bg-gradient-to-r from-indigo-700 to-purple-700 text-white hover:from-indigo-800 hover:to-purple-800"
-                    }`}
+                    className={theme === "light" ? "flex items-center justify-center gap-2 px-4 py-2 rounded-lg shadow-md transition-colors bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700" : "flex items-center justify-center gap-2 px-4 py-2 rounded-lg shadow-md transition-colors bg-gradient-to-r from-indigo-700 to-purple-700 text-white hover:from-indigo-800 hover:to-purple-800"}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
@@ -1011,19 +927,6 @@ export default function CinemaSeatArrangement() {
                 </div>
               </motion.div>
             )}
-
-            <motion.button
-              onClick={handleBack}
-              className={`mt-6 flex items-center gap-2 px-4 py-3 rounded-lg shadow-md transition-colors ${
-                theme === "light"
-                  ? "bg-gradient-to-r from-gray-600 to-gray-700 text-white hover:from-gray-700 hover:to-gray-800"
-                  : "bg-gradient-to-r from-gray-700 to-gray-800 text-white hover:from-gray-800 hover:to-gray-900"
-              }`}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              Back to Dashboard
-            </motion.button>
           </motion.div>
         </div>
       )}

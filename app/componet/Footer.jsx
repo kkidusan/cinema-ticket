@@ -1,4 +1,4 @@
-import { FaFacebook, FaTwitter, FaLinkedin, FaGithub } from "react-icons/fa";
+import { FaFacebook, FaTwitter, FaTelegram, FaWhatsapp } from "react-icons/fa";
 
 const Footer = () => {
   return (
@@ -9,17 +9,37 @@ const Footer = () => {
         </div>
 
         <div className="flex space-x-4 mb-4 md:mb-0">
-          <a href="#" className="hover:text-blue-400 transition">
+          <a 
+            href="https://www.facebook.com" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="hover:text-blue-400 transition"
+          >
             <FaFacebook size={24} />
           </a>
-          <a href="#" className="hover:text-blue-300 transition">
+          <a 
+            href="https://www.twitter.com" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="hover:text-blue-300 transition"
+          >
             <FaTwitter size={24} />
           </a>
-          <a href="#" className="hover:text-blue-500 transition">
-            <FaLinkedin size={24} />
+          <a 
+            href="https://www.telegram.me" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="hover:text-blue-500 transition"
+          >
+            <FaTelegram size={24} />
           </a>
-          <a href="#" className="hover:text-gray-400 transition">
-            <FaGithub size={24} />
+          <a 
+            href="https://www.whatsapp.com" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="hover:text-green-400 transition"
+          >
+            <FaWhatsapp size={24} />
           </a>
         </div>
 
@@ -31,7 +51,7 @@ const Footer = () => {
       </div>
 
       <div className="text-center text-xs text-gray-400 mt-6">
-        &copy; {new Date().getFullYear()} Ethio cimema ticketing. All rights reserved.
+        © {new Date().getFullYear()} Ethio cinema ticketing. All rights reserved.
       </div>
     </footer>
   );

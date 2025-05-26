@@ -63,16 +63,17 @@ const ethMonths = [
   "Pagume",
 ];
 
-// Interface for Seat (matching CinemaSeatArrangement)
-interface Seat {
-  id: string;
-  number: number;
-  row: number;
-  col: number;
-  x?: number;
-  y?: number;
-  reserved: boolean;
-}
+// JSDoc for Seat (replacing TypeScript interface for JSX compatibility)
+/**
+ * @typedef {Object} Seat
+ * @property {string} id - The unique identifier for the seat
+ * @property {number} number - The seat number
+ * @property {number} row - The row number
+ * @property {number} col - The column number
+ * @property {number} [x] - Optional x-coordinate
+ * @property {number} [y] - Optional y-coordinate
+ * @property {boolean} reserved - Whether the seat is reserved
+ */
 
 // Memoized initial form data
 const getInitialFormData = () => ({
@@ -89,7 +90,7 @@ const getInitialFormData = () => ({
   poster: "",
   promotionVideo: "",
   movieID: "",
-  seats: [] as Seat[],
+  seats: [], // Array of Seat objects
 });
 
 // Tooltip Component
@@ -340,7 +341,7 @@ export default function VideoUploadForm() {
     mainCast: false,
   });
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
-  const [isPending, setIsPending] = useState<boolean | null>(null);
+  const [isPending, setIsPending] = useState(null);
 
   const generateMovieID = useCallback(() => {
     const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -926,8 +927,8 @@ export default function VideoUploadForm() {
                   ...prev,
                   availableSite: totalSeatsValue > 0 ? "" : (
                     <>
-                      No valid seat arrangement found.{" "}
-                      <a
+                      No valid seat arrangement found.{" "
+                      }<a
                         onClick={handleDesignSeats}
                         className={`text-sm font-medium cursor-pointer ${
                           theme === "light"
@@ -952,8 +953,8 @@ export default function VideoUploadForm() {
                   ...prev,
                   availableSite: (
                     <>
-                      No seat arrangement found.{" "}
-                      <a
+                      No seat arrangement found.{" "
+                      }<a
                         onClick={handleDesignSeats}
                         className={`text-sm font-medium cursor-pointer ${
                           theme === "light"
@@ -988,8 +989,8 @@ export default function VideoUploadForm() {
                 ...prev,
                 availableSite: (
                   <>
-                    Failed to load seat arrangement.{" "}
-                    <a
+                    Failed to load seat arrangement.{" "
+                    }<a
                       onClick={handleDesignSeats}
                       className={`text-sm font-medium cursor-pointer ${
                         theme === "light"
@@ -1177,14 +1178,13 @@ export default function VideoUploadForm() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, type: "spring" }}
+            transition={{ duration: 0.5, type: "spring", stiffness: 300 }}
+            whileHover={{ scale: 1.02 }}
             className={`w-full max-w-4xl ${
               theme === "light"
                 ? "bg-gradient-to-br from-blue-50 to-purple-50"
                 : "bg-gradient-to-br from-gray-800 to-gray-900"
-            } p-6 sm:p-8 rounded-2xl shadow-xl hover:shadow-Born transition-shadow`}
-            whileHover={{ scale: 1.02 }}
-            transition={{ type: "spring", stiffness: 300 }}
+            } p-6 sm:p-8 rounded-2xl shadow-xl hover:shadow-2xl`}
           >
             <div
               className={`${
@@ -1665,7 +1665,7 @@ export default function VideoUploadForm() {
                               theme === "light"
                                 ? "text-indigo-600 hover:text-indigo-800"
                                 : "text-indigo-400 hover:text-indigo-300"
-                              } underline transition-colors`}
+                            } underline transition-colors`}
                           >
                             Make Seat Arrangement
                           </a>
@@ -1743,7 +1743,7 @@ export default function VideoUploadForm() {
                           className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
                           xmlns="http://www.w3.org/2000/svg"
                           fill="none"
-                          viewBox="0 24 24"
+                          viewBox="0 0 24 24"
                         >
                           <circle
                             className="opacity-25"
@@ -1756,7 +1756,7 @@ export default function VideoUploadForm() {
                           <path
                             className="opacity-75"
                             fill="currentColor"
-                            d="M4 12a8 8 0 018-8VFILLM4 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                           ></path>
                         </svg>
                         Uploading...

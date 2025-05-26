@@ -14,7 +14,7 @@ export default function PortfolioPage() {
   const [userCount, setUserCount] = useState(0);
   const [ownerCount, setOwnerCount] = useState(0);
   const [transactionCount, setTransactionCount] = useState(0);
-  const [soldTicketsCount, setSoldTicketsCount] = useState(0); // New state for sold tickets
+  const [soldTicketsCount, setSoldTicketsCount] = useState(0);
   const [showContactCard, setShowContactCard] = useState(false);
   const context = useContext(ThemeContext);
 
@@ -163,33 +163,54 @@ export default function PortfolioPage() {
             <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <Phone className={`w-6 h-6 ${theme === "light" ? "text-yellow-500" : "text-yellow-400"}`} />
-                <p className={theme === "light" ? "text-zinc-700" : "text-zinc-300"}>
+                <a
+                  href="tel:+251123456789"
+                  className={`hover:underline ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}
+                >
                   Phone: +251-123-456-789
-                </p>
+                </a>
               </div>
               <div className="flex items-center gap-3">
                 <Mail className={`w-6 h-6 ${theme === "light" ? "text-yellow-500" : "text-yellow-400"}`} />
-                <p className={theme === "light" ? "text-zinc-700" : "text-zinc-300"}>
+                <a
+                  href="mailto:support@ethiocinema.com"
+                  className={`hover:underline ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}
+                >
                   Email: support@ethiocinema.com
-                </p>
+                </a>
               </div>
               <div className="flex items-center gap-3">
                 <Send className={`w-6 h-6 ${theme === "light" ? "text-yellow-500" : "text-yellow-400"}`} />
-                <p className={theme === "light" ? "text-zinc-700" : "text-zinc-300"}>
+                <a
+                  href="https://t.me/EthioCinema"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`hover:underline ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}
+                >
                   Telegram: @EthioCinema
-                </p>
+                </a>
               </div>
               <div className="flex items-center gap-3">
                 <Instagram className={`w-6 h-6 ${theme === "light" ? "text-yellow-500" : "text-yellow-400"}`} />
-                <p className={theme === "light" ? "text-zinc-700" : "text-zinc-300"}>
+                <a
+                  href="https://www.instagram.com/EthioCinemaOfficial"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`hover:underline ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}
+                >
                   Instagram: @EthioCinemaOfficial
-                </p>
+                </a>
               </div>
               <div className="flex items-center gap-3">
                 <Facebook className={`w-6 h-6 ${theme === "light" ? "text-yellow-500" : "text-yellow-400"}`} />
-                <p className={theme === "light" ? "text-zinc-700" : "text-zinc-300"}>
+                <a
+                  href="https://www.facebook.com/EthioCinema"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`hover:underline ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}
+                >
                   Facebook: EthioCinema
-                </p>
+                </a>
               </div>
             </div>
             <button
@@ -233,7 +254,7 @@ export default function PortfolioPage() {
             </Link>
             <button
               onClick={() => setShowContactCard(true)}
-              className={`flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg transition-all text-lg shadow-md`}
+              className={`flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg transition-all text-lg shadow-md`}
             >
               Contact Us <Phone className="w-5 h-5" />
             </button>

@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useContext, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import axios from "axios";
+import { useRouter } from "next/navigation";
 import {
   collection,
   query,
@@ -23,13 +22,50 @@ import {
   Eye,
   EyeOff,
   CheckCircle,
+  Mail,
+  User,
+  Loader2,
+  CreditCard,
+  X,
 } from "lucide-react";
 import { FaArrowLeft } from "react-icons/fa";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
-// Define interfaces for type safety
+// Encryption utilities
+const encoder = new TextEncoder();
+
+async function generateKey(): Promise<CryptoKey> {
+  return crypto.subtle.generateKey(
+    {
+      name: "AES-GCM",
+      length: 256,
+    },
+    true,
+    ["encrypt", "decrypt"]
+  );
+}
+
+async function encryptData(data: string, key: CryptoKey): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encodedData = encoder.encode(data);
+  const encrypted = await crypto.subtle.encrypt(
+    {
+      name: "AES-GCM",
+      iv,
+    },
+    key,
+    encodedData
+  );
+  const encryptedArray = new Uint8Array(encrypted);
+  const combined = new Uint8Array(iv.length + encryptedArray.length);
+  combined.set(iv);
+  combined.set(encryptedArray, iv.length);
+  return btoa(String.fromCharCode(...combined));
+}
+
+// Define interfaces
 interface Bank {
   code: string;
   name: string;
@@ -51,12 +87,31 @@ interface Transaction {
 }
 
 interface FormData {
-  amount: string;
-  currency: string;
-  account_number: string;
-  account_name: string;
-  bank_code: string;
-  isMobileMoney: boolean;
+  // For withdrawal
+  amount?: string;
+  currency?: string;
+  account_number?: string;
+  account_name?: string;
+  bank_code?: string;
+  isMobileMoney?: boolean;
+  // For deposit (PaymentForm)
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+}
+
+interface Errors {
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  amount?: string;
+}
+
+interface FinancePageProps {
+  isSidebarOpen: boolean;
+  toggleSidebar: () => void;
+  isCollapsed: boolean;
+  toggleCollapse: () => void;
 }
 
 const bankCodes: Bank[] = [
@@ -72,7 +127,7 @@ const generateReference = (): string => {
   return `txn-${timestamp}-${random}`;
 };
 
-// Utility function to check saleTicket and withdrawal amount against totalAmount
+// Utility function to check saleTicket and withdrawal amount
 const checkSaleTicket = async (
   userEmail: string,
   withdrawalAmount: number,
@@ -187,7 +242,7 @@ const checkSaleTicket = async (
   }
 };
 
-// Utility function to update balance in Firestore using a transaction
+// Utility function to update balance in Firestore
 const updateBalanceInFirestore = async (
   userEmail: string,
   withdrawalAmount: number,
@@ -263,12 +318,15 @@ const updateBalanceInFirestore = async (
   }
 };
 
-export default function FinancePage() {
+export default function FinancePage({
+  isSidebarOpen,
+  toggleSidebar,
+  isCollapsed,
+  toggleCollapse,
+}: FinancePageProps) {
   const { theme = "light" } = useContext(ThemeContext) || {};
-  const searchParams = useSearchParams();
   const router = useRouter();
-  const initialTab = searchParams.get("tab") || "withdraw";
-  const [activeTab, setActiveTab] = useState<string>(initialTab);
+  const [activeTab, setActiveTab] = useState<string>("withdraw");
   const [loading, setLoading] = useState<boolean>(true);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [totalBalance, setTotalBalance] = useState<number>(0);
@@ -280,14 +338,28 @@ export default function FinancePage() {
     account_name: "",
     bank_code: "",
     isMobileMoney: false,
+    email: "",
+    firstName: "",
+    lastName: "",
   });
   const [userEmail, setUserEmail] = useState<string>("");
   const [userRole, setUserRole] = useState<string>("");
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isPending, setIsPending] = useState<boolean>(false);
+  const [errors, setErrors] = useState<Errors>({});
+  const [error, setError] = useState<string>("");
+  const [encryptionKey, setEncryptionKey] = useState<CryptoKey | null>(null);
   const isTestMode = process.env.NEXT_PUBLIC_CHAPA_TEST_MODE === "true";
 
-  // Fetch user authentication and set up real-time pending status listener
+  // Compute content margin based on sidebar state
+  const contentMargin = isSidebarOpen ? (isCollapsed ? "lg:ml-24" : "lg:ml-64") : "ml-0";
+
+  // Initialize encryption key
+  useEffect(() => {
+    generateKey().then((key) => setEncryptionKey(key));
+  }, []);
+
+  // Fetch user authentication
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -315,6 +387,7 @@ export default function FinancePage() {
           setUserEmail(data.email);
           setUserRole(data.role);
           setIsAuthenticated(true);
+          setFormData((prev) => ({ ...prev, email: data.email }));
         } else {
           toast.error("User is not an owner.", {
             position: "bottom-right",
@@ -372,17 +445,6 @@ export default function FinancePage() {
 
     return () => unsubscribe();
   }, [isAuthenticated, userEmail, theme]);
-
-  // Handle tab navigation
-  useEffect(() => {
-    const tab = searchParams.get("tab") || "withdraw";
-    if (["withdraw", "deposit", "transaction"].includes(tab)) {
-      setActiveTab(tab);
-    } else {
-      setActiveTab("withdraw");
-      router.replace("/dashboard/finance?tab=withdraw");
-    }
-  }, [searchParams, router]);
 
   // Fetch total balance
   const fetchTotalBalance = useCallback(async () => {
@@ -492,6 +554,7 @@ export default function FinancePage() {
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    setErrors((prev) => ({ ...prev, [name]: undefined }));
   };
 
   const handleMobileMoneyToggle = () => {
@@ -503,7 +566,7 @@ export default function FinancePage() {
     }));
   };
 
-  const validateForm = (): boolean => {
+  const validateWithdrawalForm = (): boolean => {
     const amount = Number(formData.amount);
     if (!amount || amount <= 0) {
       toast.error("Please enter a valid amount greater than zero.", {
@@ -517,7 +580,7 @@ export default function FinancePage() {
       });
       return false;
     }
-    if (activeTab === "withdraw" && amount > totalBalance) {
+    if (amount > totalBalance) {
       toast.error(
         `Amount cannot exceed your balance of ${totalBalance} ETB.`,
         {
@@ -532,7 +595,7 @@ export default function FinancePage() {
       );
       return false;
     }
-    if (!formData.account_number.trim()) {
+    if (!formData.account_number?.trim()) {
       toast.error("Please enter a valid account number or phone number.", {
         position: "bottom-right",
         autoClose: 3000,
@@ -575,7 +638,7 @@ export default function FinancePage() {
         return false;
       }
     }
-    if (!formData.account_name.trim()) {
+    if (!formData.account_name?.trim()) {
       toast.error("Please enter the account holder’s name.", {
         position: "bottom-right",
         autoClose: 3000,
@@ -611,181 +674,117 @@ export default function FinancePage() {
       });
       return false;
     }
-    toast.success("Form validated successfully. Processing your request...", {
-      position: "bottom-right",
-      autoClose: 3000,
-      hideProgressBar: false,
-      closeOnClick: true,
-      pauseOnHover: true,
-      draggable: true,
-      theme: theme === "light" ? "light" : "dark",
-      className: "bg-blue-100 text-blue-800 font-medium rounded-xl shadow-lg",
-    });
     return true;
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const validateDepositForm = (): boolean => {
+    const newErrors: Errors = {};
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!formData.email || !emailRegex.test(formData.email)) {
+      newErrors.email = "Please enter a valid email address";
+    }
+    if (!formData.firstName?.trim()) {
+      newErrors.firstName = "First name is required";
+    }
+    if (!formData.lastName?.trim()) {
+      newErrors.lastName = "Last name is required";
+    }
+    if (
+      !formData.amount ||
+      isNaN(Number(formData.amount)) ||
+      Number(formData.amount) <= 0
+    ) {
+      newErrors.amount = "Please enter a valid amount";
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleWithdrawalSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!validateForm()) return;
+    if (!validateWithdrawalForm()) return;
 
     setLoading(true);
     try {
       const reference = generateReference();
-      const payload = {
-        amount: Number(formData.amount),
-        currency: formData.currency,
-        account_number: formData.account_number,
-        account_name: formData.account_name,
-        reference,
-        payment_method: formData.isMobileMoney ? "telebirr" : "bank",
-        ...(formData.isMobileMoney ? {} : { bank_code: formData.bank_code }),
-      };
+      const canWithdraw = await checkSaleTicket(
+        userEmail,
+        Number(formData.amount),
+        theme
+      );
+      if (!canWithdraw) {
+        setLoading(false);
+        return;
+      }
 
-      if (activeTab === "withdraw") {
-        const canWithdraw = await checkSaleTicket(
+      const newBalance = await updateBalanceInFirestore(
+        userEmail,
+        Number(formData.amount),
+        theme
+      );
+      if (newBalance === false) {
+        throw new Error("Balance update failed");
+      }
+      setTotalBalance(newBalance);
+
+      try {
+        await addDoc(collection(db, "transactions"), {
+          type: "withdrawal",
+          amount: Number(formData.amount),
+          currency: formData.currency,
+          account_number: formData.account_number,
+          account_name: formData.account_name,
+          bank_code: formData.isMobileMoney ? null : formData.bank_code,
+          reference,
           userEmail,
-          Number(formData.amount),
-          theme
-        );
-        if (!canWithdraw) {
-          setLoading(false);
-          return;
-        }
-
-        const newBalance = await updateBalanceInFirestore(
-          userEmail,
-          Number(formData.amount),
-          theme
-        );
-        if (newBalance === false) {
-          throw new Error("Balance update failed");
-        }
-        setTotalBalance(newBalance);
-
-        try {
-          await addDoc(collection(db, "transactions"), {
-            type: "withdrawal",
-            amount: Number(formData.amount),
-            currency: formData.currency,
-            account_number: formData.account_number,
-            account_name: formData.account_name,
-            bank_code: formData.isMobileMoney ? null : formData.bank_code,
-            reference,
-            userEmail,
-            date: new Date().toISOString(),
-            isMobileMoney: formData.isMobileMoney,
-            payment_method: formData.isMobileMoney ? "telebirr" : "bank",
-          });
-
-          toast.success(
-            <div className="flex items-center gap-2">
-              <CheckCircle size={24} className="text-green-600" />
-              <span>
-                {formData.isMobileMoney
-                  ? `Withdrawal of ${formData.amount} ETB to Telebirr (${
-                      formData.account_number
-                    }) successful! New balance: ${newBalance.toLocaleString(
-                      "en-US",
-                      { minimumFractionDigits: 2 }
-                    )} ETB.`
-                  : `Withdrawal of ${formData.amount} ETB to bank account successful! New balance: ${newBalance.toLocaleString(
-                      "en-US",
-                      { minimumFractionDigits: 2 }
-                    )} ETB.`}
-              </span>
-            </div>,
-            {
-              position: "top-right",
-              autoClose: 3000,
-              hideProgressBar: false,
-              closeOnClick: true,
-              pauseOnHover: true,
-              draggable: true,
-              theme: theme === "light" ? "light" : "dark",
-              className: `${
-                theme === "light"
-                  ? "bg-gradient-to-r from-green-100 to-green-200 text-green-800"
-                  : "bg-gradient-to-r from-green-700 to-green-800 text-green-100"
-              } font-semibold rounded-xl shadow-xl border ${
-                theme === "light" ? "border-green-300" : "border-green-600"
-              } p-4`,
-              style: { minWidth: "300px", animation: "slideIn 0.3s ease-in-out" },
-            }
-          );
-        } catch (firestoreError) {
-          console.error(
-            "Error recording transaction:",
-            (firestoreError as Error).message
-          );
-          toast.warn(
-            `Withdrawal of ${formData.amount} ETB successful, but failed to record in history. Contact support.`,
-            {
-              position: "bottom-right",
-              autoClose: 3000,
-              hideProgressBar: false,
-              closeOnClick: true,
-              pauseOnHover: true,
-              draggable: true,
-              theme: theme === "light" ? "light" : "dark",
-            }
-          );
-        }
-      } else {
-        const endpoint = "/api/deposit";
-        const response = await axios.post(endpoint, payload, {
-          headers: {
-            Authorization: `Bearer ${process.env.NEXT_PUBLIC_API_SECRET}`,
-            "x-user-id": userEmail || "test-user",
-          },
+          date: new Date().toISOString(),
+          isMobileMoney: formData.isMobileMoney,
+          payment_method: formData.isMobileMoney ? "telebirr" : "bank",
         });
 
-        if (response.data.success) {
-          try {
-            await addDoc(collection(db, "transactions"), {
-              type: "deposit",
-              amount: Number(formData.amount),
-              currency: formData.currency,
-              account_number: formData.account_number,
-              account_name: formData.account_name,
-              bank_code: formData.isMobileMoney ? null : formData.bank_code,
-              reference,
-              userEmail,
-              date: new Date().toISOString(),
-              isMobileMoney: formData.isMobileMoney,
-              payment_method: formData.isMobileMoney ? "telebirr" : "bank",
-            });
-
-            toast.success(
-              formData.isMobileMoney
-                ? `Deposit of ${formData.amount} ETB via Telebirr initiated successfully!`
-                : `Deposit of ${formData.amount} ETB via bank transfer initiated successfully!`,
-              {
-                position: "bottom-right",
-                autoClose: 3000,
-                hideProgressBar: false,
-                closeOnClick: true,
-                pauseOnHover: true,
-                draggable: true,
-                theme: theme === "light" ? "light" : "dark",
-              }
-            );
-            await fetchTotalBalance();
-          } catch (firestoreError) {
-            toast.warn(
-              `Deposit of ${formData.amount} ETB initiated, but failed to record in history. Contact support.`,
-              {
-                position: "bottom-right",
-                autoClose: 3000,
-                hideProgressBar: false,
-                closeOnClick: true,
-                pauseOnHover: true,
-                draggable: true,
-                theme: theme === "light" ? "light" : "dark",
-              }
-            );
+        toast.success(
+          <div className="flex items-center gap-2">
+            <CheckCircle size={24} className="text-green-600" />
+            <span>
+              {formData.isMobileMoney
+                ? `Withdrawal of ${formData.amount} ETB to Telebirr (${
+                    formData.account_number
+                  }) successful! New balance: ${newBalance.toLocaleString(
+                    "en-US",
+                    { minimumFractionDigits: 2 }
+                  )} ETB.`
+                : `Withdrawal of ${formData.amount} ETB to bank account successful! New balance: ${newBalance.toLocaleString(
+                    "en-US",
+                    { minimumFractionDigits: 2 }
+                  )} ETB.`}
+            </span>
+          </div>,
+          {
+            position: "top-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            theme: theme === "light" ? "light" : "dark",
+            className: `${
+              theme === "light"
+                ? "bg-gradient-to-r from-green-100 to-green-200 text-green-800"
+                : "bg-gradient-to-r from-green-700 to-green-800 text-green-100"
+            } font-semibold rounded-xl shadow-xl border ${
+              theme === "light" ? "border-green-300" : "border-green-600"
+            } p-4`,
+            style: { minWidth: "300px", animation: "slideIn 0.3s ease-in-out" },
           }
-        } else {
-          toast.error(response.data.message || "Deposit failed.", {
+        );
+      } catch (firestoreError) {
+        console.error(
+          "Error recording transaction:",
+          (firestoreError as Error).message
+        );
+        toast.warn(
+          `Withdrawal of ${formData.amount} ETB successful, but failed to record in history. Contact support.`,
+          {
             position: "bottom-right",
             autoClose: 3000,
             hideProgressBar: false,
@@ -793,11 +792,12 @@ export default function FinancePage() {
             pauseOnHover: true,
             draggable: true,
             theme: theme === "light" ? "light" : "dark",
-          });
-        }
+          }
+        );
       }
 
       setFormData({
+        ...formData,
         amount: "",
         currency: "ETB",
         account_number: "",
@@ -807,10 +807,8 @@ export default function FinancePage() {
       });
     } catch (err) {
       const errorMessage = isTestMode
-        ? `Test mode: Simulated ${activeTab} failure.`
-        : axios.isAxiosError(err)
-        ? err.response?.data?.error || `Failed to process ${activeTab}.`
-        : `Failed to process ${activeTab}.`;
+        ? `Test mode: Simulated withdrawal failure.`
+        : `Failed to process withdrawal.`;
       toast.error(errorMessage, {
         position: "bottom-right",
         autoClose: 3000,
@@ -825,9 +823,183 @@ export default function FinancePage() {
     }
   };
 
+  const handleDepositSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!validateDepositForm()) {
+      setError("Please fill in all required fields correctly.");
+      toast.error("Please fill in all required fields.", {
+        position: "bottom-right",
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === "light" ? "light" : "dark",
+      });
+      return;
+    }
+
+    if (!encryptionKey) {
+      setError("Encryption key not available. Please try again.");
+      toast.error("Encryption key not available.", {
+        position: "bottom-right",
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === "light" ? "light" : "dark",
+      });
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    const totalAmount = Number(formData.amount);
+    const orderId = `TX-${Date.now()}`;
+    const threePercentAmount = (totalAmount * 0.03).toFixed(2);
+
+    const paymentData = {
+      email: formData.email,
+      amount: totalAmount.toString(),
+      currency: "ETB",
+      callback_url: `${window.location.origin}/api/payment/callback`,
+      return_url: `${window.location.origin}/dashboard/deposit`,
+      order_id: orderId,
+      first_name: formData.firstName,
+      last_name: formData.lastName,
+    };
+
+    try {
+      const paymentDetails = {
+        order_id: orderId,
+        email: formData.email,
+        amount: totalAmount.toString(),
+        threePercentAmount: threePercentAmount,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        date: new Date().toISOString(),
+      };
+
+      const encryptedDetails = await encryptData(
+        JSON.stringify(paymentDetails),
+        encryptionKey
+      );
+      localStorage.setItem("order_id", orderId);
+      localStorage.setItem("payment_details", encryptedDetails);
+      const exportedKey = await crypto.subtle.exportKey("raw", encryptionKey);
+      localStorage.setItem(
+        "encryption_key",
+        btoa(String.fromCharCode(...new Uint8Array(exportedKey)))
+      );
+
+      const res = await fetch("/api/payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(paymentData),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.data?.checkout_url) {
+        try {
+          await addDoc(collection(db, "transactions"), {
+            type: "deposit",
+            amount: totalAmount,
+            currency: "ETB",
+            account_number: formData.email,
+            account_name: `${formData.firstName} ${formData.lastName}`,
+            bank_code: null,
+            reference: orderId,
+            userEmail,
+            date: new Date().toISOString(),
+            isMobileMoney: false,
+            payment_method: "chapa",
+          });
+
+          toast.success(
+            `Deposit of ${formData.amount} ETB via Chapa initiated successfully!`,
+            {
+              position: "bottom-right",
+              autoClose: 3000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+              theme: theme === "light" ? "light" : "dark",
+            }
+          );
+          window.location.href = data.data.checkout_url;
+        } catch (firestoreError) {
+          toast.warn(
+            `Deposit of ${formData.amount} ETB initiated, but failed to record in history. Contact support.`,
+            {
+              position: "bottom-right",
+              autoClose: 3000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+              theme: theme === "light" ? "light" : "dark",
+            }
+          );
+          window.location.href = data.data.checkout_url;
+        }
+      } else {
+        setError(data.error || "Payment initialization failed");
+        toast.error("Payment initialization failed.", {
+          position: "bottom-right",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          theme: theme === "light" ? "light" : "dark",
+        });
+        localStorage.removeItem("order_id");
+        localStorage.removeItem("payment_details");
+        localStorage.removeItem("encryption_key");
+      }
+    } catch (error) {
+      setError("An error occurred during payment initialization");
+      toast.error("Payment initialization failed.", {
+        position: "bottom-right",
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        theme: theme === "light" ? "light" : "dark",
+      });
+      localStorage.removeItem("order_id");
+      localStorage.removeItem("payment_details");
+      localStorage.removeItem("encryption_key");
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
     router.push(`/dashboard/finance?tab=${tab}`);
+    setFormData({
+      amount: "",
+      currency: "ETB",
+      account_number: "",
+      account_name: "",
+      bank_code: "",
+      isMobileMoney: false,
+      email: userEmail,
+      firstName: "",
+      lastName: "",
+    });
+    setErrors({});
+    setError("");
   };
 
   const toggleBalanceVisibility = () => {
@@ -913,6 +1085,8 @@ export default function FinancePage() {
                         <td className="p-3 text-sm">
                           {txn.isMobileMoney
                             ? `Phone: ${txn.account_number} (Telebirr)`
+                            : txn.payment_method === "chapa"
+                            ? `Email: ${txn.account_number} (Chapa)`
                             : `A/C: ${txn.account_number} (${
                                 bank ? bank.name : "Unknown Bank"
                               })`}
@@ -928,8 +1102,238 @@ export default function FinancePage() {
       );
     }
 
+    if (activeTab === "deposit") {
+      return (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className={`p-6 sm:p-8 rounded-2xl shadow-lg border max-w-md mx-auto ${
+            theme === "light"
+              ? "bg-gradient-to-br from-gray-100 to-indigo-200 border-indigo-300/20"
+              : "bg-gradient-to-br from-gray-800 to-indigo-900 border-indigo-500/20"
+          }`}
+        >
+          <h3
+            className={`text-2xl font-bold mb-6 text-center ${
+              theme === "light" ? "text-gray-800" : "text-gray-200"
+            }`}
+          >
+            Deposit Funds
+          </h3>
+          <form id="deposit-form" onSubmit={handleDepositSubmit} className="space-y-6">
+            <div>
+              <label
+                htmlFor="email"
+                className={`block text-sm font-medium mb-1 ${
+                  theme === "light" ? "text-gray-700" : "text-gray-300"
+                }`}
+              >
+                Email Address
+              </label>
+              <div className="relative">
+                <Mail
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5"
+                />
+                <input
+                  id="email"
+                  type="email"
+                  name="email"
+                  value={formData.email || ""}
+                  onChange={handleChange}
+                  className={`w-full pl-10 pr-4 py-2 border ${
+                    errors.email ? "border-red-500" : "border-gray-300"
+                  } rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${
+                    theme === "light" ? "bg-white" : "bg-gray-700 text-gray-200"
+                  }`}
+                  placeholder="Enter email"
+                />
+              </div>
+              {errors.email && (
+                <p className="text-red-500 text-sm mt-1">{errors.email}</p>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label
+                  htmlFor="firstName"
+                  className={`block text-sm font-medium mb-1 ${
+                    theme === "light" ? "text-gray-700" : "text-gray-300"
+                  }`}
+                >
+                  First Name
+                </label>
+                <div className="relative">
+                  <User
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5"
+                  />
+                  <input
+                    id="firstName"
+                    type="text"
+                    name="firstName"
+                    value={formData.firstName || ""}
+                    onChange={handleChange}
+                    className={`w-full pl-10 pr-4 py-2 border ${
+                      errors.firstName ? "border-red-500" : "border-gray-300"
+                    } rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${
+                      theme === "light" ? "bg-white" : "bg-gray-700 text-gray-200"
+                    }`}
+                    placeholder="First name"
+                  />
+                </div>
+                {errors.firstName && (
+                  <p className="text-red-500 text-sm mt-1">{errors.firstName}</p>
+                )}
+              </div>
+              <div>
+                <label
+                  htmlFor="lastName"
+                  className={`block text-sm font-medium mb-1 ${
+                    theme === "light" ? "text-gray-700" : "text-gray-300"
+                  }`}
+                >
+                  Last Name
+                </label>
+                <div className="relative">
+                  <User
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5"
+                  />
+                  <input
+                    id="lastName"
+                    type="text"
+                    name="lastName"
+                    value={formData.lastName || ""}
+                    onChange={handleChange}
+                    className={`w-full pl-10 pr-4 py-2 border ${
+                      errors.lastName ? "border-red-500" : "border-gray-300"
+                    } rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${
+                      theme === "light" ? "bg-white" : "bg-gray-700 text-gray-200"
+                    }`}
+                    placeholder="Last name"
+                  />
+                </div>
+                {errors.lastName && (
+                  <p className="text-red-500 text-sm mt-1">{errors.lastName}</p>
+                )}
+              </div>
+            </div>
+            <div>
+              <label
+                htmlFor="amount"
+                className={`block text-sm font-medium mb-1 ${
+                  theme === "light" ? "text-gray-700" : "text-gray-300"
+                }`}
+              >
+                Amount (ETB)
+              </label>
+              <div className="relative">
+                <CreditCard
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5"
+                />
+                <input
+                  id="amount"
+                  type="number"
+                  name="amount"
+                  value={formData.amount || ""}
+                  onChange={handleChange}
+                  className={`w-full pl-10 pr-4 py-2 border ${
+                    errors.amount ? "border-red-500" : "border-gray-300"
+                  } rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${
+                    theme === "light" ? "bg-white" : "bg-gray-700 text-gray-200"
+                  }`}
+                  placeholder="Enter amount"
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+              {errors.amount && (
+                <p className="text-red-500 text-sm mt-1">{errors.amount}</p>
+              )}
+            </div>
+          </form>
+
+          <AnimatePresence>
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className={`mt-6 p-4 rounded-lg flex items-center gap-2 ${
+                  theme === "light" ? "bg-red-100 text-red-700" : "bg-red-900 text-red-200"
+                }`}
+              >
+                <X className="w-5 h-5" />
+                {error}
+                <button
+                  onClick={() => setError("")}
+                  className={`ml-auto p-1 rounded-full ${
+                    theme === "light" ? "hover:bg-red-200" : "hover:bg-red-800"
+                  }`}
+                  aria-label="Close error message"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <motion.div
+            className="text-center mt-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.6 }}
+          >
+            <motion.button
+              type="submit"
+              form="deposit-form"
+              disabled={loading}
+              className={`flex items-center justify-center gap-2 px-6 py-3 bg-transparent border-2 rounded-lg transition-all w-full max-w-md mx-auto ${
+                loading
+                  ? "border-gray-400 text-gray-400 cursor-not-allowed"
+                  : `border-[#4e3dea] hover:bg-[#4e3dea] ${
+                      theme === "light" ? "text-[#4e3dea] hover:text-white" : "text-white hover:text-white"
+                    }`
+              }`}
+              whileHover={{ scale: loading ? 1 : 1.05 }}
+              whileTap={{ scale: loading ? 1 : 0.95 }}
+              aria-label={loading ? "Processing payment" : "Pay now"}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  Pay Now
+                  <CreditCard className="w-4 h-4" />
+                </>
+              )}
+            </motion.button>
+          </motion.div>
+
+          <div className="mt-4 text-center max-w-md mx-auto">
+            <p
+              className={`text-sm font-medium ${
+                theme === "light" ? "text-gray-600" : "text-gray-400"
+              }`}
+            >
+              Secured by Chapa Payment Gateway
+            </p>
+            <p
+              className={`text-xs mt-1 ${
+                theme === "light" ? "text-gray-500" : "text-gray-500"
+              }`}
+            >
+              You will be redirected to complete your payment
+            </p>
+          </div>
+        </motion.div>
+      );
+    }
+
     return (
-      <form onSubmit={handleSubmit} className="mt-6">
+      <form onSubmit={handleWithdrawalSubmit} className="mt-6">
         <div className="mb-4">
           <label
             className={`block text-sm font-medium mb-1 ${
@@ -941,7 +1345,7 @@ export default function FinancePage() {
           <input
             type="number"
             name="amount"
-            value={formData.amount}
+            value={formData.amount || ""}
             onChange={handleChange}
             className={`w-full p-2 border rounded-lg ${
               theme === "light" ? "bg-white text-gray-800" : "bg-gray-700 text-gray-100"
@@ -951,13 +1355,11 @@ export default function FinancePage() {
             step="0.01"
             placeholder="Enter amount"
           />
-          {activeTab === "withdraw" &&
-            formData.amount &&
-            Number(formData.amount) > totalBalance && (
-              <p className="text-red-600 text-sm mt-1">
-                Amount exceeds your balance of {totalBalance} ETB.
-              </p>
-            )}
+          {formData.amount && Number(formData.amount) > totalBalance && (
+            <p className="text-red-600 text-sm mt-1">
+              Amount exceeds your balance of {totalBalance} ETB.
+            </p>
+          )}
         </div>
         <div className="mb-4">
           <label
@@ -969,7 +1371,7 @@ export default function FinancePage() {
           </label>
           <select
             name="currency"
-            value={formData.currency}
+            value={formData.currency || "ETB"}
             onChange={handleChange}
             className={`w-full p-2 border rounded-lg ${
               theme === "light" ? "bg-white text-gray-800" : "bg-gray-700 text-gray-100"
@@ -984,7 +1386,7 @@ export default function FinancePage() {
           <label className="flex items-center">
             <input
               type="checkbox"
-              checked={formData.isMobileMoney}
+              checked={formData.isMobileMoney || false}
               onChange={handleMobileMoneyToggle}
               className="mr-2"
             />
@@ -1008,7 +1410,7 @@ export default function FinancePage() {
           <input
             type="text"
             name="account_number"
-            value={formData.account_number}
+            value={formData.account_number || ""}
             onChange={handleChange}
             className={`w-full p-2 border rounded-lg ${
               theme === "light" ? "bg-white text-gray-800" : "bg-gray-700 text-gray-100"
@@ -1030,7 +1432,7 @@ export default function FinancePage() {
           <input
             type="text"
             name="account_name"
-            value={formData.account_name}
+            value={formData.account_name || ""}
             onChange={handleChange}
             className={`w-full p-2 border rounded-lg ${
               theme === "light" ? "bg-white text-gray-800" : "bg-gray-700 text-gray-100"
@@ -1050,7 +1452,7 @@ export default function FinancePage() {
             </label>
             <select
               name="bank_code"
-              value={formData.bank_code}
+              value={formData.bank_code || ""}
               onChange={handleChange}
               className={`w-full p-2 border rounded-lg ${
                 theme === "light" ? "bg-white text-gray-800" : "bg-gray-700 text-gray-100"
@@ -1072,26 +1474,17 @@ export default function FinancePage() {
           type="submit"
           disabled={
             loading ||
-            (activeTab === "withdraw" &&
-              formData.amount &&
-              Number(formData.amount) > totalBalance)
+            (formData.amount && Number(formData.amount) > totalBalance)
           }
           className={`w-full p-2 rounded-lg ${
-            loading ||
-            (activeTab === "withdraw" &&
-              formData.amount &&
-              Number(formData.amount) > totalBalance)
+            loading || (formData.amount && Number(formData.amount) > totalBalance)
               ? "bg-gray-400 cursor-not-allowed"
               : theme === "light"
               ? "bg-blue-600 hover:bg-blue-700 text-white"
               : "bg-blue-500 hover:bg-blue-600 text-white"
           }`}
         >
-          {loading
-            ? "Processing..."
-            : activeTab === "withdraw"
-            ? "Withdraw"
-            : "Deposit"}
+          {loading ? "Processing..." : "Withdraw"}
         </button>
       </form>
     );
@@ -1102,7 +1495,7 @@ export default function FinancePage() {
       <div
         className={`min-h-screen flex items-center justify-center ${
           theme === "light" ? "bg-zinc-50" : "bg-gray-900"
-        }`}
+        } ${contentMargin} transition-all duration-300`}
       >
         <motion.div
           className="text-center px-4"
@@ -1167,7 +1560,7 @@ export default function FinancePage() {
       <div
         className={`min-h-screen flex items-center justify-center ${
           theme === "light" ? "bg-zinc-100" : "bg-zinc-900"
-        }`}
+        } ${contentMargin} transition-all duration-300`}
       >
         <motion.div
           className="flex flex-col items-center"
@@ -1207,7 +1600,11 @@ export default function FinancePage() {
   }
 
   return (
-    <div className={`min-h-screen ${theme === "light" ? "bg-zinc-100" : "bg-zinc-900"}`}>
+    <div
+      className={`min-h-screen ${
+        theme === "light" ? "bg-zinc-100" : "bg-zinc-900"
+      } ${contentMargin} transition-all duration-300`}
+    >
       <style jsx global>{`
         @keyframes slideIn {
           from {
@@ -1233,8 +1630,7 @@ export default function FinancePage() {
         theme={theme === "light" ? "light" : "dark"}
       />
 
-      <div
-        className={`sticky top-0 z-50 ${
+      <div className={`sticky top-0 z-50 ${
           theme === "light"
             ? "bg-gradient-to-br from-zinc-100 to-zinc-200"
             : "bg-gradient-to-br from-gray-800 to-gray-900"

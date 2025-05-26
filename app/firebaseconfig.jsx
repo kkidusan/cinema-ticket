@@ -1,4 +1,5 @@
-import { initializeApp } from "firebase/app";
+// app/lib/firebaseconfig.js
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { 
     getFirestore, 
     collection, 
@@ -26,6 +27,20 @@ import {
 } from "firebase/auth";
 import { getStorage } from "firebase/storage";
 
+// Validate environment variables
+const requiredEnvVars = [
+    'NEXT_PUBLIC_FIREBASE_API_KEY',
+    'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
+    'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
+    'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET',
+    'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
+    'NEXT_PUBLIC_FIREBASE_APP_ID',
+];
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+if (missingEnvVars.length > 0 && process.env.NODE_ENV !== 'production') {
+    console.warn(`Missing Firebase environment variables: ${missingEnvVars.join(', ')}`);
+}
+
 // Firebase config
 const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -37,22 +52,21 @@ const firebaseConfig = {
     measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase only if not already initialized
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firestore with default settings (no need for initializeFirestore)
-const db = getFirestore(app); // Use getFirestore instead of initializeFirestore
-
-// Initialize Auth and Storage
+// Initialize Firestore, Auth, and Storage
+export const db = getFirestore(app);
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 
 // Enable session persistence
-setPersistence(auth, browserSessionPersistence);
+setPersistence(auth, browserSessionPersistence).catch(error => {
+    console.error('Failed to set auth persistence:', error);
+});
 
-// Export necessary Firebase modules
+// Export Firebase modules
 export { 
-    db,
     addDoc, 
     collection, 
     query, 

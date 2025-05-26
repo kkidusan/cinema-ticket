@@ -282,7 +282,7 @@ export default function Meeting({ isSidebarOpen, toggleSidebar, isCollapsed, tog
             >
               Payment Confirmation
             </h1>
-            <div className="ww-10" />
+            <div className="w-10" />
           </div>
         </div>
       </div>
@@ -294,68 +294,95 @@ export default function Meeting({ isSidebarOpen, toggleSidebar, isCollapsed, tog
         className="py-12 px-4 sm:px-6 lg:px-8"
       >
         <div
-          className={`max-w-2xl mx-auto p-8 rounded-2xl shadow-lg border relative ${
+          className={`max-w-3xl mx-auto p-6 sm:p-8 rounded-3xl shadow-2xl border relative overflow-hidden ${
             theme === "light"
-              ? "bg-gradient-to-br from-gray-100 to-indigo-200 border-indigo-300/20"
-              : "bg-gradient-to-br from-gray-800 to-indigo-900 border-indigo-500/20"
+              ? "bg-white border-indigo-200/50"
+              : "bg-gray-800 border-indigo-500/30"
           }`}
         >
+          {/* Background accent */}
+          <div
+            className={`absolute inset-0 bg-gradient-to-br ${
+              theme === "light"
+                ? "from-indigo-50 to-purple-50 opacity-50"
+                : "from-indigo-900 to-purple-900 opacity-30"
+            }`}
+          />
+          
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => router.push("/dashboard/finance")}
-            className={`absolute top-4 right-4 p-2 rounded-full ${
-              theme === "light" ? "hover:bg-gray-200" : "hover:bg-gray-700"
+            className={`absolute top-4 right-4 p-2 rounded-full z-10 ${
+              theme === "light" ? "hover:bg-indigo-100" : "hover:bg-indigo-900"
             } transition-colors`}
             aria-label="Close"
           >
-            <X className={`w-6 h-6 ${theme === "light" ? "text-gray-500" : "text-gray-400"}`} />
+            <X className={`w-6 h-6 ${theme === "light" ? "text-indigo-600" : "text-indigo-300"}`} />
           </motion.button>
 
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="relative z-10">
             <div
-              className={`rounded-lg p-4 mb-8 ${
-                theme === "light" ? "bg-green-100 text-green-700" : "bg-green-900 text-green-200"
+              className={`rounded-xl p-4 sm:p-6 mb-8 flex items-center justify-center gap-3 ${
+                theme === "light" ? "bg-green-50 text-green-700" : "bg-green-900/50 text-green-200"
               }`}
             >
-              <p className="text-center font-medium">
+              <CheckCircle className="w-8 h-8" />
+              <p className="text-lg sm:text-xl font-semibold text-center">
                 Payment Successful! Amount Paid: {userData?.amount} ETB
               </p>
             </div>
 
-            <div 
-        className={`p-6 rounded-2xl shadow-lg mb-6 ${
+            <div
+              className={`p-6 sm:p-8 rounded-2xl shadow-inner ${
                 theme === "light"
-                  ? "bg-gradient-to-r from-indigo-600 to-purple-600"
-                  : "bg-gradient-to-r from-indigo-700 to-purple-700"
+                  ? "bg-gradient-to-r from-indigo-500 to-purple-500"
+                  : "bg-gradient-to-r from-indigo-600 to-purple-600"
               } text-white`}
             >
-              <h2 className="text-2xl font-bold mb-4">Payment Details</h2>
-              <div className="space-y-4">
-                <p className="text-lg">Name: {userData?.firstName} {userData?.lastName}</p>
-                <p className="text-lg">Email: {userData?.email}</p>
-                <p className="text-lg">Amount: {userData?.amount} ETB</p>
-                <p className="text-lg">Date: {userData?.date}</p>
+              <h2 className="text-2xl sm:text-3xl font-bold mb-6 tracking-tight">Payment Details</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                <div>
+                  <p className="text-sm font-medium text-indigo-100">Name</p>
+                  <p className="text-lg sm:text-xl font-semibold">{userData?.firstName} {userData?.lastName}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-indigo-100">Email</p>
+                  <p className="text-lg sm:text-xl font-semibold">{userData?.email}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-indigo-100">Amount</p>
+                  <p className="text-lg sm:text-xl font-semibold">{userData?.amount} ETB</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-indigo-100">Date</p>
+                  <p className="text-lg sm:text-xl font-semibold">{userData?.date}</p>
+                </div>
               </div>
             </div>
 
             <div
-              className={`mt-6 p-4 rounded-2xl border ${
+              className={`mt-8 p-4 sm:p-6 rounded-2xl border ${
                 theme === "light"
-                  ? "bg-gray-100 border-indigo-300/20"
-                  : "bg-gray-800 border-indigo-500/20"
+                  ? "bg-white border-indigo-200/50"
+                  : "bg-gray-800 border-indigo-500/30"
               }`}
             >
-              <div className="flex items-center justify-between">
-                <p className={`text-lg ${theme === "light" ? "text-gray-700" : "text-gray-300"}`}>
-                  <span className="font-medium">Transaction ID:</span> {orderId}
-                </p>
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <p className={`text-sm font-medium ${theme === "light" ? "text-gray-600" : "text-gray-300"}`}>
+                    Transaction ID
+                  </p>
+                  <p className={`text-lg font-semibold ${theme === "light" ? "text-gray-900" : "text-gray-100"}`}>
+                    {orderId}
+                  </p>
+                </div>
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={copyOrderId}
                   className={`p-2 rounded-full ${
-                    theme === "light" ? "hover:bg-gray-200" : "hover:bg-gray-700"
+                    theme === "light" ? "hover:bg-indigo-100" : "hover:bg-indigo-900"
                   } transition-colors`}
                   aria-label="Copy transaction ID"
                 >
@@ -368,7 +395,7 @@ export default function Meeting({ isSidebarOpen, toggleSidebar, isCollapsed, tog
                         exit={{ scale: 0 }}
                       >
                         <CheckCircle
-                          className={`w-5 h-5 ${theme === "light" ? "text-green-500" : "text-green-400"}`}
+                          className={`w-6 h-6 ${theme === "light" ? "text-green-500" : "text-green-400"}`}
                         />
                       </motion.div>
                     ) : (
@@ -379,7 +406,7 @@ export default function Meeting({ isSidebarOpen, toggleSidebar, isCollapsed, tog
                         exit={{ scale: 0 }}
                       >
                         <Copy
-                          className={`w-5 h-5 ${theme === "light" ? "text-indigo-500" : "text-indigo-400"}`}
+                          className={`w-6 h-6 ${theme === "light" ? "text-indigo-500" : "text-indigo-400"}`}
                         />
                       </motion.div>
                     )}
@@ -389,7 +416,7 @@ export default function Meeting({ isSidebarOpen, toggleSidebar, isCollapsed, tog
             </div>
 
             <motion.div
-              className="text-center mt-6"
+              className="text-center mt-8"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.6 }}
@@ -398,15 +425,15 @@ export default function Meeting({ isSidebarOpen, toggleSidebar, isCollapsed, tog
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => router.push("/dashboard/finance")}
-                className={`flex items-center justify-center gap-2 px-6 py-3 bg-transparent border-2 rounded-lg transition-all w-full ${
+                className={`inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r ${
                   theme === "light"
-                    ? "border-[#4e3dea] text-[#4e3dea] hover:bg-[#4e3dea] hover:text-white"
-                    : "border-[#4e3dea] text-white hover:bg-[#4e3dea] hover:text-white"
-                }`}
+                    ? "from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600"
+                    : "from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+                } text-white rounded-lg shadow-md transition-all w-full sm:w-auto`}
                 aria-label="View profile"
               >
-                Successful!
-                <CheckCircle className="w-4 h-4" />
+                <span className="font-semibold">Back to Dashboard</span>
+                <CheckCircle className="w-5 h-5" />
               </motion.button>
             </motion.div>
           </motion.div>

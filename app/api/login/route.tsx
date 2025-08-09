@@ -3,15 +3,25 @@ import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { auth, db, signInWithEmailAndPassword, collection, query, where, getDocs } from "../../firebaseconfig";
 
+// Access environment variables using Next.js convention
 const JWT_SECRET_OWNER = process.env.JWT_SECRET_OWNER;
 const JWT_SECRET_ADMIN = process.env.JWT_SECRET_ADMIN;
 
-// Validate environment variables at runtime
+// Validate environment variables at startup
 if (!JWT_SECRET_OWNER || !JWT_SECRET_ADMIN) {
-    throw new Error("JWT_SECRET_OWNER and JWT_SECRET_ADMIN must be set in environment variables");
+    console.error("Environment variables JWT_SECRET_OWNER or JWT_SECRET_ADMIN are not set.");
+    // Instead of throwing, return a response to avoid breaking the API
+    // This allows the API to fail gracefully in production
+    const errorResponse = NextResponse.json(
+        { error: "Server configuration error. Please contact support." },
+        { status: 500 }
+    );
+    // Log for debugging
+    console.error("Ensure JWT_SECRET_OWNER and JWT_SECRET_ADMIN are set in .env.local or environment");
 }
 
-export async function POST(request) {
+// Main POST handler
+export async function POST(request: Request) {
     try {
         // Validate Firebase initialization
         if (!auth || !db) {
@@ -41,21 +51,21 @@ export async function POST(request) {
         const adminQuery = query(adminRef, where("email", "==", user.email));
         const adminSnapshot = await getDocs(adminQuery);
 
-        let role = null;
-        let token = null;
+        let role: string | null = null;
+        let token: string | null = null;
 
         if (!ownerSnapshot.empty) {
             role = "owner";
             token = jwt.sign(
                 { userId: user.uid, email: user.email, role },
-                JWT_SECRET_OWNER,
+                JWT_SECRET_OWNER!,
                 { expiresIn: "1h" }
             );
         } else if (!adminSnapshot.empty) {
             role = "admin";
             token = jwt.sign(
                 { userId: user.uid, email: user.email, role },
-                JWT_SECRET_ADMIN,
+                JWT_SECRET_ADMIN!,
                 { expiresIn: "1h" }
             );
         } else {
@@ -82,7 +92,7 @@ export async function POST(request) {
         });
 
         return response;
-    } catch (error) {
+    } catch (error: any) {
         console.error("Login error:", {
             code: error.code,
             message: error.message,

@@ -1,15 +1,22 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import React, { useState, useEffect, useContext, useRef, useCallback, useMemo } from "react";
 import { db } from "../../lib/firebase-client";
 import { collection, addDoc, getDocs, query, where, updateDoc, doc, Timestamp, onSnapshot } from "firebase/firestore";
-import { PuffLoader } from "react-spinners";
-import { Armchair, RotateCcw, Download, ArrowLeft } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { ThemeContext } from "../../context/ThemeContext";
-import { toast, ToastContainer } from "react-toastify";
+import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+
+// Dynamically import client-only dependencies
+const ToastContainer = dynamic(() => import("react-toastify").then((mod) => mod.ToastContainer), { ssr: false });
+const PuffLoader = dynamic(() => import("react-spinners").then((mod) => mod.PuffLoader), { ssr: false });
+const Armchair = dynamic(() => import("lucide-react").then((mod) => mod.Armchair), { ssr: false });
+const RotateCcw = dynamic(() => import("lucide-react").then((mod) => mod.RotateCcw), { ssr: false });
+const Download = dynamic(() => import("lucide-react").then((mod) => mod.Download), { ssr: false });
+const ArrowLeft = dynamic(() => import("lucide-react").then((mod) => mod.ArrowLeft), { ssr: false });
 
 // Types
 interface Seat {
@@ -205,10 +212,16 @@ export default function CinemaSeatArrangement() {
         } as Arrangement;
         arrangement.seats = arrangement.seats.map(seat => ({
           ...seat,
+          id: seat.id || `seat-${Math.random().toString(36).substr(2, 9)}`,
+          number: Number(seat.number) || 0,
+          row: Number(seat.row) || 0,
+          col: Number(seat.col) || 0,
+          x: Number(seat.x) || undefined,
+          y: Number(seat.y) || undefined,
           reserved: seat.reserved ?? false,
         }));
         const calculatedReservedCount = arrangement.seats.filter(seat => seat.reserved).length;
-        arrangement.reservedSeatsCount = arrangement.reservedSeatsCount ?? calculatedReservedCount;
+        arrangement.reservedSeatsCount = Number(arrangement.reservedSeatsCount) ?? calculatedReservedCount;
         setSavedArrangement(arrangement);
         loadArrangement(arrangement);
       }
@@ -587,18 +600,6 @@ export default function CinemaSeatArrangement() {
             Loading seat arrangement...
           </motion.p>
         </motion.div>
-        <ToastContainer
-          position="bottom-right"
-          autoClose={3000}
-          hideProgressBar={false}
-          newestOnTop={false}
-          closeOnClick
-          rtl={false}
-          pauseOnFocusLoss
-          draggable
-          pauseOnHover
-          theme={theme === "light" ? "light" : "dark"}
-        />
       </div>
     );
   }
